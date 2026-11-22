@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+﻿import React, { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { API_BASE_URL, apiFetch, safeJson } from '@/lib/api';
 import { useEditorOrchestrator } from './EditorOrchestrator';
 import { useCircuitOrchestrator } from './CircuitOrchestrator';
@@ -12,6 +12,7 @@ interface CompileResponse {
   success?: boolean;
   log?: string;
   hex?: string;
+  error?: string;
   requestId?: string;
   compiledFiles?: number;
 }
@@ -109,8 +110,8 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
         const lines = (data.log || '').split('\n').filter((line) => line.trim().length > 0);
         lines.forEach((line) => webSerial.addMessage('app', line));
       } else {
-        const message = res.ok ? 'Compilation failed.' : `Compiler API error (status ${res.status}).`;
-        setCompileFeedback(extractCompileFeedback(data?.log || message, message));
+        const message = data?.error || (res.ok ? 'Compilation failed.' : `Compiler API error (status ${res.status}).`);
+        setCompileFeedback(extractCompileFeedback(data?.log || data?.error || message, message));
         webSerial.addMessage('error', message);
         const lines = (data?.log || '').split('\n').filter((line) => line.trim().length > 0);
         lines.forEach((line) => webSerial.addMessage('error', line));
@@ -191,8 +192,8 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
         webSerial.addMessage('system', 'Compilation successful. Starting upload...');
         await webSerial.flashArduino(data.hex);
       } else {
-        const message = res.ok ? 'Compilation failed. Upload aborted.' : `Compiler API error (status ${res.status}).`;
-        setCompileFeedback(extractCompileFeedback(data?.log || message, message));
+        const message = data?.error || (res.ok ? 'Compilation failed. Upload aborted.' : `Compiler API error (status ${res.status}).`);
+        setCompileFeedback(extractCompileFeedback(data?.log || data?.error || message, message));
         webSerial.addMessage('error', message);
         const lines = (data?.log || '').split('\n').filter((line) => line.trim().length > 0);
         lines.forEach((line) => webSerial.addMessage('error', line));
@@ -223,9 +224,9 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
   const handleConnectDevice = useCallback(() => {
     openBlockTerminalTab('connection');
     if (webSerial.isConnected) {
-      webSerial.disconnect();
+      void webSerial.disconnect();
     } else {
-      webSerial.connect(115200);
+      void webSerial.connect();
     }
   }, [openBlockTerminalTab, webSerial]);
 
@@ -282,4 +283,5 @@ export function useCompileController() {
   }
   return context;
 }
+
 

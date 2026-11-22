@@ -1498,3 +1498,9 @@ html[data-theme='magma'] .custom-blockly-host {
 .sticial-compile-error-glyph {
   background: radial-gradient(circle at center, rgba(248, 113, 113, 0.98) 0%, rgba(239, 68, 68, 0.98) 54%, rgba(239, 68, 68, 0) 55%);
 }
+
+.ui-foundation-panel.rounded-none,
+.ui-foundation-panel-quiet.rounded-none {
+  border-radius: 0 !important;
+}
+

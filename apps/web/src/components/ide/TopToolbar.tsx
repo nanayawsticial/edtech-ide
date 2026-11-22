@@ -15,6 +15,7 @@ import {
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
+  Plus,
   Rocket,
   Save,
   Settings2,
@@ -24,6 +25,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/Button";
 import { fadeInUp } from "@/components/ui/motion";
 import ThemeToggle from '@/components/layout/ThemeToggle';
+import BackHomeButtons from "@/components/layout/BackHomeButtons";
 import WorkspaceStageRail from "./WorkspaceStageRail";
 
 export type StudioView = "code" | "circuit";
@@ -44,6 +46,7 @@ interface TopToolbarProps {
   bottomCollapsed: boolean;
   showLeftToggle?: boolean;
   showPanelControls?: boolean;
+  showBottomToggle?: boolean;
   showStudioToggle?: boolean;
   activeStudioView?: StudioView;
   onChangeStudioView?: (view: StudioView) => void;
@@ -53,6 +56,7 @@ interface TopToolbarProps {
   onSelectBoard: () => void;
   onSaveProject: () => void;
   onOpenProject: () => void;
+  onNewSketch: () => void;
   onOpenPreferences: () => void;
   onToggleLeft: () => void;
   onToggleRight: () => void;
@@ -88,6 +92,7 @@ export default function TopToolbar({
   bottomCollapsed,
   showLeftToggle = true,
   showPanelControls = true,
+  showBottomToggle = true,
   showStudioToggle = false,
   activeStudioView,
   onChangeStudioView,
@@ -97,6 +102,7 @@ export default function TopToolbar({
   onSelectBoard,
   onSaveProject,
   onOpenProject,
+  onNewSketch,
   onOpenPreferences,
   onToggleLeft,
   onToggleRight,
@@ -151,7 +157,7 @@ export default function TopToolbar({
         initial="hidden"
         animate="visible"
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-2.5 py-2.5 sm:px-3">
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -174,6 +180,18 @@ export default function TopToolbar({
               <Rocket size={14} strokeWidth={2.5} />
               {isCompiling ? "Uploading..." : "Upload"}
             </button>
+            <button
+              type="button"
+              onClick={onConnectDevice}
+              className={`flex h-9 items-center gap-2 rounded-[10px] border px-3 text-xs font-medium transition-all ${
+                isConnected
+                  ? "border-emerald-400/22 bg-emerald-400/12 text-emerald-200"
+                  : "border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-elevated)] text-[var(--ui-color-text-muted)] hover:text-[var(--ui-color-text)]"
+              }`}
+            >
+              {isConnected ? <Link2 size={14} /> : <Link2Off size={14} />}
+              {isConnected ? "Disconnect" : "Connect"}
+            </button>
 
             <div className="h-5 w-px bg-[color:var(--ui-border-soft)]" />
 
@@ -193,7 +211,14 @@ export default function TopToolbar({
             ) : null}
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex w-full items-center gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 md:w-auto md:pb-0">
+            <BackHomeButtons
+              backFallbackHref="/dashboard"
+              variant="ghost"
+              size="sm"
+              buttonClassName="min-h-9 rounded-[10px] px-3 text-xs font-medium text-[var(--ui-color-text-muted)] transition-all hover:bg-[color:var(--ui-surface-elevated)] hover:text-[var(--ui-color-text)]"
+            />
+
             <button
               type="button"
               onClick={onSaveProject}
@@ -202,19 +227,6 @@ export default function TopToolbar({
               <Save size={14} />
               {isSaving ? "Saving..." : "Save"}
               {hasUnsavedChanges ? <span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> : null}
-            </button>
-
-            <button
-              type="button"
-              onClick={onConnectDevice}
-              className={`flex h-9 items-center gap-2 rounded-[10px] border px-3 text-xs font-medium transition-all ${
-                isConnected
-                  ? "border-emerald-400/22 bg-emerald-400/12 text-emerald-200"
-                  : "border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-elevated)] text-[var(--ui-color-text-muted)] hover:text-[var(--ui-color-text)]"
-              }`}
-            >
-              {isConnected ? <Link2 size={14} /> : <Link2Off size={14} />}
-              {isConnected ? "Disconnect" : "Connect"}
             </button>
 
             <div className="mx-1 h-4 w-px bg-[color:var(--ui-border-soft)]" />
@@ -230,11 +242,11 @@ export default function TopToolbar({
 
             <button
               type="button"
-              onClick={onOpenPreferences}
-              className="flex h-9 w-9 items-center justify-center rounded-[10px] text-[var(--ui-color-text-soft)] transition-all hover:bg-[color:var(--ui-surface-elevated)] hover:text-[var(--ui-color-text)]"
-              title="Preferences"
+              onClick={onNewSketch}
+              className="flex h-9 items-center gap-2 rounded-[10px] px-3 text-xs font-medium text-[var(--ui-color-text-muted)] transition-all hover:bg-[color:var(--ui-surface-elevated)] hover:text-[var(--ui-color-text)]"
             >
-              <Settings2 size={14} />
+              <Plus size={14} />
+              New Sketch
             </button>
             <ThemeToggle className="h-9 rounded-[10px] px-2 text-[var(--ui-color-text-soft)] hover:bg-[color:var(--ui-surface-elevated)] hover:text-[var(--ui-color-text)]" />
           </div>
@@ -252,12 +264,12 @@ export default function TopToolbar({
   if (isBlockWorkspace) {
     return (
       <motion.header
-        className="overflow-hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,#10131f_0%,#0a0d18_100%)] shadow-[0_30px_90px_-52px_rgba(0,0,0,1)]"
+        className="overflow-hidden rounded-[20px] border border-white/8 bg-[linear-gradient(180deg,#10131f_0%,#0a0d18_100%)] shadow-[0_30px_90px_-52px_rgba(0,0,0,1)] sm:rounded-[24px]"
         variants={fadeInUp}
         initial="hidden"
         animate="visible"
       >
-        <div className="px-4 py-3 sm:px-5">
+        <div className="px-3 py-3 sm:px-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-2.5">
               <button 
@@ -289,7 +301,13 @@ export default function TopToolbar({
               {saveStatusText ? <span className={`${chipBaseClass} ${saveStatusClass}`}>{saveStatusText}</span> : null}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex w-full items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 md:w-auto md:pb-0">
+              <BackHomeButtons
+                backFallbackHref="/dashboard"
+                variant="inverse"
+                size="sm"
+                buttonClassName="min-h-10 rounded-[14px] border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white hover:border-white/16 hover:bg-white/[0.08] hover:text-white"
+              />
               <Button
                 variant="secondary"
                 icon={<FolderOpen size={14} />}
@@ -297,6 +315,14 @@ export default function TopToolbar({
                 className="min-h-10 rounded-[14px] border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white hover:border-white/16 hover:bg-white/[0.08] hover:text-white"
               >
                 Dashboard
+              </Button>
+              <Button
+                variant="secondary"
+                icon={<Plus size={14} />}
+                onClick={onNewSketch}
+                className="min-h-10 rounded-[14px] border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white hover:border-white/16 hover:bg-white/[0.08] hover:text-white"
+              >
+                New Sketch
               </Button>
               <Button
                 variant="secondary"
@@ -348,7 +374,7 @@ export default function TopToolbar({
 
   return (
     <motion.header
-      className="ui-foundation-panel overflow-hidden px-4 py-4 sm:px-5 sm:py-5"
+      className="ui-foundation-panel overflow-hidden px-3 py-3 sm:px-5 sm:py-5"
       variants={fadeInUp}
       initial="hidden"
       animate="visible"
@@ -408,9 +434,16 @@ export default function TopToolbar({
         </div>
 
         <div className="flex flex-col gap-3 xl:items-end">
-          <div className="flex flex-wrap items-center justify-start gap-2 xl:justify-end">
+          <div className="flex w-full items-center justify-start gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 xl:w-auto xl:justify-end xl:overflow-visible xl:pb-0">
+            <BackHomeButtons
+              backFallbackHref="/dashboard"
+              buttonClassName="min-h-10 rounded-[16px] px-4 py-2 text-sm"
+            />
             <Button variant="secondary" icon={<FolderOpen size={16} />} onClick={onOpenProject} className="min-h-10 rounded-[16px] px-4 py-2 text-sm">
               Dashboard
+            </Button>
+            <Button variant="secondary" icon={<Plus size={16} />} onClick={onNewSketch} className="min-h-10 rounded-[16px] px-4 py-2 text-sm">
+              New Sketch
             </Button>
             <Button variant="secondary" icon={<Save size={16} />} onClick={onSaveProject} disabled={isSaving} className="min-h-10 rounded-[16px] px-4 py-2 text-sm">
               {isSaving ? "Saving..." : "Save"}
@@ -463,14 +496,16 @@ export default function TopToolbar({
               >
                 {rightCollapsed ? <PanelRightOpen size={15} /> : <PanelRightClose size={15} />}
               </button>
-              <button
-                type="button"
-                onClick={onToggleBottom}
-                className={utilityButtonClass}
-                title={bottomCollapsed ? "Show output panel" : "Hide output panel"}
-              >
-                {bottomCollapsed ? <PanelBottomOpen size={15} /> : <PanelBottomClose size={15} />}
-              </button>
+              {showBottomToggle ? (
+                <button
+                  type="button"
+                  onClick={onToggleBottom}
+                  className={utilityButtonClass}
+                  title={bottomCollapsed ? "Show output panel" : "Hide output panel"}
+                >
+                  {bottomCollapsed ? <PanelBottomOpen size={15} /> : <PanelBottomClose size={15} />}
+                </button>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -478,6 +513,9 @@ export default function TopToolbar({
     </motion.header>
   );
 }
+
+
+
 
 
 

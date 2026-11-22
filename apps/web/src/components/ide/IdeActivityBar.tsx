@@ -1,13 +1,14 @@
 ﻿"use client";
 
 import React from "react";
-import { FolderOpen, Settings, LayoutGrid, Search, Cpu } from "lucide-react";
+import { FolderOpen, Settings, LayoutGrid } from "lucide-react";
 
 interface IdeActivityBarProps {
   activeView: string;
   onChangeView: (viewId: string) => void;
   isCollapsed: boolean;
   onToggleCollapsed: () => void;
+  onOpenPreferences: () => void;
   enabledViewIds?: string[];
 }
 
@@ -16,6 +17,7 @@ export default function IdeActivityBar({
   onChangeView,
   isCollapsed,
   onToggleCollapsed,
+  onOpenPreferences,
   enabledViewIds = ["files"],
 }: IdeActivityBarProps) {
   const enabledViews = React.useMemo(() => new Set(enabledViewIds), [enabledViewIds]);
@@ -37,13 +39,11 @@ export default function IdeActivityBar({
 
   const navItems = [
     { id: "files", icon: <FolderOpen size={22} strokeWidth={1.5} />, label: "Explorer" },
-    { id: "search", icon: <Search size={22} strokeWidth={1.5} />, label: "Search" },
-    { id: "boards", icon: <Cpu size={22} strokeWidth={1.5} />, label: "Boards Manager" },
     { id: "libraries", icon: <LayoutGrid size={22} strokeWidth={1.5} />, label: "Library Manager" },
   ];
 
   return (
-    <div className="flex h-full w-[54px] flex-col items-center justify-between rounded-l-[30px] border-r border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-quiet)] py-4 shadow-inner backdrop-blur-xl">
+    <div className="flex h-full w-[54px] flex-col items-center justify-between rounded-none border-r border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-quiet)] py-4 shadow-inner backdrop-blur-xl">
       <div className="flex w-full flex-col items-center gap-4">
         {navItems.map((item) => {
           const isEnabled = enabledViews.has(item.id);
@@ -74,6 +74,7 @@ export default function IdeActivityBar({
       <div className="flex w-full flex-col items-center gap-4">
         <button
           type="button"
+          onClick={onOpenPreferences}
           className="flex h-12 w-12 items-center justify-center rounded-[16px] text-[var(--ui-color-text-soft)] transition-colors hover:bg-[color:var(--ui-surface-elevated)] hover:text-[var(--ui-color-text)]"
           title="Settings"
         >

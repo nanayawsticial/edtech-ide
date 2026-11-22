@@ -68,6 +68,14 @@ function summarizeIncludes(library: LibraryItem) {
   return library.includes.slice(0, 3).join(', ');
 }
 
+function shouldRetryLibraryResponse(status: number) {
+  return status === 502 || status === 503 || status === 504;
+}
+
+function waitForLibraryRetry(delayMs: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, delayMs));
+}
+
 export default function LibraryHub() {
   const { language } = useBoard();
   const { token } = useAuth();
@@ -100,17 +108,28 @@ export default function LibraryHub() {
       const suffix = searchQuery
         ? `/api/libraries/arduino/search?q=${encodeURIComponent(searchQuery)}`
         : '/api/libraries/arduino/installed';
-      const res = await apiFetch(suffix, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await safeJson<LibraryResponse>(res);
+      let data: LibraryResponse | null = null;
 
-      if (!res.ok || !data?.success) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const res = await apiFetch(suffix, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        data = await safeJson<LibraryResponse>(res);
+
+        if (res.ok && data?.success) {
+          break;
+        }
+
+        if (attempt < 2 && shouldRetryLibraryResponse(res.status)) {
+          await waitForLibraryRetry(450 * (attempt + 1));
+          continue;
+        }
+
         throw new Error(data?.error || `Library API error (status ${res.status}).`);
       }
 
-      setLibraries(Array.isArray(data.libraries) ? data.libraries : []);
-      setWarnings(Array.isArray(data.warnings) ? data.warnings : []);
+      setLibraries(Array.isArray(data?.libraries) ? data.libraries : []);
+      setWarnings(Array.isArray(data?.warnings) ? data.warnings : []);
     } catch (fetchError) {
       setLibraries([]);
       setWarnings([]);
@@ -396,3 +415,5 @@ export default function LibraryHub() {
     </div>
   );
 }
+
+

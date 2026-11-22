@@ -2,11 +2,12 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Blocks, CheckCircle2, Code2, Play, Rocket, RotateCcw, Save, Settings2, Square } from 'lucide-react';
+import { ArrowLeft, Blocks, CheckCircle2, Code2, Play, Plus, Rocket, RotateCcw, Save, Settings2, Square } from 'lucide-react';
 import type { CodingMode } from '@/contexts/BoardContext';
 import { Button } from '@/components/ui/Button';
 import { fadeInUp } from '@/components/ui/motion';
 import ThemeToggle from '@/components/layout/ThemeToggle';
+import BackHomeButtons from '@/components/layout/BackHomeButtons';
 
 interface CodingEnvironmentTopBarProps {
   projectName: string;
@@ -28,6 +29,7 @@ interface CodingEnvironmentTopBarProps {
   onStopSimulation: () => void;
   onResetSimulation: () => void;
   onSaveProject: () => void;
+  onNewSketch: () => void;
   onOpenPreferences: () => void;
   onVerify?: () => void;
   onUpload?: () => void;
@@ -55,6 +57,7 @@ export default function CodingEnvironmentTopBar({
   onStopSimulation,
   onResetSimulation,
   onSaveProject,
+  onNewSketch,
   onOpenPreferences,
   onVerify,
   onUpload,
@@ -73,12 +76,12 @@ export default function CodingEnvironmentTopBar({
   if (activeMode === 'block') {
     return (
       <motion.header
-        className='overflow-hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,#15121f_0%,#111019_100%)] shadow-[0_24px_64px_-44px_rgba(0,0,0,1)]'
+        className='overflow-hidden rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,#15121f_0%,#111019_100%)] shadow-[0_24px_64px_-44px_rgba(0,0,0,1)] sm:rounded-[24px]'
         variants={fadeInUp}
         initial='hidden'
         animate='visible'
       >
-        <div className='flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5'>
+        <div className='flex flex-wrap items-center justify-between gap-3 px-3 py-3 sm:px-5'>
           <div className='flex min-w-0 flex-col gap-3'>
             <div className='flex min-w-0 flex-wrap items-center gap-2'>
               <div className='inline-flex items-center gap-1 rounded-[16px] border border-white/10 bg-white/[0.04] p-1.5'>
@@ -104,7 +107,7 @@ export default function CodingEnvironmentTopBar({
               </span>
               {saveStatusText ? <span className={`rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] ${saveStatusClass}`}>{saveStatusText}</span> : null}
             </div>
-            <div className='flex flex-wrap items-center gap-2'>
+            <div className='flex w-full items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 md:w-auto md:pb-0'>
               <span className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${componentCount > 0 ? 'border-emerald-300/24 bg-emerald-400/12 text-emerald-100' : 'border-white/10 bg-white/[0.04] text-slate-400'}`}>
                 1 Build
               </span>
@@ -117,7 +120,13 @@ export default function CodingEnvironmentTopBar({
             </div>
           </div>
 
-          <div className='flex flex-wrap items-center gap-2'>
+          <div className='flex w-full items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 md:w-auto md:pb-0'>
+            <BackHomeButtons
+              backFallbackHref="/dashboard"
+              variant="inverse"
+              size="sm"
+              buttonClassName="min-h-11 rounded-[16px] border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white hover:border-white/16 hover:bg-white/[0.08] hover:text-white"
+            />
             <Button
               variant='secondary'
               icon={<ArrowLeft size={16} />}
@@ -134,6 +143,14 @@ export default function CodingEnvironmentTopBar({
               className='min-h-11 rounded-[16px] border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white hover:border-white/16 hover:bg-white/[0.08] hover:text-white'
             >
               {isSaving ? 'Saving...' : 'Save'}
+            </Button>
+            <Button
+              variant='secondary'
+              icon={<Plus size={16} />} 
+              onClick={onNewSketch}
+              className='min-h-11 rounded-[16px] border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white hover:border-white/16 hover:bg-white/[0.08] hover:text-white'
+            >
+              New Sketch
             </Button>
             <Button
               variant='secondary'
@@ -182,12 +199,12 @@ export default function CodingEnvironmentTopBar({
 
   return (
     <motion.header
-      className='flex-shrink-0 overflow-hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,#15121f_0%,#111019_100%)] shadow-[0_24px_64px_-44px_rgba(0,0,0,1)]'
+      className='flex-shrink-0 overflow-hidden rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,#15121f_0%,#111019_100%)] shadow-[0_24px_64px_-44px_rgba(0,0,0,1)] sm:rounded-[24px]'
       variants={fadeInUp}
       initial='hidden'
       animate='visible'
     >
-      <div className='flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 sm:px-5'>
+      <div className='flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 sm:px-5'>
         {/* ── Left: mode switcher + board chip + status ──────────── */}
         <div className='flex min-w-0 flex-wrap items-center gap-2'>
 
@@ -265,7 +282,13 @@ export default function CodingEnvironmentTopBar({
         </div>
 
         {/* ── Right: action buttons ──────────────────────────────── */}
-        <div className='flex flex-wrap items-center gap-2'>
+        <div className='flex w-full items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 md:w-auto md:pb-0'>
+          <BackHomeButtons
+            backFallbackHref="/dashboard"
+            variant="inverse"
+            size="sm"
+            buttonClassName="min-h-9 rounded-[12px] border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white hover:border-white/16 hover:bg-white/[0.08] hover:text-white"
+          />
           <Button
             variant='secondary'
             icon={<ArrowLeft size={14} />}
@@ -282,6 +305,14 @@ export default function CodingEnvironmentTopBar({
             className='min-h-9 rounded-[12px] border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white hover:border-white/16 hover:bg-white/[0.08] hover:text-white'
           >
             {isSaving ? 'Saving…' : 'Save'}
+          </Button>
+          <Button
+            variant='secondary'
+            icon={<Plus size={14} />} 
+            onClick={onNewSketch}
+            className='min-h-9 rounded-[12px] border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white hover:border-white/16 hover:bg-white/[0.08] hover:text-white'
+          >
+            New Sketch
           </Button>
           <Button
             icon={isSimulationActive ? <Square size={14} /> : <Play size={14} />}
@@ -319,4 +350,8 @@ export default function CodingEnvironmentTopBar({
     </motion.header>
   );
 }
+
+
+
+
 

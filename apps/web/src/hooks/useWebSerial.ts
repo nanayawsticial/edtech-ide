@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+﻿import { useMemo } from 'react';
 import { useArduinoFlash } from './web-serial/useArduinoFlash';
 import { useMicroPythonProtocol } from './web-serial/useMicroPythonProtocol';
 import { useSerialMessages } from './web-serial/useSerialMessages';
@@ -22,9 +22,11 @@ export function useWebSerial() {
   return useMemo(() => ({
     isConnected: transport.isConnected,
     isFlashing,
+    baudRate: transport.baudRate,
     messages,
     connect: transport.connect,
     disconnect: transport.disconnect,
+    setBaudRate: transport.setBaudRate,
     writeText: transport.writeText,
     writeBytes: transport.writeBytes,
     executeMicroPythonRaw,
@@ -40,9 +42,11 @@ export function useWebSerial() {
     isFlashing,
     messages,
     runMicroPythonCommand,
+    transport.baudRate,
     transport.connect,
     transport.disconnect,
     transport.isConnected,
+    transport.setBaudRate,
     transport.writeBytes,
     transport.writeText,
   ]);

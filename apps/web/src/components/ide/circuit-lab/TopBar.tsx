@@ -2,12 +2,13 @@
 
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Blocks, CircuitBoard, Code2, FolderOpen, Save, Settings2, Trash2 } from 'lucide-react';
+import { Blocks, CircuitBoard, Code2, FolderOpen, Plus, Save, Settings2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { fadeInUp } from '@/components/ui/motion';
 import { useCircuitStore } from '@/stores/circuitStore';
 import { SimulationWarningBar } from './SimulationWarningBar';
+import BackHomeButtons from '@/components/layout/BackHomeButtons';
 
 interface CircuitLabTopBarProps {
   projectName: string;
@@ -21,6 +22,7 @@ interface CircuitLabTopBarProps {
   onConnectDevice: () => void;
   onSaveProject: () => void;
   onOpenProject: () => void;
+  onNewSketch: () => void;
   onOpenPreferences: () => void;
   onOpenCodingEnvironment: () => void;
   saveStatusText?: string | null;
@@ -50,6 +52,7 @@ export default function TopBar({
   onConnectDevice,
   onSaveProject,
   onOpenProject,
+  onNewSketch,
   onOpenPreferences,
   onOpenCodingEnvironment,
   saveStatusText,
@@ -68,12 +71,12 @@ export default function TopBar({
   return (
     <>
       <motion.header
-        className="overflow-hidden rounded-[22px] border border-white/6 bg-[#0a1017] shadow-[0_24px_54px_-42px_rgba(0,0,0,0.95)]"
+        className="overflow-hidden rounded-[18px] border border-white/6 bg-[#0a1017] shadow-[0_24px_54px_-42px_rgba(0,0,0,0.95)] sm:rounded-[22px]"
         variants={fadeInUp}
         initial="hidden"
         animate="visible"
       >
-        <div className="flex flex-col gap-3 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-col gap-3 px-3 py-3 sm:px-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] border border-white/8 bg-white/[0.04] text-slate-200">
@@ -117,7 +120,13 @@ export default function TopBar({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+          <div className="flex w-full items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 xl:w-auto xl:flex-wrap xl:justify-end xl:overflow-visible xl:pb-0">
+            <BackHomeButtons
+              backFallbackHref="/dashboard"
+              variant="ghost"
+              size="sm"
+              buttonClassName="min-h-10 rounded-full border border-white/8 bg-white/[0.03] px-4 text-sm text-slate-300 hover:border-white/14 hover:bg-white/[0.06] hover:text-white"
+            />
             <Button
               icon={nextWorkspaceIcon}
               onClick={onOpenCodingEnvironment}
@@ -141,6 +150,14 @@ export default function TopBar({
               className="min-h-10 rounded-full border border-white/8 bg-white/[0.03] px-4 text-sm text-slate-300 hover:border-white/14 hover:bg-white/[0.06] hover:text-white"
             >
               Projects
+            </Button>
+            <Button
+              variant="ghost"
+              icon={<Plus size={15} />}
+              onClick={onNewSketch}
+              className="min-h-10 rounded-full border border-white/8 bg-white/[0.03] px-4 text-sm text-slate-300 hover:border-white/14 hover:bg-white/[0.06] hover:text-white"
+            >
+              New Sketch
             </Button>
             <Button
               variant="ghost"
@@ -181,3 +198,6 @@ export default function TopBar({
     </>
   );
 }
+
+
+

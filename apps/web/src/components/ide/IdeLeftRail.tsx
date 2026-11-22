@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React from "react";
 import { FolderOpen } from "lucide-react";
@@ -27,7 +27,7 @@ export default function IdeLeftRail({
   const currentView = views.find((view) => view.id === activeView) || views[0];
 
   return (
-    <section className="ui-foundation-panel flex h-full min-h-0 flex-col overflow-hidden rounded-[26px]">
+    <section className="ui-foundation-panel flex h-full min-h-0 flex-col overflow-hidden rounded-none">
       <div className="border-b border-[color:var(--ui-border-soft)] px-4 py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">

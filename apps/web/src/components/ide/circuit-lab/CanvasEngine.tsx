@@ -59,7 +59,7 @@ export default function CanvasEngine({
   return (
     <div
       ref={containerRef}
-      className="relative h-full w-full overflow-hidden rounded-[20px] bg-[#050a12] ring-1 ring-white/5"
+      className="relative h-full w-full overflow-hidden rounded-[20px] bg-[#050a12]"
       data-canvas-root="true"
       data-testid="circuit-canvas-root"
     >

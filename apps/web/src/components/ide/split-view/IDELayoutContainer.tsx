@@ -3,7 +3,7 @@
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { CircuitBoard, Code2 } from 'lucide-react';
+import { BotMessageSquare, CircuitBoard, Code2, HardDrive, TerminalSquare } from 'lucide-react';
 import type { useWebSerial } from '@/hooks/useWebSerial';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useStudioPreferences } from '@/contexts/StudioPreferencesContext';
@@ -24,6 +24,7 @@ import FileExplorer from '../FileExplorer';
 import WorkspaceGuidance from '../WorkspaceGuidance';
 import IdeShellFrame from '../IdeShellFrame';
 import IdeActivityBar from '../IdeActivityBar';
+import IdeRightActivityBar from '../IdeRightActivityBar';
 import IdeStatusBar from '../IdeStatusBar';
 import IdeLeftRail from '../IdeLeftRail';
 import IdeRightContextPanel, { type IdeRightContextView } from '../IdeRightContextPanel';
@@ -36,7 +37,8 @@ import LibraryHub from '../LibraryHub';
 import PreferencesDialog from '../PreferencesDialog';
 import { IDEErrorBoundary } from '../ErrorBoundary';
 import SaveProjectModal from './SaveProjectModal';
-import { LEFT_PANEL_WIDTH, RIGHT_PANEL_WIDTH } from './constants';
+import NewSketchDialog from './NewSketchDialog';
+import { getResponsiveShellPanelWidths } from './constants';
 import { useSplitViewEventBus } from './SplitViewEventBus';
 import { useEditorOrchestrator } from './EditorOrchestrator';
 import { useCircuitOrchestrator } from './CircuitOrchestrator';
@@ -107,14 +109,20 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
   const {
     autoSave,
     showAdvancedBlocks,
+    editorFontSize,
+    editorWordWrap,
+    editorReadabilityMode,
     isPreferencesOpen,
     openPreferences,
     closePreferences,
     setAutoSave,
     setShowAdvancedBlocks,
+    setEditorFontSize,
+    setEditorWordWrap,
+    setEditorReadabilityMode,
     resetPreferences,
   } = useStudioPreferences();
-  const { projectName, setProjectName, projectId, refreshProjectFiles } = useProject();
+  const { projectName, setProjectName, projectId, refreshProjectFiles, saveProject, startNewSketch } = useProject();
   const hasUnsavedChanges = useEditorStore((state) => state.hasUnsavedChanges);
   const editor = useEditorOrchestrator();
   const circuit = useCircuitOrchestrator();
@@ -125,33 +133,30 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
     environment: editor.environment,
     isBlockMode: editor.isBlockMode,
     supportsDeviceFiles: compile.supportsDeviceFiles,
+    editorFontSize,
   });
 
   const shouldShowCodeGuidance = !editor.isBlockMode && (
     editor.environment === 'virtual' ? circuit.virtualComponentCount === 0 : editor.sourceCode.trim().length === 0
   );
+  const shellPanelWidths = useMemo(() => getResponsiveShellPanelWidths(layout.viewportWidth), [layout.viewportWidth]);
 
 
   const rightViews = useMemo<IdeRightContextView[]>(() => {
     const views: IdeRightContextView[] = [
       {
-        id: 'ai-chat',
-        label: 'AI Chat',
-        tone: 'violet',
-        content: <AiChatPanel />,
+        id: 'terminal',
+        label: 'Terminal',
+        icon: <TerminalSquare size={20} strokeWidth={1.6} />,
+        tone: 'amber',
+        content: <TerminalPanel webSerial={webSerial} />,
       },
       {
-        id: 'status',
-        label: 'Status',
-        tone: 'slate',
-        content: (
-          <BoardStatusPanel
-            boardName={editor.currentBoard}
-            codingMode={editor.codingMode}
-            environment={editor.environment}
-            isConnected={webSerial.isConnected}
-          />
-        ),
+        id: 'ai-chat',
+        label: 'AI Chat',
+        icon: <BotMessageSquare size={20} strokeWidth={1.6} />,
+        tone: 'violet',
+        content: <AiChatPanel />,
       },
     ];
 
@@ -159,6 +164,7 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
       views.unshift({
         id: 'device',
         label: 'Device',
+        icon: <HardDrive size={20} strokeWidth={1.6} />,
         tone: 'cyan',
         content: <DeviceFiles webSerial={webSerial} />,
       });
@@ -173,7 +179,79 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
     }
   }, [layout, rightViews]);
 
+
   const runtimeLabel = editor.boardConfig?.runtimeLabel || (editor.currentLanguage === 'python' ? 'MicroPython' : 'Arduino C++');
+  const [isNewSketchDialogOpen, setIsNewSketchDialogOpen] = React.useState(false);
+  const [isSavingBeforeNewSketch, setIsSavingBeforeNewSketch] = React.useState(false);
+  const pendingNewSketchAfterSaveRef = React.useRef(false);
+
+  const executeNewSketch = React.useCallback(() => {
+    pendingNewSketchAfterSaveRef.current = false;
+    setIsNewSketchDialogOpen(false);
+    setIsSavingBeforeNewSketch(false);
+    startNewSketch();
+
+    if (editor.environment === 'virtual') {
+      layout.setStudioView('circuit');
+    }
+  }, [editor.environment, layout, startNewSketch]);
+
+  const handleRequestNewSketch = React.useCallback(() => {
+    if (!hasUnsavedChanges) {
+      executeNewSketch();
+      return;
+    }
+
+    setIsNewSketchDialogOpen(true);
+  }, [executeNewSketch, hasUnsavedChanges]);
+
+  const handleCancelNewSketch = React.useCallback(() => {
+    pendingNewSketchAfterSaveRef.current = false;
+    setIsSavingBeforeNewSketch(false);
+    setIsNewSketchDialogOpen(false);
+  }, []);
+
+  const handleDiscardNewSketch = React.useCallback(() => {
+    executeNewSketch();
+  }, [executeNewSketch]);
+
+  const handleSaveThenNewSketch = React.useCallback(async () => {
+    if (!hasUnsavedChanges) {
+      executeNewSketch();
+      return;
+    }
+
+    if (!projectId) {
+      pendingNewSketchAfterSaveRef.current = true;
+      setIsNewSketchDialogOpen(false);
+      eventBus.emit('project:save-request', { origin: 'manual' });
+      return;
+    }
+
+    setIsSavingBeforeNewSketch(true);
+    try {
+      await saveProject();
+      executeNewSketch();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not save before starting a new sketch.';
+      webSerial.addMessage('error', message);
+    } finally {
+      setIsSavingBeforeNewSketch(false);
+    }
+  }, [eventBus, executeNewSketch, hasUnsavedChanges, projectId, saveProject, webSerial]);
+
+  const handleCloseSaveProjectModal = React.useCallback(() => {
+    pendingNewSketchAfterSaveRef.current = false;
+    autoSaveManager.closeSaveModal();
+  }, [autoSaveManager]);
+
+  React.useEffect(() => {
+    return eventBus.on('FILE_SAVED', () => {
+      if (pendingNewSketchAfterSaveRef.current) {
+        executeNewSketch();
+      }
+    });
+  }, [eventBus, executeNewSketch]);
 
   const handleResetEditorZone = React.useCallback(async () => {
     useBlocklyStore.getState().resetBlocklyState();
@@ -247,10 +325,16 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
       theme={theme}
       autoSave={autoSave}
       showAdvancedBlocks={showAdvancedBlocks}
+      editorFontSize={editorFontSize}
+      editorWordWrap={editorWordWrap}
+      editorReadabilityMode={editorReadabilityMode}
       onClose={closePreferences}
       onThemeChange={setTheme}
       onAutoSaveChange={setAutoSave}
       onShowAdvancedBlocksChange={setShowAdvancedBlocks}
+      onEditorFontSizeChange={setEditorFontSize}
+      onEditorWordWrapChange={setEditorWordWrap}
+      onEditorReadabilityModeChange={setEditorReadabilityMode}
       onResetApp={() => {
         resetPreferences();
         setTheme('light');
@@ -261,7 +345,7 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
   );
 
   const textCenterStage = (
-    <div className="ui-foundation-panel relative flex h-full w-full min-h-0 min-w-0 flex-1 overflow-hidden rounded-[30px]">
+    <div className="ui-foundation-panel relative flex h-full w-full min-h-0 min-w-0 flex-1 overflow-hidden rounded-none">
       <IDEErrorBoundary
         zone="Text Editor"
         title="The text editor hit a problem"
@@ -360,16 +444,16 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
   );
 
   const blockModeStage = (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 sm:gap-3">
       {blockWorkspaceStage}
       {blockBottomStage}
     </div>
   );
 
   const virtualCodingStage = editor.isBlockMode ? (
-    <div className="mt-4 flex min-h-0 flex-1">{blockModeStage}</div>
+    <div className="mt-2 flex min-h-0 flex-1 sm:mt-4">{blockModeStage}</div>
   ) : (
-    <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4">
+    <div className="mt-2 flex min-h-0 flex-1 flex-col gap-3 sm:mt-4 sm:gap-4">
       {shouldShowCodeGuidance ? (
         <CodeGuidanceCard
           environment={editor.environment}
@@ -419,7 +503,7 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
 
   if (editor.environment === 'virtual') {
     return (
-      <div className="circuit-lab-shell flex h-[100dvh] w-full flex-col overflow-hidden px-3 py-3">
+      <div className="circuit-lab-shell flex h-[100dvh] w-full flex-col overflow-hidden px-2 py-2 sm:px-3 sm:py-3">
         {layout.activeView === 'circuit' ? (
           <>
             <CircuitLabTopBar
@@ -434,13 +518,14 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
               onConnectDevice={() => eventBus.emit('device:connect-toggle-request', undefined)}
               onSaveProject={() => eventBus.emit('project:save-request', { origin: 'manual' })}
               onOpenProject={() => router.push('/dashboard')}
+              onNewSketch={handleRequestNewSketch}
               onOpenPreferences={openPreferences}
               onOpenCodingEnvironment={() => layout.setStudioView('code')}
               saveStatusText={autoSaveManager.visibleSaveStatusText}
               saveStatusTone={autoSaveManager.visibleSaveStatusTone}
             />
             {virtualProjectRail}
-            <div className="mt-3 min-h-0 flex-1">
+            <div className="mt-2 min-h-0 flex-1 sm:mt-3">
               <div className="relative h-full min-h-0 overflow-hidden">
                 <IDEErrorBoundary
                   zone="Circuit Lab"
@@ -475,6 +560,7 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
               onStopSimulation={() => circuit.simulationControls?.stop()}
               onResetSimulation={() => circuit.simulationControls?.reset()}
               onSaveProject={() => eventBus.emit('project:save-request', { origin: 'manual' })}
+              onNewSketch={handleRequestNewSketch}
               onOpenPreferences={openPreferences}
               onVerify={() => eventBus.emit('compile:verify-request', undefined)}
               onUpload={() => eventBus.emit('compile:upload-request', undefined)}
@@ -494,8 +580,15 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
           currentBoard={editor.currentBoard}
           runtimeLabel={runtimeLabel}
           onNameChange={autoSaveManager.setNewProjectName}
-          onClose={autoSaveManager.closeSaveModal}
+          onClose={handleCloseSaveProjectModal}
           onSubmit={() => void autoSaveManager.submitSaveModal()}
+        />
+        <NewSketchDialog
+          open={isNewSketchDialogOpen}
+          isSavingFirst={isSavingBeforeNewSketch}
+          onCancel={handleCancelNewSketch}
+          onDiscard={handleDiscardNewSketch}
+          onSaveFirst={() => void handleSaveThenNewSketch()}
         />
       </div>
     );
@@ -516,6 +609,7 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
         rightCollapsed={layout.rightCollapsed}
         bottomCollapsed={layout.bottomCollapsed}
         showPanelControls={!editor.isBlockMode}
+        showBottomToggle={editor.isBlockMode}
         showStudioToggle={editor.isBlockMode}
         activeStudioView={layout.activeView}
         onChangeStudioView={layout.setStudioView}
@@ -525,9 +619,10 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
         onSelectBoard={() => router.push('/projects/select-board')}
         onSaveProject={() => eventBus.emit('project:save-request', { origin: 'manual' })}
         onOpenProject={() => router.push('/dashboard')}
+        onNewSketch={handleRequestNewSketch}
         onOpenPreferences={openPreferences}
-        onToggleLeft={() => layout.setLeftCollapsed((prev) => !prev)}
-        onToggleRight={() => layout.setRightCollapsed((prev) => !prev)}
+        onToggleLeft={layout.toggleLeftCollapsed}
+        onToggleRight={layout.toggleRightCollapsed}
         onToggleBottom={() => layout.setBottomCollapsed((prev) => !prev)}
         saveStatusText={autoSaveManager.visibleSaveStatusText}
         saveStatusTone={autoSaveManager.visibleSaveStatusTone}
@@ -537,20 +632,21 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
       {preferencesDialog}
 
       {editor.isBlockMode ? (
-        <div className="mt-3 flex min-h-0 flex-1 px-3 pb-3">{blockModeStage}</div>
+        <div className="mt-2 flex min-h-0 flex-1 px-2 pb-2 sm:mt-3 sm:px-3 sm:pb-3">{blockModeStage}</div>
       ) : (
         <div className="flex min-h-0 w-full flex-1 overflow-hidden">
           <IdeActivityBar
             activeView={layout.leftRailView}
             onChangeView={layout.setLeftRailView}
             isCollapsed={layout.leftCollapsed}
-            onToggleCollapsed={() => layout.setLeftCollapsed((prev) => !prev)}
+            onToggleCollapsed={layout.toggleLeftCollapsed}
             enabledViewIds={['files', 'libraries']}
+            onOpenPreferences={openPreferences}
           />
 
-          <div className="relative flex min-h-0 flex-1 flex-col px-2">
+          <div className="relative flex min-h-0 flex-1 flex-col">
             {shouldShowCodeGuidance ? (
-              <div className="absolute left-1/2 top-4 z-40 w-full max-w-xl -translate-x-1/2 shadow-2xl">
+              <div className="absolute left-1/2 top-3 z-40 w-full max-w-xl -translate-x-1/2 px-2 shadow-2xl sm:top-4 sm:px-0">
                 <CodeGuidanceCard
                   environment={editor.environment}
                   virtualComponentCount={circuit.virtualComponentCount}
@@ -566,20 +662,28 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
               center={textCenterStage}
               right={
                 <IdeRightContextPanel
-                  title="AI Assistant"
-                  subtitle="Ask questions, get code help, and debug faster with AI."
+                  title="Workspace Panel"
+                  subtitle="Switch between terminal, AI help, and device tools."
                   views={rightViews}
                   activeView={layout.rightPanelView}
                   onChangeView={layout.setRightPanelView}
                 />
               }
-              bottom={bottomStage}
+              bottom={null}
               leftCollapsed={layout.leftCollapsed}
               rightCollapsed={layout.rightCollapsed}
-              leftWidth={LEFT_PANEL_WIDTH}
-              rightWidth={RIGHT_PANEL_WIDTH}
+              leftWidth={shellPanelWidths.left}
+              rightWidth={shellPanelWidths.right}
             />
           </div>
+
+          <IdeRightActivityBar
+            views={rightViews}
+            activeView={layout.rightPanelView}
+            isCollapsed={layout.rightCollapsed}
+            onChangeView={layout.setRightPanelView}
+            onToggleCollapsed={layout.toggleRightCollapsed}
+          />
         </div>
       )}
 
@@ -592,15 +696,29 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
       ) : null}
 
       <SaveProjectModal
-        open={autoSaveManager.isSaveModalOpen}
-        isSaving={autoSaveManager.isSaving}
-        newProjectName={autoSaveManager.newProjectName}
-        currentBoard={editor.currentBoard}
-        runtimeLabel={runtimeLabel}
-        onNameChange={autoSaveManager.setNewProjectName}
-        onClose={autoSaveManager.closeSaveModal}
-        onSubmit={() => void autoSaveManager.submitSaveModal()}
-      />
+          open={autoSaveManager.isSaveModalOpen}
+          isSaving={autoSaveManager.isSaving}
+          newProjectName={autoSaveManager.newProjectName}
+          currentBoard={editor.currentBoard}
+          runtimeLabel={runtimeLabel}
+          onNameChange={autoSaveManager.setNewProjectName}
+          onClose={handleCloseSaveProjectModal}
+          onSubmit={() => void autoSaveManager.submitSaveModal()}
+        />
+        <NewSketchDialog
+          open={isNewSketchDialogOpen}
+          isSavingFirst={isSavingBeforeNewSketch}
+          onCancel={handleCancelNewSketch}
+          onDiscard={handleDiscardNewSketch}
+          onSaveFirst={() => void handleSaveThenNewSketch()}
+        />
     </div>
   );
 }
+
+
+
+
+
+
+

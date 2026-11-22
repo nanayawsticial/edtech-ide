@@ -42,6 +42,8 @@ function cn(...classes: (string | boolean | undefined)[]) {
 
 const WIRE_COLORS = ['#ef4444', '#f8fafc', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
 const DEFAULT_VIEWPORT = { x: -72, y: -28, scale: 0.98 };
+const COMPACT_CIRCUIT_BREAKPOINT = 1180;
+const COMPACT_CIRCUIT_HEIGHT = 820;
 
 type PaletteCategory = 'All' | ComponentCategory;
 type PlacementPreviewSource = 'existing' | 'palette' | 'armed';
@@ -177,6 +179,7 @@ export default function BreadboardCanvas({
   const [selectedWireId, setSelectedWireId] = useState<string | null>(null);
   const [wireWaypointOverrides, setWireWaypointOverrides] = useState<Record<string, Point[]>>({});
   const [isPaletteVisible, setIsPaletteVisible] = useState(showPalette);
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
   const [activeCategory, setActiveCategory] = useState<PaletteCategory>('All');
   const [dragPreview, setDragPreview] = useState<DragPreviewState | null>(null);
   const [recentlyCreatedWireId, setRecentlyCreatedWireId] = useState<string | null>(null);
@@ -188,8 +191,22 @@ export default function BreadboardCanvas({
   const recentPinTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
-    setIsPaletteVisible(showPalette);
-  }, [showPalette]);
+    const updateViewportMode = () => {
+      if (typeof window === 'undefined') {
+        return;
+      }
+
+      setIsCompactViewport(window.innerWidth < COMPACT_CIRCUIT_BREAKPOINT || window.innerHeight < COMPACT_CIRCUIT_HEIGHT);
+    };
+
+    updateViewportMode();
+    window.addEventListener('resize', updateViewportMode);
+    return () => window.removeEventListener('resize', updateViewportMode);
+  }, []);
+
+  useEffect(() => {
+    setIsPaletteVisible(isCompactViewport ? false : showPalette);
+  }, [isCompactViewport, showPalette]);
 
   useEffect(() => {
     if (selectedWireId && !circuitData.nets.some((net) => net.id === selectedWireId)) {
@@ -840,6 +857,9 @@ export default function BreadboardCanvas({
     (type: string) => {
       if (focusSingletonComponent(type)) {
         clearArmedInsertionPreview();
+        if (isCompactViewport) {
+          setIsPaletteVisible(false);
+        }
         return;
       }
 
@@ -851,8 +871,11 @@ export default function BreadboardCanvas({
       updateInsertionPreview('armed', type);
       selectComponent(null);
       setSelectedWireId(null);
+      if (isCompactViewport) {
+        setIsPaletteVisible(false);
+      }
     },
-    [clearArmedInsertionPreview, dragPreview, focusSingletonComponent, selectComponent, updateInsertionPreview]
+    [clearArmedInsertionPreview, dragPreview, focusSingletonComponent, isCompactViewport, selectComponent, updateInsertionPreview]
   );
 
   const handleCanvasPointerMoveCapture = useCallback(
@@ -1119,11 +1142,25 @@ export default function BreadboardCanvas({
   }, [eventBus, removeComponent, removeNet, selectComponent, selectedComponentId, selectedWireId]);
 
   return (
-    <div className="flex h-full w-full overflow-hidden rounded-[24px] bg-[#050913] font-sans selection:bg-cyan-400/20">
+    <div className="relative flex h-full w-full overflow-hidden rounded-[18px] bg-[#050913] font-sans selection:bg-cyan-400/20 sm:rounded-[24px]">
+      {isCompactViewport && isPaletteVisible ? (
+        <button
+          type="button"
+          aria-label="Close parts drawer"
+          onClick={() => setIsPaletteVisible(false)}
+          className="absolute inset-0 z-[220] bg-black/35 backdrop-blur-[1px]"
+        />
+      ) : null}
       <aside
         className={cn(
-          'relative z-[200] flex h-full shrink-0 border-r border-white/8 bg-[linear-gradient(180deg,#10161f_0%,#0a0f16_100%)] transition-[width,opacity] duration-200 ease-out',
-          isPaletteVisible ? 'w-[320px] opacity-100' : 'pointer-events-none w-0 border-r-0 opacity-0'
+          'flex h-full shrink-0 overflow-hidden bg-[linear-gradient(180deg,#10161f_0%,#0a0f16_100%)] transition-[width,opacity,transform] duration-200 ease-out',
+          isCompactViewport
+            ? isPaletteVisible
+              ? 'absolute inset-y-3 left-3 z-[230] w-[min(340px,calc(100%-1.5rem))] rounded-[20px] border border-white/10 opacity-100 shadow-[0_28px_68px_-36px_rgba(2,6,23,0.95)]'
+              : 'pointer-events-none absolute inset-y-3 left-3 z-[230] w-[min(340px,calc(100%-1.5rem))] -translate-x-4 rounded-[20px] border border-white/0 opacity-0'
+            : isPaletteVisible
+              ? 'relative z-[200] w-[320px] border-r border-white/8 opacity-100'
+              : 'pointer-events-none relative z-[200] w-0 border-r-0 opacity-0'
         )}
       >
         <div className="flex h-full min-h-0 w-full">
@@ -1377,41 +1414,24 @@ export default function BreadboardCanvas({
         ) : null}
 
         {interactionMode ? (
-          <>
+          <div className="pointer-events-none absolute left-1/2 top-5 z-[250] -translate-x-1/2" data-testid="circuit-mode-badge">
             <div
               className={cn(
-                'pointer-events-none absolute inset-[10px] z-[14] rounded-[24px] border transition-all duration-150',
+                'rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] shadow-[0_18px_34px_-24px_rgba(2,6,23,0.95)] backdrop-blur-xl',
                 interactionMode.tone === 'placing'
-                  ? 'border-cyan-300/16 shadow-[0_0_0_1px_rgba(34,211,238,0.06),0_0_42px_rgba(34,211,238,0.08)]'
+                  ? 'border-cyan-300/26 bg-cyan-300/12 text-cyan-100'
                   : interactionMode.tone === 'invalid'
-                    ? 'border-rose-300/18 shadow-[0_0_0_1px_rgba(248,113,113,0.06),0_0_42px_rgba(248,113,113,0.08)]'
+                    ? 'border-rose-300/30 bg-rose-500/14 text-rose-100'
                     : interactionMode.tone === 'valid'
-                      ? 'border-emerald-300/18 shadow-[0_0_0_1px_rgba(52,211,153,0.06),0_0_42px_rgba(52,211,153,0.08)]'
+                      ? 'border-emerald-300/28 bg-emerald-500/14 text-emerald-100'
                       : interactionMode.tone === 'wiring'
-                        ? 'border-sky-300/14 shadow-[0_0_0_1px_rgba(56,189,248,0.05),0_0_34px_rgba(56,189,248,0.06)]'
-                        : 'border-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]'
+                        ? 'border-sky-300/24 bg-sky-300/12 text-sky-100'
+                        : 'border-white/12 bg-[#08111d]/88 text-white/80'
               )}
-              data-testid="circuit-mode-frame"
-            />
-            <div className="pointer-events-none absolute left-1/2 top-5 z-[250] -translate-x-1/2" data-testid="circuit-mode-badge">
-              <div
-                className={cn(
-                  'rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] shadow-[0_18px_34px_-24px_rgba(2,6,23,0.95)] backdrop-blur-xl',
-                  interactionMode.tone === 'placing'
-                    ? 'border-cyan-300/26 bg-cyan-300/12 text-cyan-100'
-                    : interactionMode.tone === 'invalid'
-                      ? 'border-rose-300/30 bg-rose-500/14 text-rose-100'
-                      : interactionMode.tone === 'valid'
-                        ? 'border-emerald-300/28 bg-emerald-500/14 text-emerald-100'
-                        : interactionMode.tone === 'wiring'
-                          ? 'border-sky-300/24 bg-sky-300/12 text-sky-100'
-                          : 'border-white/12 bg-[#08111d]/88 text-white/80'
-                )}
-              >
-                {interactionMode.label} � {interactionMode.detail}
-              </div>
+            >
+              {interactionMode.label} Â· {interactionMode.detail}
             </div>
-          </>
+          </div>
         ) : null}
 
         <InteractionManager
