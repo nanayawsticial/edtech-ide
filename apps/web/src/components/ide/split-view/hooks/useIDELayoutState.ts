@@ -25,6 +25,13 @@ import { useSplitViewEventBus } from '../SplitViewEventBus';
 
 const RIGHT_EDITOR_FOCUS_THRESHOLD = 20;
 const LEFT_EDITOR_FOCUS_THRESHOLD = 26;
+const START_VIEW_OVERRIDE_KEY = 'edtech:ide-start-view';
+
+function readStartViewOverride(): StudioView | null {
+  if (typeof window === 'undefined') return null;
+  const stored = window.sessionStorage.getItem(START_VIEW_OVERRIDE_KEY);
+  return stored === 'code' || stored === 'circuit' ? stored : null;
+}
 
 interface UseIDELayoutStateOptions {
   environment: string;
@@ -84,19 +91,19 @@ export function useIDELayoutState({ environment, isBlockMode, supportsDeviceFile
 
   // One-shot override: the wizard stores 'edtech:ide-start-view' in sessionStorage
   // when the user explicitly picked a coding mode (not from Circuit Lab).
-  // We consume it exactly once here so the env-reset effect below doesn't clobber it.
-  const startViewOverrideRef = useRef(false);
-  const [activeView, setActiveView] = useState<StudioView>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = window.sessionStorage.getItem('edtech:ide-start-view');
-      if (stored === 'code' || stored === 'circuit') {
-        window.sessionStorage.removeItem('edtech:ide-start-view');
-        startViewOverrideRef.current = true;
-        return stored as StudioView;
-      }
+  // We read it once on mount (render stays side-effect free) and clear it in an effect,
+  // so the env-reset effect below doesn't clobber it.
+  const [startViewOverride] = useState<StudioView | null>(readStartViewOverride);
+  const startViewOverrideRef = useRef(startViewOverride !== null);
+  const [activeView, setActiveView] = useState<StudioView>(
+    () => startViewOverride ?? getInitialStudioView(environment),
+  );
+
+  useEffect(() => {
+    if (startViewOverride !== null) {
+      window.sessionStorage.removeItem(START_VIEW_OVERRIDE_KEY);
     }
-    return getInitialStudioView(environment);
-  });
+  }, [startViewOverride]);
 
   const defaultRightView = 'terminal';
   const effectiveBlockTerminalHeight = isCompact ? Math.min(terminalHeight, 180) : terminalHeight;

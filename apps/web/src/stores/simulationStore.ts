@@ -44,8 +44,10 @@ export interface SimulationCanvasStatus {
   compileFeedback: CompileFeedback | null;
 }
 
-export interface CircuitLabSimulationView
-  extends Pick<CircuitSimulationState, 'running' | 'ready' | 'digitalPins' | 'netStates' | 'componentVisuals'> {}
+export type CircuitLabSimulationView = Pick<
+  CircuitSimulationState,
+  'running' | 'ready' | 'digitalPins' | 'netStates' | 'componentVisuals'
+>;
 
 interface SimulationStoreState {
   simulationState: CircuitSimulationState;
