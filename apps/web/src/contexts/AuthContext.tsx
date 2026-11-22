@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { apiFetch, safeJson } from '@/lib/api';
+import { isClientDevAuthBypassEnabled } from '@/lib/auth/devBypass';
 import { normalizeRuntimeError } from '@/lib/runtime/normalizeRuntimeError';
 
 export interface User {
@@ -19,6 +20,12 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+const DEV_BYPASS_USER: User = {
+  id: 'dev-user-id',
+  email: 'stemaide-dev@example.com',
+  name: 'Developer',
+};
 
 function persistToken(token: string) {
   localStorage.setItem('token', token);
@@ -57,6 +64,23 @@ function stashAuthNotice(message: string) {
   window.sessionStorage.setItem('authNotice', message);
 }
 
+async function startDevBypassSession() {
+  const response = await apiFetch('/api/auth/dev-login', { method: 'POST' });
+  const data = await safeJson<{ token?: string; user?: User; error?: string }>(response);
+
+  if (!response.ok || !data?.token || !data?.user) {
+    throw new Error(data?.error || 'Development login is not available.');
+  }
+
+  await syncSessionCookie(data.token);
+  persistToken(data.token);
+
+  return {
+    token: data.token,
+    user: data.user,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -65,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const hasInitializedAuth = useRef(false);
 
-  const publicRoutes = ['/', '/login', '/register', '/auth/callback'];
+  const publicRoutes = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/auth/callback'];
 
   const clearAuthState = useCallback(async () => {
     clearPersistedAuth();
@@ -95,6 +119,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!storedToken) {
         await clearSessionCookie();
+
+        if (isClientDevAuthBypassEnabled()) {
+          try {
+            const devSession = await startDevBypassSession();
+            if (!isCancelled) {
+              setUser(devSession.user);
+              setToken(devSession.token);
+            }
+          } catch (error) {
+            console.warn('Development auth bypass could not get an API token.', normalizeRuntimeError(error));
+            if (!isCancelled) {
+              setUser(DEV_BYPASS_USER);
+              setToken(null);
+            }
+          }
+
+          if (!isCancelled) {
+            setIsLoading(false);
+          }
+          return;
+        }
+
         if (!isCancelled) {
           setIsLoading(false);
         }
@@ -227,3 +273,4 @@ export function useAuth() {
   }
   return context;
 }
+

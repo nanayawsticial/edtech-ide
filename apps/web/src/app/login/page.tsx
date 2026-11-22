@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { StatusBanner } from "@/components/ui/StatusBanner";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch, API_BASE_URL, safeJson } from "@/lib/api";
+import { getSupabaseCallbackUrl } from "@/lib/supabase/authRedirect";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function GoogleIcon() {
@@ -53,11 +54,10 @@ export default function LoginPage() {
 
     try {
       const supabase = getSupabaseBrowserClient();
-      const redirectTo = new URL("/auth/callback", window.location.origin).toString();
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo,
+          redirectTo: getSupabaseCallbackUrl(),
         },
       });
 
@@ -90,7 +90,10 @@ export default function LoginPage() {
         setError(data?.error || "Sign-in failed. Check your email and password, then try again.");
       }
     } catch (err) {
-      setError("Could not reach the sign-in service right now. Try again in a moment.");
+      const message = err instanceof Error && err.message
+        ? err.message
+        : "Could not reach the sign-in service right now. Try again in a moment.";
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -187,6 +190,14 @@ export default function LoginPage() {
                 className="h-[56px] w-full rounded-[20px] border border-[color:var(--ui-border-soft)] bg-[color:var(--ui-color-surface)] pl-12 pr-4 text-sm text-[color:var(--ui-color-text)] outline-none transition-colors placeholder:text-[color:var(--ui-color-text-soft)] focus:border-[color:var(--ui-color-primary)]"
                 placeholder="Enter your password"
               />
+            </div>
+            <div className="flex justify-end">
+              <Link
+                href="/forgot-password"
+                className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--ui-color-primary)] transition-colors hover:underline"
+              >
+                Forgot password?
+              </Link>
             </div>
           </div>
 
