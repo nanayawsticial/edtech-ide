@@ -47,3 +47,9 @@ packages/database/dist/
 apps/web/.next/
 
 
+.vercel
+
+# Local agent/tool scratch output
+.codex-tmp/
+output/
+.opencode/package-lock.json
