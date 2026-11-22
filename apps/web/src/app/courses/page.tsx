@@ -1,9 +1,10 @@
-﻿import { CoursesCatalogView } from '@/components/courses/CoursesCatalogView';
+import { CoursesCatalogView } from '@/components/courses/CoursesCatalogView';
 import { getCourseCatalog } from '@/lib/courses/catalog';
+
+export const dynamic = 'force-static';
 
 export default function CoursesPage() {
   const tracks = getCourseCatalog();
 
   return <CoursesCatalogView tracks={tracks} />;
 }
-
