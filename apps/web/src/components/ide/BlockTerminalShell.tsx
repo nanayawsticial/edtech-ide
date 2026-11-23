@@ -115,7 +115,7 @@ export default function BlockTerminalShell({
     <section className="ui-foundation-panel flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] shadow-[0_28px_70px_-42px_rgba(0,0,0,0.42)]">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--ui-border-soft)] px-4 py-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--ui-color-primary)]/76">Terminal Dock</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[color:var(--ui-color-text-soft)]">Terminal Dock</p>
           <p className="mt-1 text-sm ui-panel-copy-soft">Serial, upload, and device feedback for block projects.</p>
         </div>
         <div className="flex items-center gap-2">
