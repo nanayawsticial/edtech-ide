@@ -3,6 +3,7 @@ import localFont from 'next/font/local';
 import type { ReactNode } from 'react';
 import './globals.css';
 import SupabaseAuthHashBridge from '@/components/auth/SupabaseAuthHashBridge';
+import { DesktopRuntime } from '@/components/desktop/DesktopRuntime';
 import { BoardProvider } from '@/contexts/BoardContext';
 import { ProjectProvider } from '@/contexts/ProjectContext';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -30,6 +31,7 @@ export default function RootLayout({
   return (
     <html lang="en" data-theme="light" suppressHydrationWarning>
       <body className={`${editorMono.variable} antialiased`}>
+        <DesktopRuntime />
         <SupabaseAuthHashBridge />
         <ThemeProvider>
           <StudioPreferencesProvider>

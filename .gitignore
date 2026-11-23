@@ -53,3 +53,12 @@ apps/web/.next/
 .codex-tmp/
 output/
 .opencode/package-lock.json
+
+# Desktop app (apps/desktop): build outputs and files the CI workflow downloads or generates
+apps/web/out/
+apps/web/.desktop-build-stash/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/icons/
+apps/desktop/src-tauri/bin/
+apps/desktop/src-tauri/arduino-staging/

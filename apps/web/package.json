@@ -7,6 +7,7 @@
         "dev:fast": "next dev --turbopack",
         "dev:full": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/dev-all.ps1",
         "build": "next build",
+        "build:desktop": "node scripts/build-desktop.mjs",
         "start": "next start",
         "lint": "eslint",
         "validate:blockly-generators": "node scripts/validate-blockly-generators.mjs",

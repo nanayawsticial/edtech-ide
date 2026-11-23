@@ -38,8 +38,10 @@ function clearPersistedAuth() {
   } catch {}
 }
 
+// apiFetch('/api/session') is the same request as fetch('/api/session') on the web; on the desktop
+// it is answered locally (lib/desktop/desktopApi.ts).
 async function syncSessionCookie(token: string) {
-  const response = await fetch('/api/session', {
+  const response = await apiFetch('/api/session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
@@ -53,7 +55,7 @@ async function syncSessionCookie(token: string) {
 }
 
 async function clearSessionCookie() {
-  await fetch('/api/session', {
+  await apiFetch('/api/session', {
     method: 'DELETE',
     credentials: 'same-origin',
   }).catch(() => undefined);

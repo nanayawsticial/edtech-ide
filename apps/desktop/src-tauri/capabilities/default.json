@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "The main window: Tauri core APIs (events) for the bundled web app.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

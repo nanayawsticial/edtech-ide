@@ -1,0 +1,101 @@
+# Builds the Windows installer for the Sticial Studio desktop app (apps/desktop).
+#
+# Runs on GitHub's Windows machines, which already have Rust and the Visual Studio C++ tools.
+# Start it from the Actions tab ("Run workflow"), or push changes under apps/web or apps/desktop.
+# The installer is attached to the run as the artifact "sticial-studio-windows".
+name: Desktop app (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "apps/web/**"
+      - "apps/desktop/**"
+      - ".github/workflows/desktop-app.yml"
+
+env:
+  ARDUINO_CLI_VERSION: "1.4.1"
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check the web app
+        working-directory: apps/web
+        run: npx tsc --noEmit -p .
+
+      - name: Build the web app for desktop (static export to apps/web/out)
+        run: npm run build:desktop --workspace web
+
+      - name: Download arduino-cli
+        shell: pwsh
+        run: |
+          $zip = "$env:RUNNER_TEMP\arduino-cli.zip"
+          $url = "https://github.com/arduino/arduino-cli/releases/download/v$env:ARDUINO_CLI_VERSION/arduino-cli_${env:ARDUINO_CLI_VERSION}_Windows_64bit.zip"
+          Invoke-WebRequest -UseBasicParsing $url -OutFile $zip
+          $bin = "apps/desktop/src-tauri/bin"
+          New-Item -ItemType Directory -Force $bin | Out-Null
+          Expand-Archive $zip -DestinationPath $bin -Force
+          & "$bin/arduino-cli.exe" version
+
+      # Pre-download the Arduino AVR core and tools so the app's first compile works offline.
+      # The app installs them from this cache into the usual Arduino15 folder on first use.
+      - name: Bundle the Arduino AVR tools for offline first run
+        shell: pwsh
+        run: |
+          $cli = (Resolve-Path "apps/desktop/src-tauri/bin/arduino-cli.exe").Path
+          $staging = "apps/desktop/src-tauri/arduino-staging"
+          New-Item -ItemType Directory -Force $staging | Out-Null
+          $staging = (Resolve-Path $staging).Path
+          $env:ARDUINO_DIRECTORIES_DATA = "$env:RUNNER_TEMP\arduino-data"
+          $env:ARDUINO_DIRECTORIES_USER = "$env:RUNNER_TEMP\arduino-user"
+          $env:ARDUINO_DIRECTORIES_DOWNLOADS = $staging
+          & $cli core update-index
+          if ($LASTEXITCODE -ne 0) { throw "core update-index failed" }
+          & $cli core install arduino:avr
+          if ($LASTEXITCODE -ne 0) { throw "core install failed" }
+          # Compile a sketch once so every tool the compiler needs is in the cache too.
+          $sketch = "$env:RUNNER_TEMP\Blink"
+          New-Item -ItemType Directory -Force $sketch | Out-Null
+          Set-Content "$sketch\Blink.ino" "void setup() { pinMode(13, OUTPUT); }`nvoid loop() { digitalWrite(13, HIGH); delay(500); digitalWrite(13, LOW); delay(500); }"
+          & $cli compile --fqbn arduino:avr:uno $sketch
+          if ($LASTEXITCODE -ne 0) { throw "test compile failed" }
+          foreach ($name in "package_index.json", "package_index.json.sig") {
+            $source = Join-Path $env:ARDUINO_DIRECTORIES_DATA $name
+            if (Test-Path $source) { Copy-Item $source $staging }
+          }
+          $core = Get-ChildItem "$staging\packages" -Filter "avr-*.tar.bz2" | Select-Object -First 1
+          if (-not $core) { throw "AVR core archive not found in the download cache" }
+          ($core.Name -replace '^avr-(.*)\.tar\.bz2$', '$1') | Set-Content -NoNewline "$staging\avr-core-version.txt"
+          Get-ChildItem -Recurse $staging | Measure-Object -Sum Length | ForEach-Object { "Bundled cache: {0:N1} MB in {1} files" -f ($_.Sum / 1MB), $_.Count }
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - name: Generate app icons
+        working-directory: apps/desktop/src-tauri
+        run: npx --yes @tauri-apps/cli@2 icon ../app-icon.png
+
+      - name: Build the installer
+        working-directory: apps/desktop/src-tauri
+        run: npx --yes @tauri-apps/cli@2 build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sticial-studio-windows
+          path: apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
