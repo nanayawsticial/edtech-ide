@@ -34,7 +34,7 @@ export default function IdeBottomDock({
           />
         </div>
       ) : null}
-      <div style={{ height }} className="min-h-[160px] transition-[height] duration-200">
+      <div style={{ height }} className="min-h-[120px] transition-[height] duration-200">
         {children}
       </div>
     </>

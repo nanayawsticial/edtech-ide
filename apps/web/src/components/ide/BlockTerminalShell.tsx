@@ -113,14 +113,33 @@ export default function BlockTerminalShell({
 
   return (
     <section className="ui-foundation-panel flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] shadow-[0_28px_70px_-42px_rgba(0,0,0,0.42)]">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--ui-border-soft)] px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[color:var(--ui-color-text-soft)]">Terminal Dock</p>
-          <p className="mt-1 text-sm ui-panel-copy-soft">Serial, upload, and device feedback for block projects.</p>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[color:var(--ui-border-soft)] px-3 py-1.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5" role="group" aria-label="Terminal views">
+          {TAB_OPTIONS.map((tab) => {
+            const isActive = activeTab === tab.id;
+            const count = tab.id === "serial" ? serialMessages.length : tab.id === "build" ? buildMessages.length : connectionMessages.length;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                aria-pressed={isActive}
+                onClick={() => handleTabChange(tab.id)}
+                className={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs font-semibold transition-all ${
+                  isActive
+                    ? 'ui-tab-active shadow-[0_14px_26px_-18px_rgba(0,0,0,0.28)]'
+                    : 'ui-pill-surface text-[var(--ui-color-text-soft)] hover:bg-[color:var(--ui-surface-elevated)] hover:text-[var(--ui-color-text-on-surface)]'
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+                <span className="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px] font-bold opacity-90">{count}</span>
+              </button>
+            );
+          })}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <span
-            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
+            className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] ${
               webSerial.isConnected
                 ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
                 : "ui-pill-surface text-[var(--ui-color-text-soft)]"
@@ -132,35 +151,13 @@ export default function BlockTerminalShell({
           <button
             type="button"
             onClick={onToggleCollapsed}
-            className="ui-action-quiet inline-flex h-9 items-center gap-2 rounded-[12px] px-3 text-xs font-semibold transition-all"
+            aria-label="Collapse terminal"
+            title="Collapse terminal"
+            className="ui-action-quiet inline-flex h-8 w-8 items-center justify-center rounded-[10px] transition-all"
           >
-            Collapse
-            <ChevronDown size={14} />
+            <ChevronDown size={15} />
           </button>
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 border-b border-[color:var(--ui-border-soft)] px-4 py-2.5">
-        {TAB_OPTIONS.map((tab) => {
-          const isActive = activeTab === tab.id;
-          const count = tab.id === "serial" ? serialMessages.length : tab.id === "build" ? buildMessages.length : connectionMessages.length;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => handleTabChange(tab.id)}
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
-                isActive
-                  ? 'ui-tab-active shadow-[0_14px_26px_-18px_rgba(0,0,0,0.28)]'
-                  : 'ui-pill-surface text-[var(--ui-color-text-soft)] hover:bg-[color:var(--ui-surface-elevated)] hover:text-[var(--ui-color-text-on-surface)]'
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-              <span className="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px] font-bold opacity-90">{count}</span>
-            </button>
-          );
-        })}
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
@@ -175,10 +172,7 @@ export default function BlockTerminalShell({
 
         {activeTab === "build" ? (
           <div className="flex h-full min-h-0 flex-col">
-            <div className="border-b border-[color:var(--ui-border-soft)] px-4 py-3 text-xs ui-panel-copy-quiet">
-              Verify, upload, sync, and flash events appear here while the block project talks to the board toolchain.
-            </div>
-            <div className="custom-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
+            <div className="custom-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
               {buildMessages.length > 0 ? (
                 buildMessages.map((message, index) => (
                   <div key={`${message.timestamp}-${index}`} className={`rounded-[12px] px-3 py-2 ${toneForMessage(message.type)}`}>
@@ -187,10 +181,10 @@ export default function BlockTerminalShell({
                   </div>
                 ))
               ) : (
-                <div className="flex h-full min-h-[120px] items-center justify-center text-center">
-                  <div className="space-y-2">
+                <div className="flex h-full min-h-[72px] items-center justify-center text-center">
+                  <div className="space-y-1.5">
                     <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--ui-color-text-soft)]">No build activity yet</p>
-                    <p className="text-xs ui-panel-copy-quiet">Run Verify or Upload to start filling this stream.</p>
+                    <p className="text-xs ui-panel-copy-quiet">Run Verify or Upload. Compile, upload and sync events show up here.</p>
                   </div>
                 </div>
               )}

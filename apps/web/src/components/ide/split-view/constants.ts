@@ -1,6 +1,6 @@
 export const DEFAULT_BLOCKLY_XML = '<xml xmlns="https://developers.google.com/blockly/xml"></xml>';
-export const BLOCK_TERMINAL_MIN_HEIGHT = 160;
-export const BLOCK_TERMINAL_DEFAULT_HEIGHT = 220;
+export const BLOCK_TERMINAL_MIN_HEIGHT = 120;
+export const BLOCK_TERMINAL_DEFAULT_HEIGHT = 200;
 export const BLOCK_TERMINAL_MAX_HEIGHT = 420;
 export const BLOCK_TERMINAL_HEIGHT_STORAGE_KEY = 'edtech:block-terminal-height';
 export const BLOCK_TERMINAL_COLLAPSED_STORAGE_KEY = 'edtech:block-terminal-collapsed';
