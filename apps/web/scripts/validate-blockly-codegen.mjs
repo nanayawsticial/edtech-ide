@@ -196,14 +196,19 @@ for (const generatorName of Object.keys(generators)) {
     if (Object.values(generators).some((generator) => generator.markBlockIds_)) fail('markers were left switched on');
     if (generatorName === 'micropython') pythonPrograms.push({ type: 'code line map sample', program: code });
     for (const [id, expected] of Object.entries(MAP_EXPECTED_TEXT[generatorName])) {
-      const [range] = blockLineRanges[id] || [];
-      if (!range) {
+      const ranges = blockLineRanges[id] || [];
+      if (ranges.length === 0) {
         fail(`no lines recorded for block "${id}"`);
         continue;
       }
-      if (range.start < 1 || range.end > lines.length || range.start > range.end) fail(`block "${id}" has an impossible range ${range.start}-${range.end}`);
-      const text = lines.slice(range.start - 1, range.end).join('\n');
-      if (!text.includes(expected)) fail(`block "${id}" maps to lines ${range.start}-${range.end} ("${text.trim().slice(0, 60)}"), expected "${expected}"`);
+      for (const range of ranges) {
+        if (range.start < 1 || range.end > lines.length || range.start > range.end) fail(`block "${id}" has an impossible range ${range.start}-${range.end}`);
+      }
+      // A block can own several ranges (e.g. print owns its line and Serial.begin()); one must match.
+      const texts = ranges.map((range) => lines.slice(range.start - 1, range.end).join('\n'));
+      if (!texts.some((text) => text.includes(expected))) {
+        fail(`block "${id}" maps to ${ranges.map((r) => `${r.start}-${r.end}`).join(', ')} ("${texts.join(' | ').trim().slice(0, 60)}"), expected "${expected}"`);
+      }
     }
     const [repeat] = blockLineRanges.repeat || [];
     for (const child of ['on', 'wait']) {
@@ -216,6 +221,72 @@ for (const generatorName of Object.keys(generators)) {
     fail(`throws: ${String(error.message || error).slice(0, 120)}`);
   } finally {
     workspace.dispose();
+  }
+}
+
+// Whole-program order and pin setup. Part setup (Serial.begin, pinMode, pin objects) must run
+// before the user's own setup blocks, and every pin a digital block uses must exist first.
+function generateProgram(xml, generatorName) {
+  const workspace = new Blockly.Workspace();
+  try {
+    Blockly.Xml.domToWorkspace(Blockly.utils.xml.textToDom(xml), workspace);
+    return buildSourceCodeFromBlocklyWorkspace(workspace, generatorName).code;
+  } finally {
+    workspace.dispose();
+  }
+}
+const rootXml = (setup, loop) => `<xml xmlns="https://developers.google.com/blockly/xml">
+  <block type="arduino_setup_loop" x="0" y="0"><statement name="SETUP">${setup}</statement><statement name="LOOP">${loop}</statement></block>
+</xml>`;
+const writePin13 = (state, next = '') =>
+  `<block type="arduino_digitalWrite"><field name="PIN">13</field><field name="STATE">${state}</field>${next ? `<next>${next}</next>` : ''}</block>`;
+const ORDER_SAMPLES = {
+  // The map sample: set pin + print in setup, nested loop.
+  sample: MAP_SAMPLE_XML,
+  // No "set pin" block: digital write must still create/configure the pin.
+  writeOnly: rootXml('', writePin13('HIGH')),
+  // "set pin 13 to INPUT" then digital write: the user's explicit mode must win.
+  explicitInput: rootXml('<block type="arduino_pinMode"><field name="PIN">13</field><field name="MODE">INPUT</field></block>', writePin13('HIGH')),
+};
+const lineIndex = (lines, pattern) => lines.findIndex((line) => pattern.test(line));
+for (const generatorName of Object.keys(generators)) {
+  checked += 1;
+  const fail = (reason) => failures.push(`${generatorName.padEnd(11)} program order: ${reason}`);
+  try {
+    const programs = Object.fromEntries(Object.entries(ORDER_SAMPLES).map(([name, xml]) => [name, generateProgram(xml, generatorName)]));
+    if (showType === 'program-order') {
+      for (const [name, code] of Object.entries(programs)) console.log(`--- ${generatorName} ${name} ---\n${code}`);
+    }
+    if (generatorName === 'micropython') {
+      for (const [name, code] of Object.entries(programs)) pythonPrograms.push({ type: `program order ${name}`, program: code });
+    }
+
+    if (generatorName === 'arduino') {
+      const lines = programs.sample.split('\n');
+      const begin = lineIndex(lines, /Serial\.begin\(/);
+      const print = lineIndex(lines, /Serial\.print\(/);
+      const mode = lineIndex(lines, /pinMode\(13, OUTPUT\)/);
+      if (begin < 0 || print < 0 || begin > print) fail('Serial.begin() must come before the first Serial.print() in setup()');
+      if (mode < 0 || mode > print) fail('pinMode() from "set pin" must come before the user\'s setup blocks');
+      if (!/^  Serial\.print\(/m.test(programs.sample)) fail('setup() body should be indented 2 spaces');
+      if (!/^  for \(/m.test(programs.sample) || !/^    digitalWrite\(13, HIGH\)/m.test(programs.sample)) fail('loop() body should be indented 2 spaces, nested blocks 4');
+      if (!/pinMode\(13, OUTPUT\);/.test(programs.writeOnly)) fail('digital write without "set pin" must add pinMode(13, OUTPUT)');
+      if (/pinMode\(13, OUTPUT\)/.test(programs.explicitInput) || !/pinMode\(13, INPUT\)/.test(programs.explicitInput)) fail('an explicit "set pin 13 to INPUT" must not be replaced');
+    } else {
+      for (const [name, code] of Object.entries(programs)) {
+        const lines = code.split('\n');
+        const defined = lineIndex(lines, /^pin_13 = machine\.Pin\(13/);
+        const used = lineIndex(lines, /pin_13\.value\(/);
+        if (used >= 0 && (defined < 0 || defined > used)) fail(`${name}: pin_13 is used before it is created`);
+      }
+      const lines = programs.sample.split('\n');
+      const pin = lineIndex(lines, /^pin_13 = /);
+      const print = lineIndex(lines, /^print\(/);
+      if (pin < 0 || print < 0 || pin > print) fail('part setup (pin objects) must come before the user\'s setup blocks');
+      if (!/machine\.Pin\(13, machine\.Pin\.IN\)/.test(programs.explicitInput)) fail('an explicit "set pin 13 to INPUT" must not be replaced');
+    }
+  } catch (error) {
+    fail(`throws: ${String(error.message || error).slice(0, 120)}`);
   }
 }
 

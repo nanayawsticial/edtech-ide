@@ -99,6 +99,10 @@ function buildMarkedSource(
   const setupsDict = generator.setups_ || {};
   const loopEntries: string[] = [];
   const manualSetupCode = setupsDict["__setup_code__"] || setupsDict["manual_setup"] || "";
+  // Lines parts register for setup (Serial.begin, pinMode, pin objects, sensor begin calls).
+  // They run before the user's own setup blocks, so e.g. a print in setup comes after
+  // Serial.begin() and a pin is configured before the first write.
+  const partSetupEntries: string[] = [];
 
   if (manualSetupCode.trim()) {
     looseSetupEntries.unshift(manualSetupCode);
@@ -138,14 +142,14 @@ function buildMarkedSource(
       if (isGlobalSnippet) {
         globalEntries.push(snippet);
       } else {
-        looseSetupEntries.push(snippet);
+        partSetupEntries.push(snippet);
       }
     } else {
-      looseSetupEntries.push(snippet);
+      partSetupEntries.push(snippet);
     }
   }
 
-  const setupCode = looseSetupEntries.join("\n");
+  const setupCode = [...partSetupEntries, ...looseSetupEntries].join("\n");
   const loopCode = loopEntries.join("\n");
 
   if (generatorType === "micropython") {

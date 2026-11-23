@@ -95,6 +95,19 @@ arduinoGenerator.INDENT = '  ';
     return markBlockCode(this, block, code) + nextCode;
 };
 
+/**
+ * The body of a setup/loop root block. Arduino statement handlers already indent their own lines
+ * by one level, and statementToCode adds another, so strip one level to get 2-space bodies.
+ */
+function arduinoRootBody(block: Blockly.Block, inputName: string) {
+    const code: string = (arduinoGenerator as any).statementToCode(block, inputName) || '';
+    const indent = arduinoGenerator.INDENT || '  ';
+    return code
+        .split('\n')
+        .map((line) => (line.startsWith(indent) ? line.slice(indent.length) : line))
+        .join('\n');
+}
+
 // -- Arduino Blocks --
 (arduinoGenerator as any).forBlock['arduino_pinMode'] = function (block: Blockly.Block) {
     const pin = block.getFieldValue('PIN');
@@ -106,6 +119,9 @@ arduinoGenerator.INDENT = '  ';
 (arduinoGenerator as any).forBlock['arduino_digitalWrite'] = function (block: Blockly.Block) {
     const pin = block.getFieldValue('PIN');
     const state = block.getFieldValue('STATE');
+    // Without pinMode(OUTPUT) a write only toggles the weak pull-up, so an LED glows dimly.
+    // Add it unless a "set pin" block configures this pin (that block always wins).
+    (arduinoGenerator as any).setups_[`pinMode_${pin}`] ??= `  pinMode(${pin}, OUTPUT);`;
     return `  digitalWrite(${pin}, ${state});\n`;
 };
 
@@ -406,22 +422,22 @@ const NUMBER_LITERAL = /^-?\d+(\.\d+)?$/;
     return ['lightMeter.readLightLevel()', (arduinoGenerator as any).ORDER_ATOMIC];
 };
 (arduinoGenerator as any).forBlock['arduino_setup_loop'] = function (block: Blockly.Block) {
-    const setupCode = (arduinoGenerator as any).statementToCode(block, 'SETUP') || '';
-    const loopCode = (arduinoGenerator as any).statementToCode(block, 'LOOP') || '';
+    const setupCode = arduinoRootBody(block, 'SETUP');
+    const loopCode = arduinoRootBody(block, 'LOOP');
     (arduinoGenerator as any).setups_['__setup_code__'] = setupCode;
     (arduinoGenerator as any).setups_['__loop_code__'] = loopCode;
     return '';
 };
 
 (arduinoGenerator as any).forBlock['arduino_on_start'] = function (block: Blockly.Block) {
-    const setupCode = (arduinoGenerator as any).statementToCode(block, 'SETUP') || '';
+    const setupCode = arduinoRootBody(block, 'SETUP');
     const existing = (arduinoGenerator as any).setups_['__setup_code__'] || '';
     (arduinoGenerator as any).setups_['__setup_code__'] = existing + setupCode;
     return '';
 };
 
 (arduinoGenerator as any).forBlock['arduino_forever'] = function (block: Blockly.Block) {
-    const loopCode = (arduinoGenerator as any).statementToCode(block, 'LOOP') || '';
+    const loopCode = arduinoRootBody(block, 'LOOP');
     const existing = (arduinoGenerator as any).setups_['__loop_code__'] || '';
     (arduinoGenerator as any).setups_['__loop_code__'] = existing + loopCode;
     return '';
@@ -757,6 +773,10 @@ function dedentMicroPython(code: string) {
 (micropythonGenerator as any).forBlock['arduino_digitalWrite'] = function (block: Blockly.Block) {
     const pin = block.getFieldValue('PIN');
     const state = block.getFieldValue('STATE') === 'HIGH' ? '1' : '0';
+    // Create the pin if no "set pin" block did; otherwise `pin_N` is undefined on the board.
+    const setups = getMicroPythonState(micropythonGenerator);
+    setups.imports_.add('machine');
+    setups.setups_[`pinMode_${pin}`] ??= `pin_${pin} = machine.Pin(${pin}, machine.Pin.OUT)`;
     return `pin_${pin}.value(${state})\n`;
 };
 
@@ -819,7 +839,8 @@ function getMicroPythonLedConfig(block: Blockly.Block) {
     const pin = block.getFieldValue('PIN');
     const state = getMicroPythonState(micropythonGenerator);
     state.imports_.add('machine');
-    state.setups_[`pinMode_${pin}`] = `pin_${pin} = machine.Pin(${pin}, machine.Pin.IN)`;
+    // Keep a pin a "set pin" block already configured; only create it if missing.
+    state.setups_[`pinMode_${pin}`] ??= `pin_${pin} = machine.Pin(${pin}, machine.Pin.IN)`;
     return [`pin_${pin}.value()`, (micropythonGenerator as any).ORDER_ATOMIC];
 };
 
