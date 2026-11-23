@@ -1,3 +1,4 @@
+import * as Blockly from 'blockly';
 import { 
     getDigitalPinOptions, 
     getAnalogPinOptions, 
@@ -261,6 +262,7 @@ export const actuatorsBlocks = [
                 { type: "field_dropdown", name: "G_PIN", options: getDigitalPinOptions },
                 { type: "field_dropdown", name: "STATE", options: [["Red", "RED"], ["Yellow", "YELLOW"], ["Green", "GREEN"], ["Off", "OFF"]] }
             ],
+            extensions: ["distinct_pin_defaults"],
             previousStatement: null,
             nextStatement: null,
             style: "light_blocks",
@@ -278,6 +280,7 @@ export const actuatorsBlocks = [
                 { type: "input_value", name: "G_VAL", check: "Number" },
                 { type: "input_value", name: "B_VAL", check: "Number" }
             ],
+            extensions: ["distinct_pin_defaults"],
             previousStatement: null,
             nextStatement: null,
             style: "light_blocks",
@@ -324,3 +327,28 @@ export const actuatorsBlocks = [
             helpUrl: ""
         }
 ];
+
+let actuatorExtensionsRegistered = false;
+
+/**
+ * Multi-pin parts (RGB LED, traffic light) would otherwise start with every pin dropdown on the
+ * first pin, so one pin drives all three colours. New blocks start each pin on the next free one.
+ * Saved projects are unaffected: their field values load after this runs.
+ */
+export function registerActuatorExtensions() {
+    if (actuatorExtensionsRegistered || Blockly.Extensions.isRegistered('distinct_pin_defaults')) {
+        actuatorExtensionsRegistered = true;
+        return;
+    }
+    Blockly.Extensions.register('distinct_pin_defaults', function (this: Blockly.Block) {
+        const pinFields = this.inputList
+            .flatMap((input) => input.fieldRow)
+            .filter((field): field is Blockly.FieldDropdown => field instanceof Blockly.FieldDropdown && /_PIN$/.test(field.name ?? ''));
+        pinFields.forEach((field, index) => {
+            if (index === 0) return;
+            const option = field.getOptions(false)[index];
+            if (Array.isArray(option) && typeof option[1] === 'string') field.setValue(option[1]);
+        });
+    });
+    actuatorExtensionsRegistered = true;
+}
