@@ -1191,9 +1191,9 @@ export default function BreadboardCanvas({
             <div className="border-b border-white/8 px-4 py-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.26em] text-white/36">Parts Drawer</div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.26em] text-white/55">Parts Drawer</div>
                   <div className="mt-1 text-[1.05rem] font-semibold text-white/90">{activeCategory === 'All' ? CATEGORY_META.All.label : componentRegistry.getCategoryLabel(activeCategory)}</div>
-                  <div className="mt-2 max-w-[220px] text-[11px] leading-4 text-white/46">
+                  <div className="mt-2 max-w-[220px] text-[11px] leading-4 text-white/60">
                     Drag a part to place it, or click a part and then click exactly where you want it to go.
                   </div>
                   {dragPreview?.source === 'armed' && palettePreviewDefinition ? (
@@ -1209,8 +1209,11 @@ export default function BreadboardCanvas({
             </div>
 
             <div className="custom-scrollbar flex-1 overflow-x-hidden overflow-y-auto px-3 py-3">
-              <div className="space-y-2.5">
-                {visiblePaletteItems.map((item) => (
+              <div className="grid grid-cols-2 gap-2">
+                {visiblePaletteItems.map((item) => {
+                  const isArmed = dragPreview?.source === 'armed' && dragPreview.componentType === item.entry.id;
+                  const description = item.alreadyPlaced ? 'Already on the canvas. Click to select it.' : item.entry.description;
+                  return (
                   <button
                     key={item.entry.id}
                     data-testid={`palette-item-${item.entry.id}`}
@@ -1237,27 +1240,32 @@ export default function BreadboardCanvas({
 
                       beginComponentInsertion(item.entry.id);
                     }}
-                    className="group flex w-full items-center gap-3 rounded-[16px] border border-white/[0.06] bg-[linear-gradient(180deg,#161d28_0%,#0d131b_100%)] px-3 py-3 text-left transition-all duration-150 hover:-translate-y-0.5 hover:border-cyan-300/18 hover:bg-[linear-gradient(180deg,#1a2230_0%,#111824_100%)]"
+                    title={description}
+                    className={cn(
+                      'group flex min-w-0 flex-col gap-2 rounded-[14px] border bg-[linear-gradient(180deg,#161d28_0%,#0d131b_100%)] p-2 text-left transition-all duration-150 hover:-translate-y-0.5 hover:border-cyan-300/18 hover:bg-[linear-gradient(180deg,#1a2230_0%,#111824_100%)]',
+                      isArmed ? 'border-cyan-300/40' : 'border-white/[0.06]'
+                    )}
                   >
-                    <div className="flex h-[94px] w-[116px] shrink-0 items-center justify-center rounded-[14px] border border-white/8 bg-[radial-gradient(circle_at_50%_35%,rgba(34,47,67,0.96),rgba(14,20,29,0.98)_74%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <div className="flex h-[72px] w-full items-center justify-center rounded-[10px] border border-white/8 bg-[radial-gradient(circle_at_50%_35%,rgba(34,47,67,0.96),rgba(14,20,29,0.98)_74%)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                       <ComponentPreview definition={item.definition} className="h-full w-full" />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3"><div className="text-[15px] font-semibold text-white/90">{item.entry.name}</div>{dragPreview?.source === 'armed' && dragPreview.componentType === item.entry.id ? (<span className="rounded-full border border-cyan-300/28 bg-cyan-300/12 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100">Placing</span>) : null}</div>
-                      <div className="mt-2 text-[11px] uppercase tracking-[0.18em] text-white/34">{componentRegistry.getCategoryLabel(item.entry.category)}</div>
-                      <div className="mt-1 text-[11px] leading-4 text-white/38">
-                        {item.alreadyPlaced ? 'Already on the canvas. Click to select it.' : item.entry.description}
+                    <div className="min-w-0 px-0.5 pb-0.5">
+                      <div className="line-clamp-2 text-[13px] font-semibold leading-tight text-white/90">{item.entry.name}</div>
+                      <div className="mt-1 flex items-center justify-between gap-1.5">
+                        <span className="truncate text-[10px] uppercase tracking-[0.14em] text-white/55">{componentRegistry.getCategoryLabel(item.entry.category)}</span>
+                        {isArmed ? (
+                          <span className="shrink-0 rounded-full border border-cyan-300/28 bg-cyan-300/12 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-cyan-100">Placing</span>
+                        ) : item.alreadyPlaced ? (
+                          <span className="shrink-0 rounded-full border border-white/12 bg-white/[0.05] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-white/70">On canvas</span>
+                        ) : null}
                       </div>
-                      <div className="mt-2 text-[11px] font-medium leading-4 text-white/56">
-                        {item.alreadyPlaced
-                          ? 'This part is limited to one copy.'
-                          : dragPreview?.source === 'armed' && dragPreview.componentType === item.entry.id
-                            ? 'Click on the canvas to place it.'
-                            : 'Drag to place, or click and then click on the canvas.'}
-                      </div>
+                      <span className="sr-only">
+                        {description} {isArmed ? 'Click on the canvas to place it.' : item.alreadyPlaced ? 'This part is limited to one copy.' : ''}
+                      </span>
                     </div>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
