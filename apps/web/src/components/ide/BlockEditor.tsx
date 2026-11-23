@@ -1,41 +1,17 @@
 "use client";
 
-
-
-
-
-
-
 import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 
 import * as Blockly from 'blockly';
 
-import { Activity, AlertCircle, Blocks as BlocksIcon, Check, ChevronLeft, ChevronRight, Code2, Crosshair, GitBranch, Infinity as InfinityIcon, Lightbulb, Lock, MessageSquare, Monitor, Move, Search, SlidersHorizontal, Sparkles, SquareFunction, Variable, Wand2 } from 'lucide-react';
-
-
-
-
-
-
-
 import { defineCustomBlocks } from '@/lib/blockly/blocks';
-
-
-
 import { getBlocklyGridColor, getBlocklyTheme } from '@/lib/blockly/theme';
-
-
-
 import { buildSourceCodeFromBlocklyWorkspace } from '@/lib/blockly/codegen';
-
-
 
 import { useBoard, BoardKey } from '@/contexts/BoardContext';
 import { useStudioPreferences } from '@/contexts/StudioPreferencesContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSplitViewEventBus } from './split-view/SplitViewEventBus';
-
-
 
 import {
   buildGuidedCategoryToolboxXml,
@@ -46,220 +22,65 @@ import {
   type GuidedToolboxCategorySummary,
 } from '@/lib/blockly/toolbox';
 
-
-
 import { useCircuitStore } from '@/stores/circuitStore';
 import { useBlocklyStore } from '@/stores/blocklyStore';
 
-
-
-import { getNetFromNodeId, getNetToNodeId } from '@/lib/circuit/netData';
-import { getOledInstances } from '@/lib/blockly/dropdowns';
-import { isBlockSupportedForBoard } from '@/lib/blockly/blockSupport';
 import { isOptionalCircuitBlock } from '@/lib/blockly/circuitAwareness';
-import { TOOLBOX_LEARNING_LEVELS, type ToolboxLearningLevel } from '@/lib/blockly/guidedToolbox';
 
-
-
-
-
-
-
-
-type BoardAwareWindow = Window & typeof globalThis & {
-
-
-
-  SELECTED_BOARD?: BoardKey;
-
-
-
-};
-
-
-
-
-
-
-
-type BlocklyMotionEvent = Blockly.Events.Abstract & {
-
-
-
-  isStart?: boolean;
-
-
-
-  isMoveInProgress?: boolean;
-
-
-
-};
-
-type StabilizedFlyout = Blockly.IFlyout & {
-  setAutoClose?: (autoClose: boolean) => void;
-  getFlyoutScale?: () => number;
-  setVisible?: (visible: boolean) => void;
-  setContainerVisible?: (visible: boolean) => void;
-  reflow?: () => void;
-  position?: () => void;
-  getTargetWorkspace?: () => Blockly.WorkspaceSvg;
-  svgGroup_?: SVGElement | null;
-  width_?: number;
-  __edtechFixedScale?: boolean;
-};
-
-
-
-
-
-
-
-
-const EMPTY_TOOLBOX_XML = '<xml xmlns="https://developers.google.com/blockly/xml"></xml>';
-
-
-
-const BLOCKLY_FLYOUT_SCALE = 0.9;
-const BLOCKLY_FLYOUT_FIXED_WIDTH = 320;
-const BLOCKLY_CODE_PANEL_MIN_WIDTH = 280;
-const BLOCKLY_CODE_PANEL_DEFAULT_WIDTH = 340;
-const BLOCKLY_CODE_PANEL_MAX_WIDTH = 520;
-const BLOCKLY_CODE_PANEL_COMPACT_MAX_WIDTH = 360;
-const BLOCKLY_CODE_PANEL_STORAGE_KEY = 'edtech:blockly-code-panel-width';
-const BLOCKLY_CODE_PANEL_OPEN_STORAGE_KEY = 'edtech:blockly-code-panel-open';
-const BLOCKLY_HIDDEN_CATEGORY_STORAGE_KEY = 'edtech:blockly-hidden-categories';
-const BLOCKLY_SYNC_DEBOUNCE_MS = 200;
-
-function clampCodePanelWidth(width: number) {
-  return Math.min(BLOCKLY_CODE_PANEL_MAX_WIDTH, Math.max(BLOCKLY_CODE_PANEL_MIN_WIDTH, width));
-}
-
-
-
-
-
-
-
-
-function boardLabel(board: BoardKey) {
-
-
-
-  return board.replace(/_/g, ' ');
-
-
-
-}
-
-const LEARNING_LEVEL_LABELS: Record<ToolboxLearningLevel, string> = {
-  starter: 'Starter',
-  builder: 'Builder',
-  explore: 'Explore',
-};
-
-const GUIDED_CATEGORY_METADATA: Record<
-  string,
-  { icon: React.ReactNode; color: string }
-> = {
-  start: { icon: <Sparkles size={16} strokeWidth={2.3} />, color: '#6d7cff' },
-  'your-circuit': { icon: <BlocksIcon size={16} strokeWidth={2.3} />, color: '#5b6dff' },
-  output: { icon: <Lightbulb size={16} strokeWidth={2.3} />, color: '#d5607c' },
-  decide: { icon: <GitBranch size={16} strokeWidth={2.3} />, color: '#744ffc' },
-  sense: { icon: <Activity size={16} strokeWidth={2.3} />, color: '#c0488a' },
-  numbers: { icon: <InfinityIcon size={16} strokeWidth={2.3} />, color: '#54b274' },
-  variables: { icon: <Variable size={16} strokeWidth={2.3} />, color: '#df8b2d' },
-  functions: { icon: <SquareFunction size={16} strokeWidth={2.3} />, color: '#efb936' },
-  messages: { icon: <MessageSquare size={16} strokeWidth={2.3} />, color: '#d86b43' },
-  displays: { icon: <Monitor size={16} strokeWidth={2.3} />, color: '#5e31a6' },
-};
-
-type LearningGuideActionId =
-  | 'open-start'
-  | 'open-output'
-  | 'open-your-circuit'
-  | 'show-code'
-  | 'advance-builder'
-  | 'advance-explore';
-
-const DISPLAY_BLOCK_TYPES = new Set(['oled_init', 'lcd_i2c_init', 'arduino_tft_init']);
-const TIMING_BLOCK_TYPES = new Set(['arduino_delay', 'time_delay', 'time_wait_seconds', 'time_wait_until']);
-const ROOT_FLOW_BLOCK_TYPES = new Set(['arduino_setup_loop', 'arduino_on_start', 'arduino_forever', 'controls_forever']);
-
-function stringArrayEqual(left: string[], right: string[]) {
-  if (left === right) {
-    return true;
-  }
-
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  return left.every((value, index) => value === right[index]);
-}
-
-
-
-
-
-
-
+import {
+  BLOCKLY_FLYOUT_FIXED_WIDTH,
+  BLOCKLY_FLYOUT_SCALE,
+  BLOCKLY_SYNC_DEBOUNCE_MS,
+  DISPLAY_BLOCK_TYPES,
+  EMPTY_TOOLBOX_XML,
+  FALLBACK_START_CATEGORY,
+  ROOT_FLOW_BLOCK_TYPES,
+  TIMING_BLOCK_TYPES,
+  boardLabel,
+  clampCodePanelWidth,
+  stringArrayEqual,
+  toShelfCategory,
+  type BlocklyMotionEvent,
+  type BoardAwareWindow,
+  type StabilizedFlyout,
+} from './block-editor/config';
+import { CanvasToolbar } from './block-editor/CanvasToolbar';
+import { CategoryManagerDialog } from './block-editor/CategoryManagerDialog';
+import { CategorySidebar } from './block-editor/CategorySidebar';
+import { CoachCard } from './block-editor/CoachCard';
+import { CodePreviewPanel } from './block-editor/CodePreviewPanel';
+import { getDisplayStarters } from './block-editor/displayStarters';
+import { getCoachMilestones, getLearningGuide, type LearningGuideActionId } from './block-editor/learningGuide';
 
 export default function BlockEditor({
-
   onCodeChange,
-
   onXmlChange,
-
   initialXml,
-
   generatorType,
-
   onWorkspaceReady,
-
   selectedCategoryName,
-
   onSelectCategory,
-
   sourceCode,
   isCompactLayout = false,
 }: {
-
-
-
   onCodeChange: (code: string) => void;
-
-
 
   onXmlChange?: (xml: string) => void;
 
-
-
   initialXml?: string;
-
-
 
   generatorType: string;
 
-
-
   onWorkspaceReady?: (workspace: Blockly.WorkspaceSvg | null) => void;
-
-
 
   selectedCategoryName?: string;
 
-
-
   onSelectCategory?: (category: string) => void;
-
-
 
   sourceCode?: string;
 
   isCompactLayout?: boolean;
 }) {
-
   const containerRef = useRef<HTMLDivElement>(null);
 
   const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
@@ -312,52 +133,29 @@ export default function BlockEditor({
   const prevBoardRef = useRef<BoardKey | null>(null);
   const prevThemeRef = useRef(theme);
 
-  const prevCircuitSignatureRef = useRef<string>('');
-
   const codePanelResizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const blocklyTheme = useMemo(() => getBlocklyTheme(theme), [theme]);
   const blocklyGridColor = useMemo(() => getBlocklyGridColor(theme), [theme]);
 
-
-
-
-
-
-
   const onCodeChangeRef = useRef(onCodeChange);
-
-
 
   const onXmlChangeRef = useRef(onXmlChange);
 
-
-
   const onWorkspaceReadyRef = useRef(onWorkspaceReady);
-
-
 
   const generatorTypeRef = useRef(generatorType);
 
-
-
   const initialXmlRef = useRef(initialXml || '');
-
-
 
   const selectedCategoryNameRef = useRef(selectedCategoryName || 'start');
 
-
-
   const lastSyncedXmlRef = useRef<string | null>(null);
-
-
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const sourceCodeRef = useRef(sourceCode || '');
   const currentBoardRef = useRef(currentBoard);
   const isFlyoutVisibleRef = useRef(false);
   const lastCircuitUpdateSignatureRef = useRef('');
-
 
   useEffect(() => {
     if (!isCodePanelResizing) {
@@ -397,150 +195,34 @@ export default function BlockEditor({
     };
   }, [codePanelWidth, isCodePanelResizing]);
 
-
-
-
-
-  const circuitRefreshSignature = useMemo(
-
-
-
-    () =>
-
-
-
-      JSON.stringify({
-
-
-
-        componentIds: circuitData.components.map((component) => `${component.id}:${component.type}`),
-
-
-
-        netEdges: circuitData.nets.map((net) => `${net.id}:${getNetFromNodeId(net)}->${getNetToNodeId(net)}`),
-
-
-
-        availableBlockTypes: codingSnapshot.availableBlockTypes,
-
-
-
-        usedSignalPins: codingSnapshot.usedSignalPins,
-
-
-
-        mappedComponentIds: codingSnapshot.mappedComponentIds,
-
-
-
-      }),
-
-
-
-    [circuitData.components, circuitData.nets, codingSnapshot.availableBlockTypes, codingSnapshot.usedSignalPins, codingSnapshot.mappedComponentIds]
-
-
-
-  );
-
-
-
-
-
-
-
   useEffect(() => {
-
-
-
     (window as BoardAwareWindow).SELECTED_BOARD = currentBoard;
-
-
-
   }, [currentBoard]);
 
-
-
-
-
-
-
   useEffect(() => {
-
-
-
     if (typeof window === 'undefined') {
-
-
-
       return;
-
-
-
     }
-
-
-
-
-
-
 
     const awareWindow = window as CircuitAwareWindow;
 
-
-
     awareWindow.__CIRCUIT_DATA = circuitData;
 
-
-
     awareWindow.__CIRCUIT_CODING_SNAPSHOT = codingSnapshot;
-
-
-
   }, [circuitData, codingSnapshot]);
 
-
-
-
-
-
-
   useEffect(() => {
-
-
-
     onCodeChangeRef.current = onCodeChange;
-
-
 
     onXmlChangeRef.current = onXmlChange;
 
-
-
     onWorkspaceReadyRef.current = onWorkspaceReady;
 
-
-
     generatorTypeRef.current = generatorType;
-
-
-
   }, [onCodeChange, onXmlChange, onWorkspaceReady, generatorType]);
 
-
-
-
-
-
-
   useEffect(() => {
-
-
-
     initialXmlRef.current = initialXml || '';
-
-
-
   }, [initialXml]);
 
   useEffect(() => {
@@ -557,27 +239,9 @@ export default function BlockEditor({
     isFlyoutVisibleRef.current = isFlyoutVisible;
   }, [isFlyoutVisible]);
 
-
-
-
-
-
-
   useEffect(() => {
-
-
-
     selectedCategoryNameRef.current = selectedCategoryName || 'start';
-
-
-
   }, [selectedCategoryName]);
-
-
-
-
-
-
 
   const syncBlockCount = useCallback(() => {
     if (!workspaceRef.current) {
@@ -596,35 +260,13 @@ export default function BlockEditor({
     setWorkspaceBlockTypes((current) => (stringArrayEqual(current, nextTypes) ? current : nextTypes));
   }, [setBlockCount]);
 
-
-
-
-
-
-
   const serializeWorkspace = useCallback(() => {
-
-
-
     if (!workspaceRef.current) return '';
-
-
 
     const xml = Blockly.Xml.workspaceToDom(workspaceRef.current);
 
-
-
     return Blockly.utils.xml.domToText(xml);
-
-
-
   }, []);
-
-
-
-
-
-
 
   const emitBlocklyChanged = useCallback(
     (force = false) => {
@@ -641,14 +283,7 @@ export default function BlockEditor({
     [eventBus, serializeWorkspace]
   );
 
-
-
-
-
-
-
   const createDefaultSetupBlock = useCallback(() => {
-
     if (!workspaceRef.current) return;
 
     const legacyRootBlock = workspaceRef.current.newBlock('arduino_setup_loop');
@@ -657,74 +292,24 @@ export default function BlockEditor({
     legacyRootBlock.moveBy(56, 56);
 
     syncBlockCount();
-
   }, [syncBlockCount]);
 
-
-
-
-
-
-
   const loadXmlIntoWorkspace = useCallback(
-
-
-
     (xmlText: string | null | undefined) => {
-
-
-
       if (!workspaceRef.current) return;
-
-
-
-
-
-
 
       const candidate = typeof xmlText === 'string' ? xmlText.trim() : '';
 
-
-
-
-
-
-
       workspaceRef.current.clear();
 
-
-
-
-
-
-
       if (!candidate || !isLikelyBlocklyXmlDocument(candidate)) {
-
-
-
         createDefaultSetupBlock();
 
-
-
         return;
-
-
-
       }
 
-
-
-
-
-
-
       try {
-
-
-
         const xml = Blockly.utils.xml.textToDom(candidate);
-
-
 
         Blockly.Xml.domToWorkspace(xml, workspaceRef.current);
 
@@ -735,55 +320,20 @@ export default function BlockEditor({
         if (!hasUserBlocks) {
           createDefaultSetupBlock();
         }
-
-
-
       } catch (e) {
-
-
-
         console.error('Failed to load workspace XML', e);
-
-
 
         workspaceRef.current.clear();
 
-
-
         createDefaultSetupBlock();
-
-
-
       }
 
-
-
-
-
-
-
       syncBlockCount();
-
-
-
     },
-
-
-
     [createDefaultSetupBlock, syncBlockCount]
-
-
-
   );
 
-
-
-
-
-
-
   const stabilizeFlyoutViewport = useCallback((flyout: Blockly.IFlyout) => {
-
   const flyoutApi = flyout as StabilizedFlyout;
 
   if (!flyoutApi.__edtechFixedScale) {
@@ -824,9 +374,7 @@ export default function BlockEditor({
 }, []);
 
 const showCategoryFlyout = useCallback(
-
   (board: BoardKey, categoryName: string | null | undefined) => {
-
     if (!workspaceRef.current) return;
 
     hideNativeToolboxUi(workspaceRef.current);
@@ -854,21 +402,13 @@ const showCategoryFlyout = useCallback(
     flyout.show(Array.from(flyoutXml.childNodes) as unknown as Blockly.utils.toolbox.FlyoutItemInfoArray);
     stabilizeFlyoutViewport(flyout);
   },
-
   [circuitData, codingSnapshot, showExtendedBlocks, stabilizeFlyoutViewport, toolboxLearningLevel]
 );
 
 const hideCategoryFlyout = useCallback(() => {
-
-
-
     const flyout = workspaceRef.current?.getFlyout();
 
-
-
     if (!flyout) return;
-
-
 
     const flyoutApi = flyout as Blockly.IFlyout & {
       setVisible?: (visible: boolean) => void;
@@ -878,19 +418,9 @@ const hideCategoryFlyout = useCallback(() => {
     flyout.hide();
     flyoutApi.setVisible?.(false);
     flyoutApi.setContainerVisible?.(false);
-
-
-
   }, []);
 
-
-
-
-
-
-
   const syncFlyoutScale = useCallback(() => {
-
   const flyout = workspaceRef.current?.getFlyout();
   if (!flyout) return;
 
@@ -925,347 +455,112 @@ const handleGenerate = useCallback((force = false) => {
     [emitBlocklyChanged, handleGenerate]
   );
 
-
-
-
-
-
-
   const onWorkspaceChange = useCallback(
-
-
-
     (e: Blockly.Events.Abstract) => {
-
-
-
       if (e.type === Blockly.Events.VIEWPORT_CHANGE) {
-
-
-
         syncFlyoutScale();
-
-
-
       }
-
-
-
-
-
-
 
       if (e.isUiEvent || e.type === Blockly.Events.FINISHED_LOADING) return;
 
-
-
-
-
-
-
       if (e.type === Blockly.Events.BLOCK_DRAG || e.type === Blockly.Events.BLOCK_MOVE) {
-
-
-
         const motionEvent = e as BlocklyMotionEvent;
 
-
-
         if (motionEvent.isStart || motionEvent.isMoveInProgress) return;
-
-
-
       }
-
-
-
-
-
-
 
       syncBlockCount();
 
-
-
-
-
-
-
       if (debounceTimerRef.current) {
-
-
-
         clearTimeout(debounceTimerRef.current);
-
-
-
       }
-
-
-
-
-
-
 
       debounceTimerRef.current = setTimeout(() => {
         flushBlocklySync();
         debounceTimerRef.current = null;
       }, BLOCKLY_SYNC_DEBOUNCE_MS);
-
-
-
     },
-
-
-
     [flushBlocklySync, syncBlockCount, syncFlyoutScale]
-
-
-
   );
 
-
-
-
-
-
-
   const initializeWorkspace = useCallback(
-
-
-
     (board: BoardKey) => {
-
-
-
       if (!containerRef.current) return;
 
-
-
-
-
-
-
       workspaceRef.current = Blockly.inject(containerRef.current, {
-
-
-
         toolbox: EMPTY_TOOLBOX_XML,
-        
         media: '/blockly/media/',
-
-
-
         theme: blocklyTheme,
-
-
-
         renderer: 'zelos',
-
-
-
         trashcan: true,
-
-
-
         move: { scrollbars: true, drag: true, wheel: true },
-
-
-
         zoom: { controls: true, wheel: true, startScale: 1, maxScale: 2.4, minScale: 0.42, scaleSpeed: 1.12 },
-
-
-
         grid: {
           spacing: 28,
           length: 0,
           colour: blocklyGridColor,
           snap: true,
         },
-
-
-
       });
-
-
-
-
-
-
 
       workspaceRef.current.addChangeListener(onWorkspaceChange);
 
-
-
       requestAnimationFrame(() => {
-
-
-
         if (workspaceRef.current) {
-
-
-
           hideNativeToolboxUi(workspaceRef.current);
 
-
-
           if (isFlyoutVisible) {
-
-
-
             showCategoryFlyout(board, selectedCategoryNameRef.current);
 
-
-
             syncFlyoutScale();
-
-
-
           } else {
-
-
-
             hideCategoryFlyout();
-
-
-
           }
-
-
 
           Blockly.svgResize(workspaceRef.current);
 
-
-
           workspaceRef.current.scrollCenter();
-
-
-
         }
-
-
-
       });
 
-
-
       if (onWorkspaceReadyRef.current) {
-
-
-
         onWorkspaceReadyRef.current(workspaceRef.current);
-
-
-
       }
-
-
 
       Blockly.svgResize(workspaceRef.current);
 
-
-
-
-
-
-
       const xmlToRestore = persistedXmlRef.current || initialXmlRef.current;
-
-
 
       loadXmlIntoWorkspace(xmlToRestore);
 
       flushBlocklySync(true);
 
-
-
       const snapshot = serializeWorkspace();
-
-
 
       persistedXmlRef.current = snapshot;
 
-
-
       lastSyncedXmlRef.current = snapshot;
 
-
-
       syncBlockCount();
-
-
-
     },
-
-
-
     [blocklyGridColor, blocklyTheme, flushBlocklySync, hideCategoryFlyout, isFlyoutVisible, loadXmlIntoWorkspace, onWorkspaceChange, serializeWorkspace, showCategoryFlyout, syncBlockCount, syncFlyoutScale]
-
-
-
   );
 
-
-
-
-
-
-
   useEffect(() => {
-
-
-
     defineCustomBlocks();
 
-
-
-
-
-
-
     return () => {
-
-
-
       if (workspaceRef.current) {
-
-
-
         if (onWorkspaceReadyRef.current) {
-
-
-
           onWorkspaceReadyRef.current(null);
-
-
-
         }
-
-
 
         workspaceRef.current.dispose();
 
-
-
         workspaceRef.current = null;
-
-
-
       }
-
-
-
     };
-
-
-
   }, []);
-
-
-
-
-
-
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -1311,133 +606,49 @@ const handleGenerate = useCallback((force = false) => {
     });
   }, [eventBus, flushBlocklySync, hideCategoryFlyout, showCategoryFlyout, syncBlockCount, syncFlyoutScale]);
 
-
-
-
-
-
-
   useEffect(() => {
-
-
-
     if (!workspaceRef.current) return;
-
-
-
-
-
-
 
     const incomingXml = (initialXml || '').trim();
 
-
-
     const currentXml = serializeWorkspace().trim();
-
-
-
-
-
-
 
     if (incomingXml === lastSyncedXmlRef.current) return;
 
-
-
     if (incomingXml === currentXml) return;
-
-
 
     if (incomingXml.length === 0 && currentXml.length === 0) return;
 
-
-
-
-
-
-
     persistedXmlRef.current = initialXml || '';
-
-
 
     loadXmlIntoWorkspace(initialXml);
 
     flushBlocklySync(true);
 
-
-
     const snapshot = serializeWorkspace();
-
-
 
     persistedXmlRef.current = snapshot;
 
-
-
     lastSyncedXmlRef.current = snapshot;
 
-
-
     syncBlockCount();
-
-
-
   }, [flushBlocklySync, initialXml, loadXmlIntoWorkspace, serializeWorkspace, syncBlockCount]);
 
-
-
-
-
-
-
   useEffect(() => {
-
-
-
     if (!workspaceRef.current) return;
-
-
 
     hideNativeToolboxUi(workspaceRef.current);
 
-
-
     if (isFlyoutVisible) {
-
-
-
       showCategoryFlyout(currentBoard, selectedCategoryNameRef.current);
 
-
-
       syncFlyoutScale();
-
-
-
     } else {
-
-
-
       hideCategoryFlyout();
-
-
-
     }
 
-
-
     Blockly.svgResize(workspaceRef.current);
-
-
-
   }, [currentBoard, hideCategoryFlyout, isFlyoutVisible, selectedCategoryName, showCategoryFlyout, syncFlyoutScale]);
-
-
-
-
-
-
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -1463,60 +674,24 @@ const handleGenerate = useCallback((force = false) => {
     setIsCodePanelResizing(true);
   }, [codePanelWidth]);
 
-
-
-
-
-
-
-
-
-
-
-
-
   const handleFitWorkspace = useCallback(() => {
-
     workspaceRef.current?.zoomToFit();
 
     requestAnimationFrame(() => {
-
       syncFlyoutScale();
-
     });
-
   }, [syncFlyoutScale]);
 
-
-
   const handleCenterWorkspace = useCallback(() => {
-
     workspaceRef.current?.scrollCenter();
-
   }, []);
-
-
 
   const handleCleanWorkspace = useCallback(() => {
-
-
-
     workspaceRef.current?.cleanUp();
-
-
-
   }, []);
 
-
-
-
-
-
-
   const handleCategorySelect = useCallback(
-
     (categoryId: string) => {
-
       selectedCategoryNameRef.current = categoryId;
 
       onSelectCategory?.(categoryId);
@@ -1528,9 +703,7 @@ const handleGenerate = useCallback((force = false) => {
       }
 
       if (!workspaceRef.current) {
-
         return;
-
       }
 
       hideNativeToolboxUi(workspaceRef.current);
@@ -1540,24 +713,13 @@ const handleGenerate = useCallback((force = false) => {
       syncFlyoutScale();
 
       Blockly.svgResize(workspaceRef.current);
-
     },
-
     [currentBoard, isCompactLayout, onSelectCategory, showCategoryFlyout, syncFlyoutScale]
-
   );
 
     const handleStageClickCapture = useCallback(
-
-
-
     (event: React.MouseEvent<HTMLDivElement>) => {
-
-
-
       const target = event.target as HTMLElement | null;
-
-
 
       if (!isFlyoutVisible || !target) return;
 
@@ -1565,51 +727,16 @@ const handleGenerate = useCallback((force = false) => {
         return;
       }
 
-
-
-
-
-
-
       if (target.closest('.blocklyFlyout') || target.closest('.blocklyFlyoutBackground')) {
-
-
-
         return;
-
-
-
       }
-
-
-
-
-
-
 
       setIsFlyoutVisible(false);
 
-
-
       hideCategoryFlyout();
-
-
-
     },
-
-
-
     [hideCategoryFlyout, isFlyoutVisible]
-
-
-
   );
-
-
-
-
-
-
 
   const workspaceLooksEmpty = blockCount <= 1;
 
@@ -1622,26 +749,13 @@ const handleGenerate = useCallback((force = false) => {
     [currentBoard, circuitData, codingSnapshot, showExtendedBlocks, toolboxLearningLevel]
   );
 
-  const baseShelfCategories = useMemo(() => {
-    return guidedToolboxCategories.map((category) => {
-      const chrome = GUIDED_CATEGORY_METADATA[category.id] || {
-        icon: <BlocksIcon size={16} strokeWidth={2.3} />,
-        color: '#5b6dff',
-      };
-
-      return {
-        ...category,
-        icon: chrome.icon,
-        color: chrome.color,
-      };
-    });
-  }, [guidedToolboxCategories]);
+  // Every group with its icon and colour; the Customize dialog lists all of them, the sidebar only the visible ones.
+  const shelfCategories = useMemo(() => guidedToolboxCategories.map(toShelfCategory), [guidedToolboxCategories]);
 
   const hiddenCategoryIdSet = useMemo(() => new Set(hiddenCategoryIds), [hiddenCategoryIds]);
-  const categoryManagerCategories = useMemo(() => baseShelfCategories, [baseShelfCategories]);
   const availableCategories = useMemo(
-    () => baseShelfCategories.filter((category) => !hiddenCategoryIdSet.has(category.id)),
-    [baseShelfCategories, hiddenCategoryIdSet]
+    () => shelfCategories.filter((category) => !hiddenCategoryIdSet.has(category.id)),
+    [shelfCategories, hiddenCategoryIdSet]
   );
 
   useEffect(() => {
@@ -1664,17 +778,8 @@ const handleGenerate = useCallback((force = false) => {
       ? selectedCategoryName
       : availableCategories[0]?.id || 'start';
 
-  const activeCategory = availableCategories.find((category) => category.id === activeCategoryName) ?? availableCategories[0] ?? {
-    id: 'start',
-    label: 'Start',
-    description: 'Begin your program and add timing.',
-    icon: <Sparkles size={16} strokeWidth={2.3} />,
-    color: '#6d7cff',
-    blockCount: 0,
-    isDynamic: false,
-    isEmpty: false,
-    sourceCategoryNames: ['Control'],
-  };
+  const activeCategory =
+    availableCategories.find((category) => category.id === activeCategoryName) ?? availableCategories[0] ?? FALLBACK_START_CATEGORY;
 
   const filteredCategories = useMemo(() => {
     const normalizedQuery = categoryQuery.trim().toLowerCase();
@@ -1714,144 +819,47 @@ const handleGenerate = useCallback((force = false) => {
     [workspaceBlockTypes]
   );
 
-  const learningGuide = useMemo(() => {
-    if (!codingSnapshot.components.some((component) => component.isCodeReady)) {
-      return {
-        tone: 'progress' as const,
-        title: 'Start with output',
-        detail: 'Open Output and try the board LED or a simple pin block first.',
-        actionId: 'open-output' as const,
-      };
-    }
+  const hasCodeReadyComponent = codingSnapshot.components.some((component) => component.isCodeReady);
+  const hasPreviewWarning = Boolean(previewWarning);
 
-    if (orphanedCircuitBlockTypes.length > 0) {
-      return {
-        tone: 'warning' as const,
-        title: 'This code still uses a removed part',
-        detail: 'Reconnect that part or replace the hidden blocks before you run.',
-        actionId: 'open-your-circuit' as const,
-      };
-    }
-
-    if (workspaceLooksEmpty) {
-      if (availableBlockTypeSet.has('arduino_led_set')) {
-        return {
-          tone: 'progress' as const,
-          title: 'Turn your LED on',
-          detail: 'Open Your Circuit and drag the LED block into the loop.',
-          actionId: 'open-your-circuit' as const,
-        };
-      }
-
-      if (availableBlockTypeSet.size > 0) {
-        return {
-          tone: 'progress' as const,
-          title: 'Start with a part block',
-          detail: 'Open Your Circuit and drop one block into the loop.',
-          actionId: 'open-your-circuit' as const,
-        };
-      }
-
-      return {
-        tone: 'progress' as const,
-        title: 'Start with output',
-        detail: 'Open Output and try the board LED or a pin block.',
-        actionId: 'open-output' as const,
-      };
-    }
-
-    if (!hasRootFlowBlock || previewWarning) {
-      return {
-        tone: 'warning' as const,
-        title: 'Snap loose blocks into the flow',
-        detail: 'Place blocks inside setup or loop so the program runs in order.',
-        actionId: 'open-start' as const,
-      };
-    }
-
-    if (workspaceBlockTypes.includes('arduino_led_set') && !hasTimingBlock) {
-      return {
-        tone: 'progress' as const,
-        title: 'Add a short wait',
-        detail: 'A delay makes LED changes easier to see in the simulator.',
-        actionId: 'open-start' as const,
-      };
-    }
-
-    if (!showCodePanel) {
-      return {
-        tone: 'neutral' as const,
-        title: 'See the code version',
-        detail: 'Show code to compare your blocks with the generated program.',
-        actionId: 'show-code' as const,
-      };
-    }
-
-    if (toolboxLearningLevel === 'starter' && (blockCount > 2 || availableBlockTypeSet.size > 1)) {
-      return {
-        tone: 'neutral' as const,
-        title: 'Ready for more?',
-        detail: 'Builder adds decisions, sensors, and numbers when you need them.',
-        actionId: 'advance-builder' as const,
-      };
-    }
-
-    if (toolboxLearningLevel === 'builder' && blockCount > 4) {
-      return {
-        tone: 'neutral' as const,
-        title: 'Want more control?',
-        detail: 'Explore unlocks variables, functions, displays, and messages.',
-        actionId: 'advance-explore' as const,
-      };
-    }
-
-    return {
-      tone: 'success' as const,
-      title: 'You are ready to run',
-      detail: 'Save your work, then use Run Simulation in the top bar.',
-      actionId: null as null | 'open-start' | 'open-output' | 'open-your-circuit' | 'show-code' | 'advance-builder' | 'advance-explore',
-    };
-  }, [
-    availableBlockTypeSet,
-    blockCount,
-    codingSnapshot.availableBlockTypes,
-    codingSnapshot.components,
-    hasRootFlowBlock,
-    hasTimingBlock,
-    orphanedCircuitBlockTypes.length,
-    previewWarning,
-    showCodePanel,
-    toolboxLearningLevel,
-    workspaceBlockTypes,
-    workspaceLooksEmpty,
-  ]);
-
-  // Coach checklist: the same stages the learning guide walks through, ticked off from the live workspace.
-  const coachMilestones = useMemo(
-    () => [
-      { id: 'add', label: 'Add a block from Output or Your Circuit', done: !workspaceLooksEmpty },
-      { id: 'flow', label: 'Snap it inside setup or loop', done: !workspaceLooksEmpty && hasRootFlowBlock && !previewWarning },
-      { id: 'wait', label: 'Add a wait so changes are easy to see', done: hasTimingBlock },
-      { id: 'code', label: 'Compare your blocks with the code', done: showCodePanel },
-    ],
-    [hasRootFlowBlock, hasTimingBlock, previewWarning, showCodePanel, workspaceLooksEmpty]
+  const learningGuide = useMemo(
+    () =>
+      getLearningGuide({
+        hasCodeReadyComponent,
+        orphanedCircuitBlockCount: orphanedCircuitBlockTypes.length,
+        workspaceLooksEmpty,
+        availableBlockTypes: availableBlockTypeSet,
+        workspaceBlockTypes,
+        hasRootFlowBlock,
+        hasTimingBlock,
+        hasPreviewWarning,
+        showCodePanel,
+        learningLevel: toolboxLearningLevel,
+        blockCount,
+      }),
+    [
+      availableBlockTypeSet,
+      blockCount,
+      hasCodeReadyComponent,
+      hasPreviewWarning,
+      hasRootFlowBlock,
+      hasTimingBlock,
+      orphanedCircuitBlockTypes.length,
+      showCodePanel,
+      toolboxLearningLevel,
+      workspaceBlockTypes,
+      workspaceLooksEmpty,
+    ]
   );
-  const coachDoneCount = coachMilestones.filter((milestone) => milestone.done).length;
+
+  const coachMilestones = useMemo(
+    () => getCoachMilestones({ workspaceLooksEmpty, hasRootFlowBlock, hasPreviewWarning, hasTimingBlock, showCodePanel }),
+    [hasPreviewWarning, hasRootFlowBlock, hasTimingBlock, showCodePanel, workspaceLooksEmpty]
+  );
   const [isCoachOpen, setIsCoachOpen] = useState(true);
 
-  const moreBlocksCategory = useMemo(
-    () => ({
-      id: 'more-groups',
-      label: 'Customize',
-      description: 'Choose which learning groups stay visible.',
-      icon: <SlidersHorizontal size={16} strokeWidth={2.3} />,
-      color: '#111111',
-    }),
-    []
-  );
-
   const handleOpenCategoryManager = useCallback(() => {
-    const visibleIds = categoryManagerCategories
+    const visibleIds = shelfCategories
       .filter((category) => !hiddenCategoryIds.includes(category.id))
       .map((category) => category.id);
 
@@ -1859,7 +867,7 @@ const handleGenerate = useCallback((force = false) => {
     setIsCategoryManagerOpen(true);
     setIsFlyoutVisible(false);
     hideCategoryFlyout();
-  }, [categoryManagerCategories, hiddenCategoryIds, hideCategoryFlyout]);
+  }, [shelfCategories, hiddenCategoryIds, hideCategoryFlyout]);
 
   const handleCloseCategoryManager = useCallback(() => {
     setIsCategoryManagerOpen(false);
@@ -1880,7 +888,7 @@ const handleGenerate = useCallback((force = false) => {
   }, []);
 
   const handleConfirmCategoryVisibility = useCallback(() => {
-    const categoryIds = categoryManagerCategories.map((category) => category.id);
+    const categoryIds = shelfCategories.map((category) => category.id);
     const selectedIds = new Set(categoryManagerDraft);
     if (selectedIds.size === 0) {
       return;
@@ -1892,13 +900,9 @@ const handleGenerate = useCallback((force = false) => {
       return [...preserved, ...nextHidden];
     });
     setIsCategoryManagerOpen(false);
-  }, [categoryManagerCategories, categoryManagerDraft]);
+  }, [shelfCategories, categoryManagerDraft]);
 
-  const handleGuideAction = useCallback((actionId: LearningGuideActionId | null) => {
-    if (!actionId) {
-      return;
-    }
-
+  const handleGuideAction = useCallback((actionId: LearningGuideActionId) => {
     switch (actionId) {
       case 'open-start':
         handleCategorySelect('start');
@@ -1923,105 +927,7 @@ const handleGenerate = useCallback((force = false) => {
     }
   }, [handleCategorySelect, setShowCodePanel, setToolboxLearningLevel]);
 
-  const displayWizardOptions = useMemo(() => {
-    const escapeXmlValue = (value: string) =>
-      value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    const numberShadow = (name: string, value: number) =>
-      `<value name="${name}"><shadow type="math_number"><field name="NUM">${value}</field></shadow></value>`;
-    const textShadow = (name: string, value: string) =>
-      `<value name="${name}"><shadow type="text"><field name="TEXT">${escapeXmlValue(value)}</field></shadow></value>`;
-
-    const oledInstance = getOledInstances().find(([, value]) => value && value !== 'NONE')?.[1] ?? 'NONE';
-
-    return [
-      {
-        id: 'oled',
-        label: 'OLED starter',
-        description: oledInstance === 'NONE' ? 'Initialize, clear, and print a greeting.' : 'Start with the first mapped OLED in your circuit.',
-        buildXml: (x: number, y: number) => `
-          <xml xmlns="https://developers.google.com/blockly/xml">
-            <block type="arduino_on_start" x="${x}" y="${y}">
-              <statement name="SETUP">
-                <block type="oled_init">
-                  <field name="SENSOR">${escapeXmlValue(oledInstance)}</field>
-                  <field name="WIDTH">128</field>
-                  <field name="HEIGHT">64</field>
-                  <next>
-                    <block type="oled_clear">
-                      <field name="SENSOR">${escapeXmlValue(oledInstance)}</field>
-                      <next>
-                        <block type="oled_print">
-                          <field name="SENSOR">${escapeXmlValue(oledInstance)}</field>
-                          ${textShadow('TEXT', 'Hello!')}
-                          ${numberShadow('X', 0)}
-                          ${numberShadow('Y', 0)}
-                        </block>
-                      </next>
-                    </block>
-                  </next>
-                </block>
-              </statement>
-            </block>
-          </xml>
-        `,
-      },
-      {
-        id: 'lcd',
-        label: 'LCD starter',
-        description: 'Create a 16x2 LCD setup and print a short status line.',
-        buildXml: (x: number, y: number) => `
-          <xml xmlns="https://developers.google.com/blockly/xml">
-            <block type="arduino_on_start" x="${x}" y="${y}">
-              <statement name="SETUP">
-                <block type="lcd_i2c_init">
-                  <field name="ADDRESS">0x27</field>
-                  <field name="COLS">16</field>
-                  <field name="ROWS">2</field>
-                  <next>
-                    <block type="lcd_i2c_print">
-                      ${textShadow('TEXT', 'System ready')}
-                      ${numberShadow('COL', 0)}
-                      ${numberShadow('ROW', 0)}
-                    </block>
-                  </next>
-                </block>
-              </statement>
-            </block>
-          </xml>
-        `,
-      },
-      {
-        id: 'tft',
-        label: 'TFT starter',
-        description: 'Initialize the TFT, set a background, and print a title.',
-        requiresBlock: 'arduino_tft_init',
-        buildXml: (x: number, y: number) => `
-          <xml xmlns="https://developers.google.com/blockly/xml">
-            <block type="arduino_on_start" x="${x}" y="${y}">
-              <statement name="SETUP">
-                <block type="arduino_tft_init">
-                  <next>
-                    <block type="arduino_tft_clear">
-                      <field name="COLOR">TFT_BLACK</field>
-                      <next>
-                        <block type="arduino_tft_print">
-                          ${textShadow('TEXT', 'Display ready')}
-                          ${numberShadow('X', 18)}
-                          ${numberShadow('Y', 24)}
-                          <field name="SIZE">2</field>
-                          <field name="COLOR">TFT_WHITE</field>
-                        </block>
-                      </next>
-                    </block>
-                  </next>
-                </block>
-              </statement>
-            </block>
-          </xml>
-        `,
-      },
-    ].filter((starter) => !starter.requiresBlock || isBlockSupportedForBoard(starter.requiresBlock, currentBoard));
-  }, [currentBoard]);
+  const displayStarters = useMemo(() => getDisplayStarters(currentBoard), [currentBoard]);
 
   const insertDisplayStarter = useCallback(
     (starterId: string) => {
@@ -2030,7 +936,7 @@ const handleGenerate = useCallback((force = false) => {
         return;
       }
 
-      const starter = displayWizardOptions.find((candidate) => candidate.id === starterId);
+      const starter = displayStarters.find((candidate) => candidate.id === starterId);
       if (!starter) {
         return;
       }
@@ -2043,529 +949,84 @@ const handleGenerate = useCallback((force = false) => {
       Blockly.svgResize(workspace);
       workspace.scrollCenter();
     },
-    [displayWizardOptions, flushBlocklySync, syncBlockCount]
+    [displayStarters, flushBlocklySync, syncBlockCount]
   );
 
   const shouldShowDisplayWizard =
     hasDisplayStarterBlocks && (activeCategoryName === 'displays' || activeCategoryName === 'your-circuit');
 
-  const learningGuideActionLabel =
-    learningGuide.actionId === 'open-start'
-      ? 'Open Start'
-      : learningGuide.actionId === 'open-output'
-        ? 'Open Output'
-        : learningGuide.actionId === 'open-your-circuit'
-          ? 'Open Your Circuit'
-          : learningGuide.actionId === 'show-code'
-            ? 'Show Code'
-            : learningGuide.actionId === 'advance-builder'
-              ? 'Try Builder'
-              : learningGuide.actionId === 'advance-explore'
-                ? 'Open Explore'
-                : null;
-
   return (
-
-
-
     <div className="custom-blockly-host relative flex h-full w-full min-h-0 min-w-0 flex-1 overflow-hidden rounded-[22px] border border-[var(--blockly-shell-border)] bg-[image:var(--blockly-shell-bg)] shadow-[var(--blockly-shell-shadow)] sm:rounded-[30px]" data-flyout-visible={isFlyoutVisible ? 'true' : 'false'}>
+      <CategorySidebar
+        isCompactLayout={isCompactLayout}
+        isOpen={showCategorySidebar}
+        onClose={() => setShowCategorySidebar(false)}
+        boardName={boardLabel(currentBoard)}
+        learningLevel={toolboxLearningLevel}
+        onLearningLevelChange={setToolboxLearningLevel}
+        query={categoryQuery}
+        onQueryChange={setCategoryQuery}
+        displayStarters={shouldShowDisplayWizard ? displayStarters : []}
+        onInsertDisplayStarter={insertDisplayStarter}
+        categories={filteredCategories}
+        activeCategoryId={activeCategoryName}
+        onSelectCategory={handleCategorySelect}
+        isCategoryManagerOpen={isCategoryManagerOpen}
+        onOpenCategoryManager={handleOpenCategoryManager}
+      />
 
-      {isCompactLayout && showCategorySidebar ? (
-        <button
-          type="button"
-          aria-label="Close block toolbox"
-          onClick={() => setShowCategorySidebar(false)}
-          className="absolute inset-0 z-20 bg-slate-950/28 backdrop-blur-[1px]"
-        />
-      ) : null}
-
-
-
-
-      <aside
-        className={`flex shrink-0 flex-col overflow-hidden bg-[image:var(--blockly-sidebar-bg)] transition-[width,opacity,transform] duration-200 ${
-          isCompactLayout
-            ? showCategorySidebar
-              ? 'absolute inset-y-3 left-3 z-30 w-[min(320px,calc(100%-1.5rem))] rounded-[22px] border border-[color:var(--blockly-sidebar-border)] opacity-100 shadow-[0_28px_72px_-40px_rgba(15,23,42,0.82)]'
-              : 'pointer-events-none absolute inset-y-3 left-3 z-30 w-[min(320px,calc(100%-1.5rem))] -translate-x-4 rounded-[22px] border border-transparent opacity-0'
-            : 'w-[252px] border-r border-[color:var(--blockly-sidebar-border)]'
-        }`}
-      >
-        <div className="border-b border-[color:var(--blockly-sidebar-border)] px-3 py-3">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[color:var(--blockly-sidebar-kicker)]">Code with blocks</p>
-              <p className="mt-1 text-base font-semibold text-[color:var(--blockly-sidebar-text)]">{boardLabel(currentBoard)}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="rounded-full border border-[color:var(--blockly-sidebar-border-strong)] bg-[color:var(--blockly-sidebar-chip)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--blockly-sidebar-text-soft)]">
-                {LEARNING_LEVEL_LABELS[toolboxLearningLevel]}
-              </span>
-              {isCompactLayout ? (
-                <button
-                  type="button"
-                  onClick={() => setShowCategorySidebar(false)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-[12px] border border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-input-bg)] text-[color:var(--blockly-sidebar-text-soft)] transition-all hover:border-[color:var(--blockly-sidebar-border-strong)] hover:bg-[color:var(--blockly-sidebar-card-strong)] hover:text-[color:var(--blockly-sidebar-text)]"
-                  aria-label="Close block toolbox"
-                >
-                  <ChevronLeft size={14} />
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          <label className="mt-3 flex h-10 items-center gap-3 rounded-[16px] border border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-input-bg)] px-3 text-[color:var(--blockly-sidebar-text-soft)] transition-colors focus-within:border-[color:var(--blockly-sidebar-accent)] focus-within:text-[color:var(--blockly-sidebar-text)]">
-            <Search size={15} />
-            <input
-              value={categoryQuery}
-              onChange={(event) => setCategoryQuery(event.target.value)}
-              placeholder="Search what you want to do"
-              className="w-full bg-transparent text-sm text-[color:var(--blockly-sidebar-text)] outline-none placeholder:text-[color:var(--blockly-sidebar-text-soft)]/70"
-            />
-          </label>
-
-          <div className="mt-2 grid grid-cols-3 gap-1.5">
-            {TOOLBOX_LEARNING_LEVELS.map((level) => {
-              const isActive = toolboxLearningLevel === level;
-              return (
-                <button
-                  key={level}
-                  type="button"
-                  aria-pressed={isActive}
-                  onClick={() => setToolboxLearningLevel(level)}
-                  className={`rounded-[12px] border px-2 py-1.5 text-[11px] font-semibold transition-all ${
-                    isActive
-                      ? 'border-violet-300/30 bg-[linear-gradient(180deg,#8a56ff_0%,#7641ea_100%)] text-white shadow-[0_20px_34px_-24px_rgba(118,65,234,0.76)]'
-                      : 'border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-card)] text-[color:var(--blockly-sidebar-text-soft)] hover:border-[color:var(--blockly-sidebar-border-strong)] hover:text-[color:var(--blockly-sidebar-text)]'
-                  }`}
-                >
-                  {LEARNING_LEVEL_LABELS[level]}
-                </button>
-              );
-            })}
-          </div>
-
-
-          {shouldShowDisplayWizard && displayWizardOptions.length > 0 ? (
-            <div className="mt-4 rounded-[22px] border border-[color:var(--blockly-sidebar-border-strong)] bg-[color:var(--blockly-sidebar-card)] p-3 shadow-[0_20px_36px_-28px_rgba(15,23,42,0.55)]">
-              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--blockly-sidebar-text-soft)]">
-                <Wand2 size={13} />
-                Display starter
-              </div>
-              <div className="mt-3 space-y-2">
-                {displayWizardOptions.map((starter) => (
-                  <button
-                    key={starter.id}
-                    type="button"
-                    onClick={() => insertDisplayStarter(starter.id)}
-                    className="w-full rounded-[16px] border border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-input-bg)] px-3 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-[color:var(--blockly-sidebar-accent)]/70 hover:bg-[color:var(--blockly-sidebar-card-strong)]"
-                  >
-                    <div className="text-sm font-semibold text-[color:var(--blockly-sidebar-text)]">{starter.label}</div>
-                    <div className="mt-1 text-xs leading-5 text-[color:var(--blockly-sidebar-text-soft)]">{starter.description}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-2">
-          <div className="space-y-1.5">
-            {filteredCategories.map((category) => {
-              const isActive = activeCategoryName === category.id;
-              const isLocked = category.isEmpty;
-              const categoryDescription = isLocked ? 'Build the matching part to unlock these blocks.' : category.description;
-              return (
-                <button
-                  key={category.id}
-                  type="button"
-                  onClick={() => handleCategorySelect(category.id)}
-                  disabled={isLocked}
-                  title={categoryDescription}
-                  className={`group flex w-full items-center gap-2.5 rounded-[14px] border px-2.5 py-2 text-left transition-all ${
-                    isActive
-                      ? 'border-violet-300/35 bg-[linear-gradient(180deg,#8a56ff_0%,#7641ea_100%)] text-white shadow-[0_22px_38px_-26px_rgba(134,78,251,0.72)]'
-                      : isLocked
-                        ? 'border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-card)] text-[color:var(--blockly-sidebar-text-soft)] opacity-70'
-                        : 'border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-card)] text-[color:var(--blockly-sidebar-text)] hover:border-[color:var(--blockly-sidebar-border-strong)] hover:bg-[color:var(--blockly-sidebar-card-strong)] hover:text-[color:var(--blockly-sidebar-text)]'
-                  }`}
-                >
-                  <span
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-white shadow-[0_18px_36px_-26px_rgba(0,0,0,0.7)]"
-                    style={{ backgroundColor: category.color }}
-                  >
-                    {category.icon}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-semibold leading-5">{category.label}</span>
-                    <span
-                      className={`block truncate text-[11.5px] leading-4 ${
-                        isActive
-                          ? 'text-white/85'
-                          : 'text-[color:var(--blockly-sidebar-text-soft)] group-hover:text-[color:var(--blockly-sidebar-text)]'
-                      }`}
-                    >
-                      {categoryDescription}
-                    </span>
-                  </span>
-                  {isLocked ? (
-                    <span
-                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-input-bg)] text-[color:var(--blockly-sidebar-text-soft)]"
-                    >
-                      <Lock size={11} aria-hidden="true" />
-                      <span className="sr-only">Locked</span>
-                    </span>
-                  ) : (
-                    <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
-                      isActive
-                        ? 'border-white/18 bg-white/14 text-white'
-                        : 'border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-input-bg)] text-[color:var(--blockly-sidebar-text-soft)]'
-                    }`}>
-                      {category.blockCount}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-
-            <button
-              type="button"
-              onClick={handleOpenCategoryManager}
-              title={moreBlocksCategory.description}
-              className={`group flex w-full items-center gap-2.5 rounded-[14px] border px-2.5 py-2 text-left transition-all ${
-                isCategoryManagerOpen
-                  ? 'border-violet-300/35 bg-[linear-gradient(180deg,#1f1f22_0%,#111115_100%)] text-white shadow-[0_22px_38px_-26px_rgba(0,0,0,0.72)]'
-                  : 'border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-card)] text-[color:var(--blockly-sidebar-text)] hover:border-[color:var(--blockly-sidebar-border-strong)] hover:bg-[color:var(--blockly-sidebar-card-strong)] hover:text-[color:var(--blockly-sidebar-text)]'
-              }`}
-            >
-              <span
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-white shadow-[0_18px_36px_-26px_rgba(0,0,0,0.7)]"
-                style={{ backgroundColor: moreBlocksCategory.color }}
-              >
-                {moreBlocksCategory.icon}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-semibold leading-5">{moreBlocksCategory.label}</span>
-                <span className="block truncate text-[11.5px] leading-4 text-[color:var(--blockly-sidebar-text-soft)] group-hover:text-[color:var(--blockly-sidebar-text)]">
-                  {moreBlocksCategory.description}
-                </span>
-              </span>
-            </button>
-
-            {filteredCategories.length === 0 ? (
-              <div className="mt-4 rounded-[18px] border border-dashed border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-card)] px-4 py-4 text-sm text-[color:var(--blockly-sidebar-text-soft)]">
-                {categoryQuery.trim().length > 0
-                  ? `No block groups match "${categoryQuery}".`
-                  : 'All block groups are hidden. Open Customize to choose what shows here.'}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </aside>
-
-
-
-
-
-
-
-      {/* Main canvas area */}
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-
-        {/* Blockly workspace column */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <CanvasToolbar
+            activeCategoryLabel={activeCategory.label}
+            isCompactLayout={isCompactLayout}
+            isSidebarOpen={showCategorySidebar}
+            onToggleSidebar={() => setShowCategorySidebar((value) => !value)}
+            blockCount={blockCount}
+            onFit={handleFitWorkspace}
+            onCenter={handleCenterWorkspace}
+            onArrange={handleCleanWorkspace}
+            showCodePanel={showCodePanel}
+            onToggleCodePanel={() => setShowCodePanel((v) => !v)}
+          />
 
-          {/* Header row */}
-          <div className="flex min-h-[68px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-[#2f1169]/84 px-4 py-3 backdrop-blur">
-
-            <div className="min-w-0 flex-1">
-              {/* The canvas toolbar is dark purple in every theme, so these use fixed light colours. */}
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-violet-200/80">Step 2: Code</p>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <span className="rounded-full border border-violet-300/30 bg-violet-400/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-50">
-                  {activeCategory.label}
-                </span>
-                <span className="hidden text-xs text-violet-100/60 md:inline">Build, code, then run.</span>
-              </div>
-            </div>
-
-            <div className="flex w-full items-center justify-end gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 lg:w-auto lg:flex-nowrap lg:overflow-visible lg:pb-0">
-              {isCompactLayout ? (
-                <button
-                  type="button"
-                  onClick={() => setShowCategorySidebar((value) => !value)}
-                  className="inline-flex h-10 items-center gap-2 rounded-[14px] border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-violet-50/90 transition-all hover:-translate-y-0.5 hover:border-violet-300/35 hover:bg-white/[0.08] hover:text-white"
-                >
-                  <BlocksIcon size={14} />
-                  <span className="hidden sm:inline">{showCategorySidebar ? 'Hide Toolbox' : 'Toolbox'}</span>
-                  {showCategorySidebar ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
-                </button>
-              ) : null}
-              {/* bg-white/[0.05] matches the toolbar buttons beside it; bg-white/[0.06] is repainted opaque white by the light-theme overrides. */}
-              <span className="hidden rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-50/78 sm:inline-flex">
-                {blockCount} blocks
-              </span>
-              <button type="button" onClick={handleFitWorkspace} className="inline-flex h-10 items-center gap-2 rounded-[14px] border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-violet-50/90 transition-all hover:-translate-y-0.5 hover:border-violet-300/35 hover:bg-white/[0.08] hover:text-white">
-                <Crosshair size={14} />
-                <span className="hidden sm:inline">Fit</span>
-              </button>
-              <button type="button" onClick={handleCenterWorkspace} className="inline-flex h-10 items-center gap-2 rounded-[14px] border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-violet-50/90 transition-all hover:-translate-y-0.5 hover:border-violet-300/35 hover:bg-white/[0.08] hover:text-white">
-                <Move size={14} />
-                <span className="hidden sm:inline">Center</span>
-              </button>
-              <button type="button" onClick={handleCleanWorkspace} className="inline-flex h-10 items-center gap-2 rounded-[14px] border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-violet-50/90 transition-all hover:-translate-y-0.5 hover:border-violet-300/35 hover:bg-white/[0.08] hover:text-white">
-                <Wand2 size={14} />
-                <span className="hidden sm:inline">Arrange</span>
-              </button>
-              {/* Toggle code panel */}
-              <button
-                type="button"
-                onClick={() => setShowCodePanel((v) => !v)}
-                title={showCodePanel ? 'Hide code preview' : 'Show code preview'}
-                className="inline-flex h-10 items-center gap-2 rounded-[14px] border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-violet-50/90 transition-all hover:-translate-y-0.5 hover:border-violet-300/35 hover:bg-white/[0.08] hover:text-white"
-              >
-                <Code2 size={14} />
-                <span className="hidden sm:inline">{showCodePanel ? 'Hide Code' : 'Show Code'}</span>
-                {showCodePanel ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
-              </button>
-            </div>
-          </div>
-
-          {/* Canvas */}
           <div
             className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-[radial-gradient(circle_at_top,rgba(134,78,251,0.2),transparent_42%),linear-gradient(180deg,#32106f_0%,#270e5b_100%)]"
             onClickCapture={handleStageClickCapture}
           >
             <div ref={containerRef} className="absolute inset-0 h-full w-full min-h-0 min-w-0" />
-
-            {/* Coach card: one goal at a time, ticked off from the workspace. The canvas is dark purple
-                in every theme, so the card uses fixed dark colours rather than the sidebar tokens. */}
-            {isCoachOpen ? (
-              <aside
-                data-coach-card
-                aria-label="Next step"
-                className="absolute right-3 top-3 z-10 flex w-[min(280px,calc(100%-1.5rem))] flex-col gap-2 rounded-[16px] border border-white/12 bg-[#1c1535]/95 p-3 text-white shadow-[0_24px_48px_-28px_rgba(0,0,0,0.9)] backdrop-blur"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-violet-200">
-                    <Sparkles size={13} aria-hidden="true" />
-                    Next step
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <span className="text-[11px] font-semibold tabular-nums text-white/70">
-                      {coachDoneCount} of {coachMilestones.length}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setIsCoachOpen(false)}
-                      className="rounded-[8px] px-2 py-1 text-[11px] font-semibold text-white/75 transition-colors hover:bg-white/10 hover:text-white"
-                    >
-                      Hide
-                    </button>
-                  </span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-white/10" aria-hidden="true">
-                  <div
-                    className="h-full rounded-full bg-violet-300 transition-[width] duration-300"
-                    style={{ width: `${(coachDoneCount / coachMilestones.length) * 100}%` }}
-                  />
-                </div>
-                <ul className="flex flex-col gap-1">
-                  {coachMilestones.map((milestone) => (
-                    <li key={milestone.id} className={`flex items-center gap-2 text-[12px] leading-5 ${milestone.done ? 'text-white/70' : 'text-white'}`}>
-                      <span
-                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${milestone.done ? 'bg-emerald-400 text-[#0b2a1c]' : 'border border-white/35'}`}
-                        aria-hidden="true"
-                      >
-                        {milestone.done ? <Check size={11} strokeWidth={3} /> : null}
-                      </span>
-                      <span className={milestone.done ? 'line-through decoration-white/30' : ''}>{milestone.label}</span>
-                      <span className="sr-only">{milestone.done ? '(done)' : '(to do)'}</span>
-                    </li>
-                  ))}
-                </ul>
-                <div
-                  className={`flex items-end gap-2 rounded-[12px] px-2.5 py-2 ${
-                    learningGuide.tone === 'warning'
-                      ? 'border border-amber-300/30 bg-amber-400/12'
-                      : learningGuide.tone === 'success'
-                        ? 'border border-emerald-300/30 bg-emerald-400/12'
-                        : 'bg-white/[0.06]'
-                  }`}
-                >
-                  <p className="min-w-0 flex-1 text-xs leading-[1.35rem] text-white/85">
-                    <span className="sr-only">{learningGuide.title}: </span>
-                    {learningGuide.detail}
-                  </p>
-                  {learningGuideActionLabel ? (
-                    <button
-                      type="button"
-                      onClick={() => handleGuideAction(learningGuide.actionId)}
-                      className="inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] bg-white px-3 text-xs font-semibold text-[#2a1a5e] transition-colors hover:bg-violet-50"
-                    >
-                      {learningGuideActionLabel}
-                    </button>
-                  ) : null}
-                </div>
-              </aside>
-            ) : (
-              <button
-                type="button"
-                data-coach-card
-                onClick={() => setIsCoachOpen(true)}
-                className="absolute right-3 top-3 z-10 inline-flex h-9 items-center gap-2 rounded-full border border-white/12 bg-[#1c1535]/95 px-3 text-xs font-semibold text-white shadow-[0_16px_32px_-20px_rgba(0,0,0,0.9)] backdrop-blur transition-colors hover:bg-[#261c48]"
-              >
-                <Sparkles size={13} aria-hidden="true" />
-                Next step · {coachDoneCount}/{coachMilestones.length}
-              </button>
-            )}
+            <CoachCard
+              isOpen={isCoachOpen}
+              onOpenChange={setIsCoachOpen}
+              milestones={coachMilestones}
+              guide={learningGuide}
+              onAction={handleGuideAction}
+            />
           </div>
         </div>
 
-        {/* Code preview panel */}
-        {showCodePanel && (
-          <>
-            {!isCompactLayout ? (
-              <div
-                role="separator"
-                aria-orientation="vertical"
-                aria-label="Resize generated code panel"
-                onPointerDown={handleCodePanelResizeStart}
-                className="group relative w-3 shrink-0 cursor-col-resize touch-none bg-transparent"
-              >
-                <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/8 transition-colors group-hover:bg-violet-300/45" />
-                <div
-                  className={`absolute inset-y-0 left-1/2 w-[3px] -translate-x-1/2 rounded-full transition-colors ${isCodePanelResizing ? 'bg-violet-300/60' : 'bg-transparent'}`}
-                />
-              </div>
-            ) : null}
-            <div
-              className={`flex flex-col ${
-                isCompactLayout
-                  ? 'absolute inset-y-3 right-3 top-[80px] z-20 overflow-hidden rounded-[24px] border border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-flyout-fill)] shadow-[0_28px_72px_-40px_rgba(0,0,0,0.95)] backdrop-blur'
-                  : 'shrink-0 border-l border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-flyout-fill)]'
-              }`}
-              style={
-                isCompactLayout
-                  ? {
-                      width: `min(${Math.min(codePanelWidth, BLOCKLY_CODE_PANEL_COMPACT_MAX_WIDTH)}px, calc(100% - 1.5rem))`,
-                      maxWidth: `${BLOCKLY_CODE_PANEL_COMPACT_MAX_WIDTH}px`,
-                    }
-                  : { width: `${codePanelWidth}px` }
-              }
-            >
-              <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[color:var(--blockly-sidebar-kicker)]">Generated code</p>
-                  <p className="mt-0.5 text-xs text-[color:var(--blockly-sidebar-text-soft)]">Your blocks become this code</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowCodePanel(false)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-input-bg)] text-[color:var(--blockly-sidebar-text-soft)] transition-all hover:border-[color:var(--blockly-sidebar-border-strong)] hover:bg-[color:var(--blockly-sidebar-card-strong)] hover:text-[color:var(--blockly-sidebar-text)]"
-                >
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-              {previewWarning ? (
-                <div className="mx-4 mt-3 flex items-start gap-2 rounded-[14px] border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-[11px] leading-5 text-amber-100/90">
-                  <AlertCircle size={14} className="mt-0.5 shrink-0 text-amber-200/90" />
-                  <p>{previewWarning}</p>
-                </div>
-              ) : null}
-              <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
-                {generatedPreviewCode && generatedPreviewCode.trim().length > 0 ? (
-                  <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-6 text-[color:var(--blockly-sidebar-text)]">{generatedPreviewCode}</pre>
-                ) : (
-                  <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-[color:var(--blockly-sidebar-text-soft)]">
-                    <Code2 size={28} className="text-[color:var(--blockly-sidebar-kicker)]" />
-                    <p className="text-xs">Add blocks and the matching code will appear here.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </>
-        )}
-
+        {showCodePanel ? (
+          <CodePreviewPanel
+            isCompactLayout={isCompactLayout}
+            width={codePanelWidth}
+            isResizing={isCodePanelResizing}
+            onResizeStart={handleCodePanelResizeStart}
+            warning={previewWarning}
+            code={generatedPreviewCode}
+            onClose={() => setShowCodePanel(false)}
+          />
+        ) : null}
       </div>
 
-        {isCategoryManagerOpen ? (
-          <div className="absolute inset-0 z-40 flex items-center justify-center bg-[color:var(--blockly-sidebar-overlay)] px-6 backdrop-blur-sm">
-            <div className="w-full max-w-[680px] overflow-hidden rounded-[30px] border border-[color:var(--blockly-sidebar-border-strong)] bg-[color:var(--blockly-flyout-fill)] shadow-[0_42px_110px_-54px_rgba(0,0,0,0.92)]">
-              <div className="px-6 py-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-[1.05rem] font-semibold text-[color:var(--blockly-sidebar-text)]">Block Groups</h3>
-                    <p className="mt-2 text-sm leading-6 text-[color:var(--blockly-sidebar-text-soft)]">Choose which learning groups should show in the block shelf.</p>
-                  </div>
-                  <span className="rounded-full border border-white/10 bg-[color:var(--blockly-sidebar-input-bg)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--blockly-sidebar-text-soft)]">
-                    {categoryManagerDraft.length} visible
-                  </span>
-                </div>
-                <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                  {categoryManagerCategories.map((category) => {
-                    const isChecked = categoryManagerDraft.includes(category.id);
-                    const isLastVisible = isChecked && categoryManagerDraft.length === 1;
-                    return (
-                      <label
-                        key={category.id}
-                        className={`flex cursor-pointer items-center gap-3 rounded-[18px] border px-4 py-3 transition-all ${
-                          isChecked
-                            ? 'border-[color:var(--blockly-sidebar-border-strong)] bg-[color:var(--blockly-sidebar-card-strong)] text-[color:var(--blockly-sidebar-text)]'
-                            : 'border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-card)] text-[color:var(--blockly-sidebar-text)] hover:border-[color:var(--blockly-sidebar-border-strong)] hover:bg-[color:var(--blockly-sidebar-card-strong)]'
-                        } ${isLastVisible ? 'opacity-90' : ''}`}
-                      >
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 shrink-0 accent-amber-400"
-                          checked={isChecked}
-                          onChange={() => handleToggleCategoryVisibility(category.id)}
-                          disabled={isLastVisible}
-                        />
-                        <span
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] text-white shadow-[0_18px_36px_-26px_rgba(0,0,0,0.7)]"
-                          style={{ backgroundColor: category.color }}
-                        >
-                          {category.icon}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-semibold">{category.label}</span>
-                          <span className="mt-0.5 block text-xs text-[color:var(--blockly-sidebar-text-soft)]">
-                            {category.isEmpty ? 'Unlock by adding the matching part.' : `${category.blockCount} blocks ready`}
-                          </span>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="flex items-center justify-end gap-3 border-t border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-input-bg)] px-6 py-4">
-                <button
-                  type="button"
-                  onClick={handleCloseCategoryManager}
-                  className="rounded-[14px] border border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-card)] px-4 py-2 text-sm font-medium text-[color:var(--blockly-sidebar-text)] transition-colors hover:border-[color:var(--blockly-sidebar-border-strong)] hover:bg-[color:var(--blockly-sidebar-card-strong)]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmCategoryVisibility}
-                  disabled={categoryManagerDraft.length === 0}
-                  className="rounded-[14px] border border-amber-300/20 bg-[linear-gradient(180deg,#f2a640_0%,#dc8a26_100%)] px-4 py-2 text-sm font-semibold text-white shadow-[0_18px_32px_-24px_rgba(220,138,38,0.8)] transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Confirm
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
+      {isCategoryManagerOpen ? (
+        <CategoryManagerDialog
+          categories={shelfCategories}
+          visibleIds={categoryManagerDraft}
+          onToggle={handleToggleCategoryVisibility}
+          onCancel={handleCloseCategoryManager}
+          onConfirm={handleConfirmCategoryVisibility}
+        />
+      ) : null}
     </div>
-
   );
-
 }
-
-
-
-
-
