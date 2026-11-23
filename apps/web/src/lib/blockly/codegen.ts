@@ -1,5 +1,6 @@
 ﻿import * as Blockly from "blockly";
 
+import { extractBlockLineRanges, setBlockMarkers, stripBlockMarkers, type BlockLineRanges } from "@/lib/blockly/codeLineMap";
 import { getGenerator } from "@/lib/blockly/generator";
 import { generateArduinoTemplate, generateMicroPythonTemplate } from "@/templates/codeTemplates";
 
@@ -14,6 +15,8 @@ export interface BlocklyCodegenResult {
   code: string;
   hasRootBlock: boolean;
   looseTopLevelBlockCount: number;
+  /** Lines of `code` each statement block produced, keyed by block id (see codeLineMap.ts). */
+  blockLineRanges: BlockLineRanges;
 }
 
 function prefersSetupSection(blockType: string) {
@@ -37,6 +40,23 @@ export function buildSourceCodeFromBlocklyWorkspace(
   generatorType: string
 ): BlocklyCodegenResult {
   const generator = getGenerator(generatorType) as unknown as BlocklyGeneratorLike;
+  // Markers are switched on only for this build and always switched off again, so any other
+  // blockToCode() call (tests, other tools) gets plain code.
+  setBlockMarkers(generator, true);
+  try {
+    const { code: markedCode, ...rest } = buildMarkedSource(workspace, generatorType, generator);
+    const { code, ranges } = extractBlockLineRanges(markedCode);
+    return { ...rest, code, blockLineRanges: ranges };
+  } finally {
+    setBlockMarkers(generator, false);
+  }
+}
+
+function buildMarkedSource(
+  workspace: Blockly.Workspace,
+  generatorType: string,
+  generator: BlocklyGeneratorLike
+): Omit<BlocklyCodegenResult, "blockLineRanges"> {
   generator.init(workspace);
 
   const rootBlocks = workspace.getBlocksByType("arduino_setup_loop");
@@ -100,7 +120,8 @@ export function buildSourceCodeFromBlocklyWorkspace(
     if (typeof snippet !== "string" || snippet.trim().length === 0) continue;
 
     if (generatorType === "arduino") {
-      const trimmed = snippet.trimStart();
+      // Classify by the snippet's text, not the block line markers that may wrap it.
+      const trimmed = stripBlockMarkers(snippet).trimStart();
       const isGlobalSnippet =
         name.startsWith("include_") ||
         name.startsWith("declare_") ||

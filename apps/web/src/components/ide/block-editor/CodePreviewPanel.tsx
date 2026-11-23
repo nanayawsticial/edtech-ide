@@ -1,7 +1,9 @@
 "use client";
 
-import type React from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { AlertCircle, ChevronRight, Code2 } from 'lucide-react';
+
+import type { CodeLineRange } from '@/lib/blockly/codeLineMap';
 
 import { BLOCKLY_CODE_PANEL_COMPACT_MAX_WIDTH } from './config';
 
@@ -13,10 +15,57 @@ type CodePreviewPanelProps = {
   warning: string | null;
   code: string;
   onClose: () => void;
+  /** Lines produced by the selected block (1-based, inclusive). */
+  highlightedRanges: CodeLineRange[];
+  /** Lines that belong to a block and can be clicked to select it. */
+  mappedLines: ReadonlySet<number>;
+  onLineClick: (line: number) => void;
 };
 
-/** "Generated code" panel beside the canvas, with a drag handle to resize it on wide layouts. */
-export function CodePreviewPanel({ isCompactLayout, width, isResizing, onResizeStart, warning, code, onClose }: CodePreviewPanelProps) {
+function describeRanges(ranges: CodeLineRange[]) {
+  if (ranges.length === 0) return null;
+  const parts = ranges.map(({ start, end }) => (start === end ? `${start}` : `${start}–${end}`));
+  const isSingleLine = ranges.length === 1 && ranges[0].start === ranges[0].end;
+  return `Selected block → ${isSingleLine ? 'line' : 'lines'} ${parts.join(', ')}`;
+}
+
+/**
+ * "Generated code" panel beside the canvas, with a drag handle to resize it on wide layouts.
+ * Selecting a block highlights the lines it produced; clicking a line selects its block.
+ */
+export function CodePreviewPanel({
+  isCompactLayout,
+  width,
+  isResizing,
+  onResizeStart,
+  warning,
+  code,
+  onClose,
+  highlightedRanges,
+  mappedLines,
+  onLineClick,
+}: CodePreviewPanelProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const lines = useMemo(() => code.replace(/\n$/, '').split('\n'), [code]);
+  const highlightedLines = useMemo(() => {
+    const set = new Set<number>();
+    for (const { start, end } of highlightedRanges) {
+      for (let line = start; line <= end; line += 1) set.add(line);
+    }
+    return set;
+  }, [highlightedRanges]);
+  const firstHighlightedLine = highlightedRanges.length > 0 ? Math.min(...highlightedRanges.map((range) => range.start)) : null;
+  const rangeSummary = describeRanges(highlightedRanges);
+  const hasCode = code.trim().length > 0;
+
+  // Bring the selected block's code into view without jumping if it is already visible.
+  useEffect(() => {
+    if (firstHighlightedLine === null) return;
+    scrollRef.current
+      ?.querySelector(`[data-line="${firstHighlightedLine}"]`)
+      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [firstHighlightedLine, code]);
+
   return (
     <>
       {!isCompactLayout ? (
@@ -49,14 +98,17 @@ export function CodePreviewPanel({ isCompactLayout, width, isResizing, onResizeS
         }
       >
         <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
-          <div>
+          <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[color:var(--blockly-sidebar-kicker)]">Generated code</p>
-            <p className="mt-0.5 text-xs text-[color:var(--blockly-sidebar-text-soft)]">Your blocks become this code</p>
+            <p className="mt-0.5 truncate text-xs text-[color:var(--blockly-sidebar-text-soft)]" aria-live="polite">
+              {rangeSummary ?? (hasCode ? 'Select a block to find its code' : 'Your blocks become this code')}
+            </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-input-bg)] text-[color:var(--blockly-sidebar-text-soft)] transition-all hover:border-[color:var(--blockly-sidebar-border-strong)] hover:bg-[color:var(--blockly-sidebar-card-strong)] hover:text-[color:var(--blockly-sidebar-text)]"
+            aria-label="Hide code preview"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-input-bg)] text-[color:var(--blockly-sidebar-text-soft)] transition-all hover:border-[color:var(--blockly-sidebar-border-strong)] hover:bg-[color:var(--blockly-sidebar-card-strong)] hover:text-[color:var(--blockly-sidebar-text)]"
           >
             <ChevronRight size={14} />
           </button>
@@ -67,9 +119,35 @@ export function CodePreviewPanel({ isCompactLayout, width, isResizing, onResizeS
             <p>{warning}</p>
           </div>
         ) : null}
-        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
-          {code && code.trim().length > 0 ? (
-            <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-6 text-[color:var(--blockly-sidebar-text)]">{code}</pre>
+        <div ref={scrollRef} className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-2 py-3">
+          {hasCode ? (
+            <pre className="font-mono text-[11px] leading-6 text-[color:var(--blockly-sidebar-text)]">
+              {lines.map((text, index) => {
+                const line = index + 1;
+                const isHighlighted = highlightedLines.has(line);
+                const isMapped = mappedLines.has(line);
+                return (
+                  <div
+                    key={line}
+                    data-line={line}
+                    onClick={isMapped ? () => onLineClick(line) : undefined}
+                    title={isMapped ? 'Show the block that made this line' : undefined}
+                    className={`flex gap-3 rounded-[6px] px-2 ${
+                      isHighlighted
+                        ? 'bg-[color-mix(in_srgb,var(--blockly-sidebar-accent)_32%,transparent)] shadow-[inset_3px_0_0_var(--blockly-sidebar-accent)]'
+                        : isMapped
+                          ? 'hover:bg-[color-mix(in_srgb,var(--blockly-sidebar-accent)_12%,transparent)]'
+                          : ''
+                    } ${isMapped ? 'cursor-pointer' : ''}`}
+                  >
+                    <span aria-hidden="true" className="w-6 shrink-0 select-none text-right tabular-nums text-[color:var(--blockly-sidebar-text-soft)] opacity-60">
+                      {line}
+                    </span>
+                    <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text || ' '}</span>
+                  </div>
+                );
+              })}
+            </pre>
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-[color:var(--blockly-sidebar-text-soft)]">
               <Code2 size={28} className="text-[color:var(--blockly-sidebar-kicker)]" />

@@ -1,5 +1,6 @@
 import * as Blockly from 'blockly';
 import type { CodingCircuitSnapshot } from '@/lib/blockly/circuitAwareness';
+import { markBlockCode, markSetupSnippets } from '@/lib/blockly/codeLineMap';
 
 function getCircuitSnapshot(): CodingCircuitSnapshot | undefined {
     if (typeof window === 'undefined') return undefined;
@@ -75,6 +76,7 @@ function toMicroPythonPin(label: string) {
 // 1. ARDUINO C++ GENERATOR
 // ----------------------------------------------------------------------------
 export const arduinoGenerator = new Blockly.CodeGenerator('Arduino');
+markSetupSnippets(arduinoGenerator);
 arduinoGenerator.INDENT = '  ';
 
 (arduinoGenerator as any).init = function (workspace: Blockly.Workspace) {
@@ -90,7 +92,7 @@ arduinoGenerator.INDENT = '  ';
 (arduinoGenerator as any).scrub_ = function (block: Blockly.Block, code: string, opt_thisOnly?: boolean): string {
     const nextBlock = block.nextConnection && block.nextConnection.targetBlock();
     const nextCode = opt_thisOnly ? '' : this.blockToCode(nextBlock);
-    return code + nextCode;
+    return markBlockCode(this, block, code) + nextCode;
 };
 
 // -- Arduino Blocks --
@@ -681,6 +683,7 @@ const NUMBER_LITERAL = /^-?\d+(\.\d+)?$/;
 // 2. MICROPYTHON GENERATOR
 // ----------------------------------------------------------------------------
 export const micropythonGenerator = new Blockly.CodeGenerator('MicroPython');
+markSetupSnippets(micropythonGenerator);
 micropythonGenerator.INDENT = '    ';
 
 function getMicroPythonState(generator: Blockly.CodeGenerator) {
@@ -738,7 +741,7 @@ function dedentMicroPython(code: string) {
 (micropythonGenerator as any).scrub_ = function (block: Blockly.Block, code: string, opt_thisOnly?: boolean): string {
     const nextBlock = block.nextConnection && block.nextConnection.targetBlock();
     const nextCode = opt_thisOnly ? '' : this.blockToCode(nextBlock);
-    return code + nextCode;
+    return markBlockCode(this, block, code) + nextCode;
 };
 
 // -- MicroPython Blocks --

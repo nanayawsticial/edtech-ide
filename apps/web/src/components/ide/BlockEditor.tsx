@@ -26,6 +26,13 @@ import { useCircuitStore } from '@/stores/circuitStore';
 import { useBlocklyStore } from '@/stores/blocklyStore';
 
 import { isOptionalCircuitBlock } from '@/lib/blockly/circuitAwareness';
+import {
+  getBlockAncestry,
+  getBlockIdAtLine,
+  getMappedLines,
+  getRangesForAncestry,
+  type BlockLineRanges,
+} from '@/lib/blockly/codeLineMap';
 
 import {
   BLOCKLY_FLYOUT_FIXED_WIDTH,
@@ -123,6 +130,11 @@ export default function BlockEditor({
   const setToolboxLearningLevel = useBlocklyStore((state) => state.setToolboxLearningLevel);
 
   const [workspaceBlockTypes, setWorkspaceBlockTypes] = useState<string[]>([]);
+  // Block <-> code line map for the code preview (see lib/blockly/codeLineMap.ts). The selected
+  // block's ancestry is kept so a selected value block can highlight its parent statement's lines.
+  const [blockLineRanges, setBlockLineRanges] = useState<BlockLineRanges>({});
+  const [selectedBlockAncestry, setSelectedBlockAncestry] = useState<string[]>([]);
+  const selectedBlockIdRef = useRef<string | null>(null);
   const [showCategorySidebar, setShowCategorySidebar] = useState(!isCompactLayout);
   const showExtendedBlocks = showAdvancedBlocks || toolboxLearningLevel === 'explore';
 
@@ -427,6 +439,15 @@ const hideCategoryFlyout = useCallback(() => {
   stabilizeFlyoutViewport(flyout);
 }, [stabilizeFlyoutViewport]);
 
+  // Re-read the selected block's parents; they change when blocks are moved, so this also runs
+  // after every regeneration.
+  const refreshSelectedBlockAncestry = useCallback(() => {
+    const blockId = selectedBlockIdRef.current;
+    const block = blockId ? workspaceRef.current?.getBlockById(blockId) ?? null : null;
+    const ancestry = getBlockAncestry(block);
+    setSelectedBlockAncestry((current) => (stringArrayEqual(current, ancestry) ? current : ancestry));
+  }, []);
+
 const handleGenerate = useCallback((force = false) => {
     if (!workspaceRef.current) return;
 
@@ -438,6 +459,8 @@ const handleGenerate = useCallback((force = false) => {
 
       setGeneratedPreviewCode((prev) => (prev === result.code ? prev : result.code));
       setPreviewWarning((prev) => (prev === warning ? prev : warning));
+      setBlockLineRanges(result.blockLineRanges);
+      refreshSelectedBlockAncestry();
 
       if (force || sourceCodeRef.current !== result.code) {
         eventBus.emit('CODE_GENERATED', { code: result.code, warning });
@@ -445,7 +468,7 @@ const handleGenerate = useCallback((force = false) => {
     } catch (e) {
       console.error('Code generation error:', e);
     }
-  }, [eventBus]);
+  }, [eventBus, refreshSelectedBlockAncestry]);
 
   const flushBlocklySync = useCallback(
     (force = false) => {
@@ -459,6 +482,11 @@ const handleGenerate = useCallback((force = false) => {
     (e: Blockly.Events.Abstract) => {
       if (e.type === Blockly.Events.VIEWPORT_CHANGE) {
         syncFlyoutScale();
+      }
+
+      if (e.type === Blockly.Events.SELECTED) {
+        selectedBlockIdRef.current = (e as Blockly.Events.Selected).newElementId ?? null;
+        refreshSelectedBlockAncestry();
       }
 
       if (e.isUiEvent || e.type === Blockly.Events.FINISHED_LOADING) return;
@@ -480,7 +508,7 @@ const handleGenerate = useCallback((force = false) => {
         debounceTimerRef.current = null;
       }, BLOCKLY_SYNC_DEBOUNCE_MS);
     },
-    [flushBlocklySync, syncBlockCount, syncFlyoutScale]
+    [flushBlocklySync, refreshSelectedBlockAncestry, syncBlockCount, syncFlyoutScale]
   );
 
   const initializeWorkspace = useCallback(
@@ -858,6 +886,29 @@ const handleGenerate = useCallback((force = false) => {
   );
   const [isCoachOpen, setIsCoachOpen] = useState(true);
 
+  const highlightedCodeRanges = useMemo(
+    () => getRangesForAncestry(blockLineRanges, selectedBlockAncestry),
+    [blockLineRanges, selectedBlockAncestry]
+  );
+  const mappedCodeLines = useMemo(() => getMappedLines(blockLineRanges), [blockLineRanges]);
+
+  const handleCodeLineClick = useCallback(
+    (line: number) => {
+      const workspace = workspaceRef.current;
+      const blockId = getBlockIdAtLine(blockLineRanges, line);
+      const block = blockId ? workspace?.getBlockById(blockId) : null;
+      if (!workspace || !block) {
+        return;
+      }
+
+      Blockly.common.setSelected(block);
+      workspace.centerOnBlock(block.id);
+      selectedBlockIdRef.current = block.id;
+      refreshSelectedBlockAncestry();
+    },
+    [blockLineRanges, refreshSelectedBlockAncestry]
+  );
+
   const handleOpenCategoryManager = useCallback(() => {
     const visibleIds = shelfCategories
       .filter((category) => !hiddenCategoryIds.includes(category.id))
@@ -1014,6 +1065,9 @@ const handleGenerate = useCallback((force = false) => {
             warning={previewWarning}
             code={generatedPreviewCode}
             onClose={() => setShowCodePanel(false)}
+            highlightedRanges={highlightedCodeRanges}
+            mappedLines={mappedCodeLines}
+            onLineClick={handleCodeLineClick}
           />
         ) : null}
       </div>
