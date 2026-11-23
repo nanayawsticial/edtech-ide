@@ -10,7 +10,7 @@ import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react'
 
 import * as Blockly from 'blockly';
 
-import { Activity, AlertCircle, Blocks as BlocksIcon, ChevronLeft, ChevronRight, Code2, Crosshair, GitBranch, Infinity as InfinityIcon, Lightbulb, Lock, MessageSquare, Monitor, Move, Search, SlidersHorizontal, Sparkles, SquareFunction, Variable, Wand2 } from 'lucide-react';
+import { Activity, AlertCircle, Blocks as BlocksIcon, Check, ChevronLeft, ChevronRight, Code2, Crosshair, GitBranch, Infinity as InfinityIcon, Lightbulb, Lock, MessageSquare, Monitor, Move, Search, SlidersHorizontal, Sparkles, SquareFunction, Variable, Wand2 } from 'lucide-react';
 
 
 
@@ -1561,6 +1561,10 @@ const handleGenerate = useCallback((force = false) => {
 
       if (!isFlyoutVisible || !target) return;
 
+      if (target.closest('[data-coach-card]')) {
+        return;
+      }
+
 
 
 
@@ -1822,6 +1826,19 @@ const handleGenerate = useCallback((force = false) => {
     workspaceLooksEmpty,
   ]);
 
+  // Coach checklist: the same stages the learning guide walks through, ticked off from the live workspace.
+  const coachMilestones = useMemo(
+    () => [
+      { id: 'add', label: 'Add a block from Output or Your Circuit', done: !workspaceLooksEmpty },
+      { id: 'flow', label: 'Snap it inside setup or loop', done: !workspaceLooksEmpty && hasRootFlowBlock && !previewWarning },
+      { id: 'wait', label: 'Add a wait so changes are easy to see', done: hasTimingBlock },
+      { id: 'code', label: 'Compare your blocks with the code', done: showCodePanel },
+    ],
+    [hasRootFlowBlock, hasTimingBlock, previewWarning, showCodePanel, workspaceLooksEmpty]
+  );
+  const coachDoneCount = coachMilestones.filter((milestone) => milestone.done).length;
+  const [isCoachOpen, setIsCoachOpen] = useState(true);
+
   const moreBlocksCategory = useMemo(
     () => ({
       id: 'more-groups',
@@ -2047,17 +2064,6 @@ const handleGenerate = useCallback((force = false) => {
                 ? 'Open Explore'
                 : null;
 
-  // The tone only tints border and background; text uses the sidebar token so it
-  // stays readable whether the sidebar is dark or light.
-  const learningGuideToneClass =
-    learningGuide.tone === 'warning'
-      ? 'border-amber-400/40 bg-amber-400/12 text-[color:var(--blockly-sidebar-text)]'
-      : learningGuide.tone === 'success'
-        ? 'border-emerald-400/40 bg-emerald-400/12 text-[color:var(--blockly-sidebar-text)]'
-        : learningGuide.tone === 'progress'
-          ? 'border-violet-400/40 bg-violet-400/12 text-[color:var(--blockly-sidebar-text)]'
-          : 'border-[color:var(--blockly-sidebar-border-strong)] bg-[color:var(--blockly-sidebar-card)] text-[color:var(--blockly-sidebar-text)]';
-
   return (
 
 
@@ -2139,25 +2145,6 @@ const handleGenerate = useCallback((force = false) => {
             })}
           </div>
 
-          <div className={`mt-3 rounded-[18px] border px-3 py-2.5 shadow-[0_20px_38px_-28px_rgba(15,23,42,0.58)] ${learningGuideToneClass}`}>
-            <div className="flex items-center justify-between gap-2">
-              <span className="flex items-center gap-2 whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.18em]">
-                <Sparkles size={13} />
-                Next step
-              </span>
-              {learningGuideActionLabel ? (
-                <button
-                  type="button"
-                  onClick={() => handleGuideAction(learningGuide.actionId)}
-                  className="inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] border border-[color:var(--blockly-sidebar-border-strong)] bg-[color:var(--blockly-sidebar-card-strong)] px-3 text-xs font-semibold text-[color:var(--blockly-sidebar-text)] transition-all hover:-translate-y-0.5 hover:border-[color:var(--blockly-sidebar-accent)]"
-                >
-                  {learningGuideActionLabel}
-                </button>
-              ) : null}
-            </div>
-            <p className="mt-1.5 text-sm font-semibold">{learningGuide.title}</p>
-            <p className="mt-0.5 text-xs leading-5 opacity-90">{learningGuide.detail}</p>
-          </div>
 
           {shouldShowDisplayWizard && displayWizardOptions.length > 0 ? (
             <div className="mt-4 rounded-[22px] border border-[color:var(--blockly-sidebar-border-strong)] bg-[color:var(--blockly-sidebar-card)] p-3 shadow-[0_20px_36px_-28px_rgba(15,23,42,0.55)]">
@@ -2350,6 +2337,88 @@ const handleGenerate = useCallback((force = false) => {
             onClickCapture={handleStageClickCapture}
           >
             <div ref={containerRef} className="absolute inset-0 h-full w-full min-h-0 min-w-0" />
+
+            {/* Coach card: one goal at a time, ticked off from the workspace. The canvas is dark purple
+                in every theme, so the card uses fixed dark colours rather than the sidebar tokens. */}
+            {isCoachOpen ? (
+              <aside
+                data-coach-card
+                aria-label="Next step"
+                className="absolute right-3 top-3 z-10 flex w-[min(280px,calc(100%-1.5rem))] flex-col gap-2 rounded-[16px] border border-white/12 bg-[#1c1535]/95 p-3 text-white shadow-[0_24px_48px_-28px_rgba(0,0,0,0.9)] backdrop-blur"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-violet-200">
+                    <Sparkles size={13} aria-hidden="true" />
+                    Next step
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold tabular-nums text-white/70">
+                      {coachDoneCount} of {coachMilestones.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsCoachOpen(false)}
+                      className="rounded-[8px] px-2 py-1 text-[11px] font-semibold text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+                    >
+                      Hide
+                    </button>
+                  </span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-white/10" aria-hidden="true">
+                  <div
+                    className="h-full rounded-full bg-violet-300 transition-[width] duration-300"
+                    style={{ width: `${(coachDoneCount / coachMilestones.length) * 100}%` }}
+                  />
+                </div>
+                <ul className="flex flex-col gap-1">
+                  {coachMilestones.map((milestone) => (
+                    <li key={milestone.id} className={`flex items-center gap-2 text-[12px] leading-5 ${milestone.done ? 'text-white/70' : 'text-white'}`}>
+                      <span
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${milestone.done ? 'bg-emerald-400 text-[#0b2a1c]' : 'border border-white/35'}`}
+                        aria-hidden="true"
+                      >
+                        {milestone.done ? <Check size={11} strokeWidth={3} /> : null}
+                      </span>
+                      <span className={milestone.done ? 'line-through decoration-white/30' : ''}>{milestone.label}</span>
+                      <span className="sr-only">{milestone.done ? '(done)' : '(to do)'}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div
+                  className={`flex items-end gap-2 rounded-[12px] px-2.5 py-2 ${
+                    learningGuide.tone === 'warning'
+                      ? 'border border-amber-300/30 bg-amber-400/12'
+                      : learningGuide.tone === 'success'
+                        ? 'border border-emerald-300/30 bg-emerald-400/12'
+                        : 'bg-white/[0.06]'
+                  }`}
+                >
+                  <p className="min-w-0 flex-1 text-xs leading-[1.35rem] text-white/85">
+                    <span className="sr-only">{learningGuide.title}: </span>
+                    {learningGuide.detail}
+                  </p>
+                  {learningGuideActionLabel ? (
+                    <button
+                      type="button"
+                      onClick={() => handleGuideAction(learningGuide.actionId)}
+                      className="inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] bg-white px-3 text-xs font-semibold text-[#2a1a5e] transition-colors hover:bg-violet-50"
+                    >
+                      {learningGuideActionLabel}
+                    </button>
+                  ) : null}
+                </div>
+              </aside>
+            ) : (
+              <button
+                type="button"
+                data-coach-card
+                onClick={() => setIsCoachOpen(true)}
+                className="absolute right-3 top-3 z-10 inline-flex h-9 items-center gap-2 rounded-full border border-white/12 bg-[#1c1535]/95 px-3 text-xs font-semibold text-white shadow-[0_16px_32px_-20px_rgba(0,0,0,0.9)] backdrop-blur transition-colors hover:bg-[#261c48]"
+              >
+                <Sparkles size={13} aria-hidden="true" />
+                Next step · {coachDoneCount}/{coachMilestones.length}
+              </button>
+            )}
           </div>
         </div>
 
