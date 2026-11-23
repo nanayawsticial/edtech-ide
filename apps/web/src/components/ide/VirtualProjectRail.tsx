@@ -90,7 +90,7 @@ export default function VirtualProjectRail({
 
   return (
     <motion.section
-      className="circuit-lab-flow mt-3 rounded-[16px] border border-white/7 bg-[#0b1017] px-4 py-2.5"
+      className="circuit-lab-flow mt-2 rounded-[16px] border border-white/7 bg-[#0b1017] px-4 py-2.5"
       variants={fadeInUp}
       initial="hidden"
       animate="visible"

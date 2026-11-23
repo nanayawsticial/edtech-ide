@@ -444,16 +444,16 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
   );
 
   const blockModeStage = (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 sm:gap-3">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
       {blockWorkspaceStage}
       {blockBottomStage}
     </div>
   );
 
   const virtualCodingStage = editor.isBlockMode ? (
-    <div className="mt-2 flex min-h-0 flex-1 sm:mt-4">{blockModeStage}</div>
+    <div className="mt-2 flex min-h-0 flex-1">{blockModeStage}</div>
   ) : (
-    <div className="mt-2 flex min-h-0 flex-1 flex-col gap-3 sm:mt-4 sm:gap-4">
+    <div className="mt-2 flex min-h-0 flex-1 flex-col gap-2">
       {shouldShowCodeGuidance ? (
         <CodeGuidanceCard
           environment={editor.environment}
@@ -503,7 +503,7 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
 
   if (editor.environment === 'virtual') {
     return (
-      <div className="circuit-lab-shell flex h-[100dvh] w-full flex-col overflow-hidden px-2 py-2 sm:px-3 sm:py-3">
+      <div className="circuit-lab-shell flex h-[100dvh] w-full flex-col overflow-hidden p-2">
         {layout.activeView === 'circuit' ? (
           <>
             <CircuitLabTopBar
@@ -525,7 +525,7 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
               saveStatusTone={autoSaveManager.visibleSaveStatusTone}
             />
             {virtualProjectRail}
-            <div className="mt-2 min-h-0 flex-1 sm:mt-3">
+            <div className="mt-2 min-h-0 flex-1">
               <div className="relative h-full min-h-0 overflow-hidden">
                 <IDEErrorBoundary
                   zone="Circuit Lab"
@@ -632,7 +632,7 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
       {preferencesDialog}
 
       {editor.isBlockMode ? (
-        <div className="mt-2 flex min-h-0 flex-1 px-2 pb-2 sm:mt-3 sm:px-3 sm:pb-3">{blockModeStage}</div>
+        <div className="mt-2 flex min-h-0 flex-1 px-2 pb-2">{blockModeStage}</div>
       ) : (
         <div className="flex min-h-0 w-full flex-1 overflow-hidden">
           <IdeActivityBar

@@ -179,7 +179,7 @@ export default function TopBar({
         </div>
       </motion.header>
 
-      <div className="mt-2">
+      <div className="mt-2 empty:hidden">
         <SimulationWarningBar />
       </div>
 
