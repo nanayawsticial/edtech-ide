@@ -1,12 +1,12 @@
 ﻿"use client";
 /**
- * BlocksPanel â€“ Scratch-style compact block library (middle column).
+ * BlocksPanel – Scratch-style compact block library (middle column).
  *
  * UX:
- *   â€¢ Compact rows (36px) â€” colored left border, icon, truncated label.
- *   â€¢ Hover â†’ row expands smoothly to show full label + "drag to use" hint.
- *   â€¢ MouseDown + drag (> 6px) â†’ block created on canvas + native drag starts.
- *   â€¢ Click without drag â†’ nothing happens (no accidental block insertions).
+ *   • Compact rows (36px) — colored left border, icon, truncated label.
+ *   • Hover → row expands smoothly to show full label + "drag to use" hint.
+ *   • MouseDown + drag (> 6px) → block created on canvas + native drag starts.
+ *   • Click without drag → nothing happens (no accidental block insertions).
  */
 import React, { useEffect, useRef, useCallback, useState } from "react";
 import * as Blockly from "blockly";
@@ -25,7 +25,7 @@ interface BlockDef {
   label: string;
 }
 
-// â”€â”€â”€ Color per category (matches theme.ts) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Color per category (matches theme.ts) ───────────────────────────────────
 const CATEGORY_COLORS: Record<string, string> = {
   control:       "#F97316",
   logic:         "#10B981",
@@ -41,7 +41,7 @@ function getCategoryColor(category: string): string {
   return CATEGORY_COLORS[category.toLowerCase()] ?? "#64748b";
 }
 
-// â”€â”€â”€ Label helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Label helper ─────────────────────────────────────────────────────────────
 function getLabel(type: string): string {
   const overrides: Record<string, string> = {
     arduino_on_start:        "On Start",
@@ -145,54 +145,54 @@ function getLabel(type: string): string {
     .join(" ");
 }
 
-// â”€â”€â”€ Icon helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Icon helper ──────────────────────────────────────────────────────────────
 function getIcon(type: string): string {
-  if (type.includes("setup_loop"))  return "â–¶ï¸";
-  if (type.includes("forever") || type.includes("repeat") || type.includes("loop")) return "ðŸ”";
-  if (type.includes("if"))          return "â“";
-  if (type.includes("wait") || type.includes("delay") || type.includes("millis")) return "â±ï¸";
-  if (type.includes("compare"))     return "âš–ï¸";
-  if (type.includes("operation"))   return "ðŸ”—";
-  if (type.includes("negate"))      return "ðŸš«";
-  if (type.includes("boolean"))     return "âœ…";
-  if (type.includes("math_number")) return "ðŸ”¢";
-  if (type.includes("arithmetic"))  return "ðŸ”£";
-  if (type.includes("random"))      return "ðŸŽ²";
-  if (type.includes("map") || type.includes("constrain")) return "ðŸ“";
-  if (type.includes("ultrasonic"))  return "ðŸ“";
-  if (type.includes("pir") || type.includes("motion")) return "ðŸš¶";
-  if (type.includes("touch"))       return "ðŸ‘†";
-  if (type.includes("dht") || type.includes("bme")) return "ðŸŒ¡ï¸";
-  if (type.includes("bh1750"))      return "â˜€ï¸";
-  if (type.includes("soil"))        return "ðŸŒ±";
-  if (type.includes("rain"))        return "ðŸŒ§ï¸";
-  if (type.includes("water"))       return "ðŸ’§";
-  if (type.includes("ir_"))         return "ðŸ“¡";
-  if (type.includes("keypad"))      return "âŒ¨ï¸";
-  if (type.includes("digitalRead") || type.includes("analogRead")) return "ðŸ“¥";
-  if (type.includes("pinMode"))     return "ðŸ”Œ";
-  if (type.includes("digitalWrite")) return "ðŸ’¬";
-  if (type.includes("analog"))      return "ã€°ï¸";
-  if (type.includes("servo"))       return "ðŸ”©";
-  if (type.includes("relay"))       return "ðŸ”˜";
-  if (type.includes("buzzer"))      return "ðŸ””";
-  if (type.includes("motor") || type.includes("robot") || type.includes("afmotor") || type.includes("l298n")) return "âš™ï¸";
-  if (type.includes("potentiometer")) return "ðŸŽ›ï¸";
-  if (type.includes("color"))       return "ðŸŽ¨";
-  if (type.includes("button"))      return "ðŸ”˜";
-  if (type.includes("max30102"))    return "â¤ï¸";
-  if (type.includes("sound"))       return "ðŸŽ¤";
-  if (type.includes("photo"))       return "ðŸ’¡";
-  if (type.includes("traffic"))     return "ðŸš¥";
-  if (type.includes("led") || type.includes("rgb")) return "ðŸ’¡";
-  if (type.includes("neopixel"))    return "ðŸŒˆ";
-  if (type.includes("oled") || type.includes("lcd") || type.includes("tft")) return "ðŸ–¥ï¸";
-  if (type.includes("serial"))      return "ðŸ“Ÿ";
-  if (type.includes("text"))        return "ðŸ“";
-  return "ðŸ§©";
+  if (type.includes("setup_loop"))  return "▶️";
+  if (type.includes("forever") || type.includes("repeat") || type.includes("loop")) return "🔁";
+  if (type.includes("if"))          return "❓";
+  if (type.includes("wait") || type.includes("delay") || type.includes("millis")) return "⏱️";
+  if (type.includes("compare"))     return "⚖️";
+  if (type.includes("operation"))   return "🔗";
+  if (type.includes("negate"))      return "🚫";
+  if (type.includes("boolean"))     return "✅";
+  if (type.includes("math_number")) return "🔢";
+  if (type.includes("arithmetic"))  return "🔣";
+  if (type.includes("random"))      return "🎲";
+  if (type.includes("map") || type.includes("constrain")) return "📏";
+  if (type.includes("ultrasonic"))  return "📐";
+  if (type.includes("pir") || type.includes("motion")) return "🚶";
+  if (type.includes("touch"))       return "👆";
+  if (type.includes("dht") || type.includes("bme")) return "🌡️";
+  if (type.includes("bh1750"))      return "☀️";
+  if (type.includes("soil"))        return "🌱";
+  if (type.includes("rain"))        return "🌧️";
+  if (type.includes("water"))       return "💧";
+  if (type.includes("ir_"))         return "📡";
+  if (type.includes("keypad"))      return "⌨️";
+  if (type.includes("digitalRead") || type.includes("analogRead")) return "📥";
+  if (type.includes("pinMode"))     return "🔌";
+  if (type.includes("digitalWrite")) return "💬";
+  if (type.includes("analog"))      return "〰️";
+  if (type.includes("servo"))       return "🔩";
+  if (type.includes("relay"))       return "🔘";
+  if (type.includes("buzzer"))      return "🔔";
+  if (type.includes("motor") || type.includes("robot") || type.includes("afmotor") || type.includes("l298n")) return "⚙️";
+  if (type.includes("potentiometer")) return "🎛️";
+  if (type.includes("color"))       return "🎨";
+  if (type.includes("button"))      return "🔘";
+  if (type.includes("max30102"))    return "❤️";
+  if (type.includes("sound"))       return "🎤";
+  if (type.includes("photo"))       return "💡";
+  if (type.includes("traffic"))     return "🚥";
+  if (type.includes("led") || type.includes("rgb")) return "💡";
+  if (type.includes("neopixel"))    return "🌈";
+  if (type.includes("oled") || type.includes("lcd") || type.includes("tft")) return "🖥️";
+  if (type.includes("serial"))      return "📟";
+  if (type.includes("text"))        return "📝";
+  return "🧩";
 }
 
-// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function BlocksPanel({
   board,
   selectedCategoryName,
@@ -202,7 +202,7 @@ export default function BlocksPanel({
   const [hoveredType, setHoveredType] = useState<string | null>(null);
   const color = getCategoryColor(selectedCategoryName);
 
-  // â”€â”€â”€ Parse category blocks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Parse category blocks ───────────────────────────────────────────────
   useEffect(() => {
     if (!selectedCategoryName) { setBlocks([]); return; }
     try {
@@ -225,10 +225,10 @@ export default function BlocksPanel({
     }
   }, [board, selectedCategoryName]);
 
-  // â”€â”€â”€ Drag-threshold detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Drag-threshold detection ────────────────────────────────────────────
   /**
    * We only create + drag a block when the user has clearly moved the mouse
-   * (drag-distance â‰¥ 6px). Pure clicks do nothing.
+   * (drag-distance ≥ 6px). Pure clicks do nothing.
    */
   const dragState = useRef<{
     blockType: string;
@@ -306,11 +306,11 @@ export default function BlocksPanel({
     [createAndDragBlock]
   );
 
-  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Render ───────────────────────────────────────────────────────────────
   if (!selectedCategoryName) {
     return (
       <div className="blocks-panel-empty">
-        <span>â† Select a category</span>
+        <span>← Select a category</span>
       </div>
     );
   }
@@ -352,7 +352,7 @@ export default function BlocksPanel({
                 <span className="block-row-label">{block.label}</span>
                 {isHovered && (
                   <span className="block-row-hint">
-                    â†– drag to workspace
+                    ↖ drag to workspace
                   </span>
                 )}
               </div>

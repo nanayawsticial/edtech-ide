@@ -1429,7 +1429,7 @@ export default function BreadboardCanvas({
                         : 'border-white/12 bg-[#08111d]/88 text-white/80'
               )}
             >
-              {interactionMode.label} Â· {interactionMode.detail}
+              {interactionMode.label} · {interactionMode.detail}
             </div>
           </div>
         ) : null}

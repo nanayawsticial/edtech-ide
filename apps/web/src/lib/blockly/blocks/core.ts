@@ -14,7 +14,7 @@ export const coreBlocks = [
             tooltip: "Legacy combined root block kept for older projects. New projects should use on start and forever.",
             helpUrl: ""
         },
-        // Root blocks (Code Kit style â€” two independent root blocks)
+        // Root blocks (Code Kit style — two independent root blocks)
         {
             type: "arduino_on_start",
             message0: "on start %1 %2",
@@ -317,7 +317,7 @@ export const coreBlocks = [
         },
         {
             type: "math_modulo_custom",
-            message0: "remainder of %1 Ã· %2",
+            message0: "remainder of %1 ÷ %2",
             args0: [
                 { type: "input_value", name: "DIVIDEND", check: "Number" },
                 { type: "input_value", name: "DIVISOR", check: "Number" }
