@@ -10,7 +10,7 @@ import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react'
 
 import * as Blockly from 'blockly';
 
-import { Activity, AlertCircle, Blocks as BlocksIcon, ChevronLeft, ChevronRight, Code2, Crosshair, GitBranch, Infinity as InfinityIcon, Lightbulb, MessageSquare, Monitor, Move, Search, SlidersHorizontal, Sparkles, SquareFunction, Variable, Wand2 } from 'lucide-react';
+import { Activity, AlertCircle, Blocks as BlocksIcon, ChevronLeft, ChevronRight, Code2, Crosshair, GitBranch, Infinity as InfinityIcon, Lightbulb, Lock, MessageSquare, Monitor, Move, Search, SlidersHorizontal, Sparkles, SquareFunction, Variable, Wand2 } from 'lucide-react';
 
 
 
@@ -2085,11 +2085,11 @@ const handleGenerate = useCallback((force = false) => {
             : 'w-[252px] border-r border-[color:var(--blockly-sidebar-border)]'
         }`}
       >
-        <div className="border-b border-[color:var(--blockly-sidebar-border)] px-4 py-4">
+        <div className="border-b border-[color:var(--blockly-sidebar-border)] px-3 py-3">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[color:var(--blockly-sidebar-kicker)]">Code with blocks</p>
-              <p className="mt-2 text-base font-semibold text-[color:var(--blockly-sidebar-text)]">{boardLabel(currentBoard)}</p>
+              <p className="mt-1 text-base font-semibold text-[color:var(--blockly-sidebar-text)]">{boardLabel(currentBoard)}</p>
             </div>
             <div className="flex items-center gap-2">
               <span className="rounded-full border border-[color:var(--blockly-sidebar-border-strong)] bg-[color:var(--blockly-sidebar-chip)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--blockly-sidebar-text-soft)]">
@@ -2108,7 +2108,7 @@ const handleGenerate = useCallback((force = false) => {
             </div>
           </div>
 
-          <label className="mt-4 flex h-11 items-center gap-3 rounded-[18px] border border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-input-bg)] px-3 text-[color:var(--blockly-sidebar-text-soft)] transition-colors focus-within:border-[color:var(--blockly-sidebar-accent)] focus-within:text-[color:var(--blockly-sidebar-text)]">
+          <label className="mt-3 flex h-10 items-center gap-3 rounded-[16px] border border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-input-bg)] px-3 text-[color:var(--blockly-sidebar-text-soft)] transition-colors focus-within:border-[color:var(--blockly-sidebar-accent)] focus-within:text-[color:var(--blockly-sidebar-text)]">
             <Search size={15} />
             <input
               value={categoryQuery}
@@ -2118,15 +2118,16 @@ const handleGenerate = useCallback((force = false) => {
             />
           </label>
 
-          <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="mt-2 grid grid-cols-3 gap-1.5">
             {TOOLBOX_LEARNING_LEVELS.map((level) => {
               const isActive = toolboxLearningLevel === level;
               return (
                 <button
                   key={level}
                   type="button"
+                  aria-pressed={isActive}
                   onClick={() => setToolboxLearningLevel(level)}
-                  className={`rounded-[14px] border px-3 py-2 text-[11px] font-semibold transition-all ${
+                  className={`rounded-[12px] border px-2 py-1.5 text-[11px] font-semibold transition-all ${
                     isActive
                       ? 'border-violet-300/30 bg-[linear-gradient(180deg,#8a56ff_0%,#7641ea_100%)] text-white shadow-[0_20px_34px_-24px_rgba(118,65,234,0.76)]'
                       : 'border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-card)] text-[color:var(--blockly-sidebar-text-soft)] hover:border-[color:var(--blockly-sidebar-border-strong)] hover:text-[color:var(--blockly-sidebar-text)]'
@@ -2138,24 +2139,24 @@ const handleGenerate = useCallback((force = false) => {
             })}
           </div>
 
-          <div className={`mt-4 rounded-[22px] border px-4 py-4 shadow-[0_20px_38px_-28px_rgba(15,23,42,0.58)] ${learningGuideToneClass}`}>
-            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em]">
-              <Sparkles size={13} />
-              Next step
+          <div className={`mt-3 rounded-[18px] border px-3 py-2.5 shadow-[0_20px_38px_-28px_rgba(15,23,42,0.58)] ${learningGuideToneClass}`}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2 whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.18em]">
+                <Sparkles size={13} />
+                Next step
+              </span>
+              {learningGuideActionLabel ? (
+                <button
+                  type="button"
+                  onClick={() => handleGuideAction(learningGuide.actionId)}
+                  className="inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] border border-[color:var(--blockly-sidebar-border-strong)] bg-[color:var(--blockly-sidebar-card-strong)] px-3 text-xs font-semibold text-[color:var(--blockly-sidebar-text)] transition-all hover:-translate-y-0.5 hover:border-[color:var(--blockly-sidebar-accent)]"
+                >
+                  {learningGuideActionLabel}
+                </button>
+              ) : null}
             </div>
-            <div className="mt-3">
-              <p className="text-sm font-semibold">{learningGuide.title}</p>
-              <p className="mt-1 text-xs leading-5 opacity-90">{learningGuide.detail}</p>
-            </div>
-            {learningGuideActionLabel ? (
-              <button
-                type="button"
-                onClick={() => handleGuideAction(learningGuide.actionId)}
-                className="mt-3 inline-flex h-10 items-center justify-center rounded-[14px] border border-[color:var(--blockly-sidebar-border-strong)] bg-[color:var(--blockly-sidebar-card-strong)] px-4 text-xs font-semibold text-[color:var(--blockly-sidebar-text)] transition-all hover:-translate-y-0.5 hover:border-[color:var(--blockly-sidebar-accent)]"
-              >
-                {learningGuideActionLabel}
-              </button>
-            ) : null}
+            <p className="mt-1.5 text-sm font-semibold">{learningGuide.title}</p>
+            <p className="mt-0.5 text-xs leading-5 opacity-90">{learningGuide.detail}</p>
           </div>
 
           {shouldShowDisplayWizard && displayWizardOptions.length > 0 ? (
@@ -2181,18 +2182,20 @@ const handleGenerate = useCallback((force = false) => {
           ) : null}
         </div>
 
-        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-3">
-          <div className="space-y-2">
+        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-2">
+          <div className="space-y-1.5">
             {filteredCategories.map((category) => {
               const isActive = activeCategoryName === category.id;
               const isLocked = category.isEmpty;
+              const categoryDescription = isLocked ? 'Build the matching part to unlock these blocks.' : category.description;
               return (
                 <button
                   key={category.id}
                   type="button"
                   onClick={() => handleCategorySelect(category.id)}
                   disabled={isLocked}
-                  className={`group flex w-full items-center gap-3 rounded-[18px] border px-3 py-3 text-left transition-all ${
+                  title={categoryDescription}
+                  className={`group flex w-full items-center gap-2.5 rounded-[14px] border px-2.5 py-2 text-left transition-all ${
                     isActive
                       ? 'border-violet-300/35 bg-[linear-gradient(180deg,#8a56ff_0%,#7641ea_100%)] text-white shadow-[0_22px_38px_-26px_rgba(134,78,251,0.72)]'
                       : isLocked
@@ -2201,30 +2204,39 @@ const handleGenerate = useCallback((force = false) => {
                   }`}
                 >
                   <span
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] text-white shadow-[0_18px_36px_-26px_rgba(0,0,0,0.7)]"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-white shadow-[0_18px_36px_-26px_rgba(0,0,0,0.7)]"
                     style={{ backgroundColor: category.color }}
                   >
                     {category.icon}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold">{category.label}</span>
+                    <span className="block truncate text-[13px] font-semibold leading-5">{category.label}</span>
                     <span
-                      className={`mt-0.5 block text-xs leading-5 ${
+                      className={`block truncate text-[11.5px] leading-4 ${
                         isActive
                           ? 'text-white/85'
                           : 'text-[color:var(--blockly-sidebar-text-soft)] group-hover:text-[color:var(--blockly-sidebar-text)]'
                       }`}
                     >
-                      {isLocked ? 'Build the matching part to unlock these blocks.' : category.description}
+                      {categoryDescription}
                     </span>
                   </span>
-                  <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-                    isActive
-                      ? 'border-white/18 bg-white/14 text-white'
-                      : 'border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-input-bg)] text-[color:var(--blockly-sidebar-text-soft)]'
-                  }`}>
-                    {isLocked ? 'Locked' : category.blockCount}
-                  </span>
+                  {isLocked ? (
+                    <span
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-input-bg)] text-[color:var(--blockly-sidebar-text-soft)]"
+                    >
+                      <Lock size={11} aria-hidden="true" />
+                      <span className="sr-only">Locked</span>
+                    </span>
+                  ) : (
+                    <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+                      isActive
+                        ? 'border-white/18 bg-white/14 text-white'
+                        : 'border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-input-bg)] text-[color:var(--blockly-sidebar-text-soft)]'
+                    }`}>
+                      {category.blockCount}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -2232,21 +2244,22 @@ const handleGenerate = useCallback((force = false) => {
             <button
               type="button"
               onClick={handleOpenCategoryManager}
-              className={`group flex w-full items-center gap-3 rounded-[18px] border px-3 py-3 text-left transition-all ${
+              title={moreBlocksCategory.description}
+              className={`group flex w-full items-center gap-2.5 rounded-[14px] border px-2.5 py-2 text-left transition-all ${
                 isCategoryManagerOpen
                   ? 'border-violet-300/35 bg-[linear-gradient(180deg,#1f1f22_0%,#111115_100%)] text-white shadow-[0_22px_38px_-26px_rgba(0,0,0,0.72)]'
                   : 'border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-card)] text-[color:var(--blockly-sidebar-text)] hover:border-[color:var(--blockly-sidebar-border-strong)] hover:bg-[color:var(--blockly-sidebar-card-strong)] hover:text-[color:var(--blockly-sidebar-text)]'
               }`}
             >
               <span
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] text-white shadow-[0_18px_36px_-26px_rgba(0,0,0,0.7)]"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-white shadow-[0_18px_36px_-26px_rgba(0,0,0,0.7)]"
                 style={{ backgroundColor: moreBlocksCategory.color }}
               >
                 {moreBlocksCategory.icon}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold">{moreBlocksCategory.label}</span>
-                <span className="mt-0.5 block text-xs leading-5 text-[color:var(--blockly-sidebar-text-soft)] group-hover:text-[color:var(--blockly-sidebar-text)]">
+                <span className="block truncate text-[13px] font-semibold leading-5">{moreBlocksCategory.label}</span>
+                <span className="block truncate text-[11.5px] leading-4 text-[color:var(--blockly-sidebar-text-soft)] group-hover:text-[color:var(--blockly-sidebar-text)]">
                   {moreBlocksCategory.description}
                 </span>
               </span>
