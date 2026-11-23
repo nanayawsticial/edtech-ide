@@ -1246,19 +1246,17 @@ export default function BreadboardCanvas({
                       isArmed ? 'border-cyan-300/40' : 'border-white/[0.06]'
                     )}
                   >
-                    <div className="flex h-[72px] w-full items-center justify-center rounded-[10px] border border-white/8 bg-[radial-gradient(circle_at_50%_35%,rgba(34,47,67,0.96),rgba(14,20,29,0.98)_74%)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <div className="relative flex h-[72px] w-full items-center justify-center rounded-[10px] border border-white/8 bg-[radial-gradient(circle_at_50%_35%,rgba(34,47,67,0.96),rgba(14,20,29,0.98)_74%)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                       <ComponentPreview definition={item.definition} className="h-full w-full" />
+                      {isArmed ? (
+                        <span className="absolute right-1 top-1 rounded-full border border-cyan-300/28 bg-[#0d2a33] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-cyan-100">Placing</span>
+                      ) : item.alreadyPlaced ? (
+                        <span className="absolute right-1 top-1 rounded-full border border-white/12 bg-[#161d28] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-white/75">On canvas</span>
+                      ) : null}
                     </div>
                     <div className="min-w-0 px-0.5 pb-0.5">
                       <div className="line-clamp-2 text-[13px] font-semibold leading-tight text-white/90">{item.entry.name}</div>
-                      <div className="mt-1 flex items-center justify-between gap-1.5">
-                        <span className="truncate text-[10px] uppercase tracking-[0.14em] text-white/55">{componentRegistry.getCategoryLabel(item.entry.category)}</span>
-                        {isArmed ? (
-                          <span className="shrink-0 rounded-full border border-cyan-300/28 bg-cyan-300/12 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-cyan-100">Placing</span>
-                        ) : item.alreadyPlaced ? (
-                          <span className="shrink-0 rounded-full border border-white/12 bg-white/[0.05] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-white/70">On canvas</span>
-                        ) : null}
-                      </div>
+                      <div className="mt-1 truncate text-[10px] uppercase tracking-[0.14em] text-white/55">{componentRegistry.getCategoryLabel(item.entry.category)}</div>
                       <span className="sr-only">
                         {description} {isArmed ? 'Click on the canvas to place it.' : item.alreadyPlaced ? 'This part is limited to one copy.' : ''}
                       </span>
