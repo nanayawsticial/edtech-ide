@@ -80,32 +80,83 @@ export default function BlockTerminalShell({
 
   const isSerialSupported = typeof navigator !== "undefined" && "serial" in navigator;
 
+  const channelCounts: Record<BlockTerminalTab, number> = {
+    serial: serialMessages.length,
+    build: buildMessages.length,
+    connection: connectionMessages.length,
+  };
+
+  // Messages that arrived while the dock was folded count as "new" until it is opened again.
+  const [seenCounts, setSeenCounts] = useState<Record<BlockTerminalTab, number>>(channelCounts);
+  useEffect(() => {
+    if (collapsed) return;
+    setSeenCounts((previous) =>
+      previous.serial === channelCounts.serial && previous.build === channelCounts.build && previous.connection === channelCounts.connection
+        ? previous
+        : { ...channelCounts }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collapsed, channelCounts.serial, channelCounts.build, channelCounts.connection]);
+
+  const latestMessage = webSerial.messages.length > 0 ? webSerial.messages[webSerial.messages.length - 1] : null;
+
   const handleTabChange = (tab: BlockTerminalTab) => {
     setActiveTab(tab);
     onTabChange?.(tab);
   };
 
+  const openOnTab = (tab: BlockTerminalTab) => {
+    handleTabChange(tab);
+    onToggleCollapsed();
+  };
+
   if (collapsed) {
     return (
-      <section className="ui-foundation-panel flex h-12 items-center justify-between rounded-[22px] px-4 shadow-[0_20px_40px_-32px_rgba(0,0,0,0.42)]">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] border border-[color:var(--ui-color-primary)]/24 bg-[color:var(--ui-color-primary)]/12 text-[var(--ui-color-primary)]">
-            <TerminalSquare size={14} />
-          </span>
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--ui-color-text)]">Terminal</p>
-            <p className="truncate text-xs text-[var(--ui-color-text-soft)]">
-              {webSerial.isConnected ? "Connected to board" : "Disconnected"} - {webSerial.messages.length} messages
-            </p>
-          </div>
+      <section
+        aria-label="Terminal status"
+        className="ui-foundation-panel flex h-11 items-center gap-3 rounded-[18px] px-3 shadow-[0_20px_40px_-32px_rgba(0,0,0,0.42)]"
+      >
+        <span className="flex shrink-0 items-center gap-2 text-xs font-semibold text-[var(--ui-color-text-soft)]">
+          <span
+            className={`h-2 w-2 rounded-full ${webSerial.isConnected ? "bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.2)]" : "border border-[color:var(--ui-color-text-soft)]"}`}
+            aria-hidden="true"
+          />
+          {webSerial.isConnected ? "Connected" : "Not connected"}
+        </span>
+        <span className="h-5 w-px shrink-0 bg-[color:var(--ui-border-soft)]" aria-hidden="true" />
+        <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Open the terminal on">
+          {TAB_OPTIONS.map((tab) => {
+            const unread = Math.max(0, channelCounts[tab.id] - seenCounts[tab.id]);
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => openOnTab(tab.id)}
+                className="inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold text-[var(--ui-color-text-soft)] transition-colors hover:bg-[color:var(--ui-surface-elevated)] hover:text-[var(--ui-color-text-on-surface)]"
+              >
+                {tab.icon}
+                {tab.id === "serial" ? "Serial" : tab.id === "build" ? "Build" : "Connection"}
+                {unread > 0 ? (
+                  <span className="rounded-full bg-[color:var(--ui-color-primary)] px-1.5 py-0.5 text-[10px] font-bold text-white">{unread} new</span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
+        <p
+          className={`min-w-0 flex-1 truncate text-xs ${latestMessage?.type === "error" ? "font-semibold ui-text-error" : "text-[var(--ui-color-text-soft)]"}`}
+          title={latestMessage?.text}
+        >
+          {latestMessage ? latestMessage.text : "No messages yet. Verify, upload or connect a board to see output here."}
+        </p>
         <button
           type="button"
           onClick={onToggleCollapsed}
-          className="ui-action-quiet inline-flex h-8 items-center gap-2 rounded-[10px] px-3 text-xs font-semibold transition-all"
+          aria-label="Open terminal"
+          title="Open terminal"
+          className="ui-action-quiet inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] transition-all"
         >
-          Open
-          <ChevronUp size={14} />
+          <ChevronUp size={15} />
         </button>
       </section>
     );

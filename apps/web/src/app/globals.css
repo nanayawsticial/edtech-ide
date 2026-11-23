@@ -1516,3 +1516,12 @@ html[data-theme='magma'] .custom-blockly-host {
 html .custom-blockly-host .blocklyInputField.blocklyEditableField > text.blocklyText {
   fill: #3c4257 !important;
 }
+
+/* Error text on panels: rose-400 on dark surfaces, rose-700 on light ones (both above 4.5:1). */
+.ui-text-error {
+  color: #fb7185;
+}
+
+html[data-theme='light'] .ui-text-error {
+  color: #be123c;
+}

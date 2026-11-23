@@ -68,7 +68,9 @@ export function useIDELayoutState({ environment, isBlockMode, supportsDeviceFile
   const [terminalHeight, setTerminalHeight] = useState(BLOCK_TERMINAL_DEFAULT_HEIGHT);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
-  const [bottomCollapsed, setBottomCollapsed] = useState(false);
+  // Block mode starts with the terminal folded into its status line; a saved preference wins, and
+  // compile/upload open it on the Build tab (CompileController emits layout:block-terminal-request).
+  const [bottomCollapsed, setBottomCollapsed] = useState(true);
   const [blockTerminalTab, setBlockTerminalTab] = useState<BlockTerminalTab>('serial');
   const [hasLoadedBlockTerminalPrefs, setHasLoadedBlockTerminalPrefs] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
