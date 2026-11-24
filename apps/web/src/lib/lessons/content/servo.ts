@@ -67,7 +67,7 @@ const oneAngle: LessonActivity = {
       id: 'run',
       kind: 'run',
       title: 'Run the simulation',
-      body: 'Click Run Simulation at the top of the Blocks screen.',
+      body: 'Click Run Simulation at the top of the Blocks screen, then click Build to watch your circuit.',
       check: { kind: 'simulating' },
     },
     {
@@ -117,7 +117,7 @@ const sweep: LessonActivity = {
       id: 'run',
       kind: 'run',
       title: 'Run the simulation',
-      body: 'Click Run Simulation at the top of the Blocks screen. If it is still running, stop it and run it again.',
+      body: 'Click Run Simulation at the top of the Blocks screen (if it is still running, stop it and run it again so it uses your new code), then click Build to watch your circuit.',
       check: { kind: 'simulating' },
     },
     {

@@ -87,7 +87,8 @@ export const ultrasonicLesson: Lesson = {
           id: 'observe',
           kind: 'observe',
           title: 'Read the distance',
-          body: 'The Serial Monitor should show a new distance in centimetres every tenth of a second. Change the distance on the sensor and watch the numbers follow.',
+          body: 'The Serial Monitor should show a new distance in centimetres every tenth of a second. Move the Distance slider in the Live inputs box (bottom-left) and watch the numbers follow.',
+          hint: 'The Live inputs box appears while the simulation runs. On a real board, move your hand in front of the sensor instead.',
         },
       ],
       solution: program(

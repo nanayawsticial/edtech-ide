@@ -7,6 +7,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import MainLayout from '@/components/layout/MainLayout';
 import SplitView from '@/components/ide/SplitView';
 import LessonPanel from '@/components/ide/lessons/LessonPanel';
+import LiveInputsPanel from '@/components/ide/LiveInputsPanel';
 import { getLesson } from '@/lib/lessons';
 import { useLessonStore } from '@/stores/lessonStore';
 
@@ -92,6 +93,7 @@ export default function Workspace() {
                     <SplitView />
                 </div>
                 <LessonPanel />
+                <LiveInputsPanel />
             </div>
         </MainLayout>
     );

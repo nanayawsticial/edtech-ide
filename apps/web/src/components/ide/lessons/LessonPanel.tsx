@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Circle, Lightbulb, X } from 'lucide-react';
 
 import { getLesson } from '@/lib/lessons';
-import { evaluateCheck, type LessonCheckContext } from '@/lib/lessons/checks';
+import { EMPTY_OBSERVATIONS, evaluateCheck, observeVisualChange, type LessonCheckContext, type LessonObservations } from '@/lib/lessons/checks';
 import type { LessonActivity, LessonStep, LessonStepKind } from '@/lib/lessons/types';
 import type { ToolboxLearningLevel } from '@/lib/blockly/guidedToolbox';
 import { normalizeComponentType } from '@/lib/wiring/componentDefinitions';
@@ -23,18 +23,13 @@ const KIND_LABELS: Record<LessonStepKind, string> = {
 
 const LEVEL_ORDER: ToolboxLearningLevel[] = ['starter', 'builder', 'explore'];
 
-interface Observations {
-  ledToggles: number;
-  servoAngles: number[];
-}
-
 /**
- * Counts what the simulation does while a step is open: LEDs switching on/off, servo angles.
- * Resets whenever `resetKey` changes (a new step).
+ * Records what the simulation does while a step is open: outputs switching on/off, colours and
+ * lamps shown, servo angles. Resets whenever `resetKey` changes (a new step).
  */
-function useSimulationObservations(resetKey: string, componentTypes: Record<string, string>): Observations {
+function useSimulationObservations(resetKey: string, componentTypes: Record<string, string>): LessonObservations {
   // Tagged with the step they were seen on, so a new step starts from zero.
-  const [observations, setObservations] = useState<Observations & { key: string }>({ key: resetKey, ledToggles: 0, servoAngles: [] });
+  const [observations, setObservations] = useState<LessonObservations & { key: string }>({ key: resetKey, ...EMPTY_OBSERVATIONS });
   const typesRef = useRef(componentTypes);
   useEffect(() => {
     typesRef.current = componentTypes;
@@ -48,32 +43,39 @@ function useSimulationObservations(resetKey: string, componentTypes: Record<stri
         return;
       }
 
-      let toggles = 0;
+      const toggles: Record<string, number> = {};
+      const seen = new Set<string>();
       const angles: number[] = [];
       for (const [componentId, visual] of Object.entries(visuals)) {
         const type = typesRef.current[componentId];
-        if (type === 'LED' && Boolean(visual?.outputHigh) !== Boolean(before[componentId]?.outputHigh)) {
-          toggles += 1;
-        }
-        if ((type === 'SERVO' || type === 'MICRO_SERVO') && typeof visual?.angle === 'number') {
-          angles.push(visual.angle as number);
-        }
+        if (!type) continue;
+        const change = observeVisualChange(type, visual, before[componentId]);
+        if (change.toggles > 0) toggles[type] = (toggles[type] ?? 0) + change.toggles;
+        change.seen.forEach((token) => seen.add(token));
+        if (typeof change.angle === 'number') angles.push(change.angle);
       }
 
-      if (toggles > 0 || angles.length > 0) {
-        setObservations((current) => {
-          const base = current.key === resetKey ? current : { key: resetKey, ledToggles: 0, servoAngles: [] };
-          return {
-            key: resetKey,
-            ledToggles: base.ledToggles + toggles,
-            servoAngles: angles.length > 0 ? [...base.servoAngles.slice(-200), ...angles] : base.servoAngles,
-          };
-        });
+      if (Object.keys(toggles).length === 0 && seen.size === 0 && angles.length === 0) {
+        return;
       }
+      setObservations((current) => {
+        const base = current.key === resetKey ? current : { key: resetKey, ...EMPTY_OBSERVATIONS };
+        const mergedToggles = { ...base.toggles };
+        Object.entries(toggles).forEach(([type, count]) => {
+          mergedToggles[type] = (mergedToggles[type] ?? 0) + count;
+        });
+        const newSeen = [...seen].filter((token) => !base.seen.includes(token));
+        return {
+          key: resetKey,
+          toggles: mergedToggles,
+          seen: newSeen.length > 0 ? [...base.seen, ...newSeen] : base.seen,
+          servoAngles: angles.length > 0 ? [...base.servoAngles.slice(-200), ...angles] : base.servoAngles,
+        };
+      });
     });
   }, [resetKey]);
 
-  return observations.key === resetKey ? observations : { ledToggles: 0, servoAngles: [] };
+  return observations.key === resetKey ? observations : EMPTY_OBSERVATIONS;
 }
 
 function useLessonCheckContext(): Omit<LessonCheckContext, 'observations'> & { componentTypes: Record<string, string> } {

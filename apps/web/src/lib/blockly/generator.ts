@@ -2170,7 +2170,8 @@ registerOverrideHandlers(ARDUINO, {
         return arduinoAtomic(`analogRead(${getSensorPin(block, 'A0', 'AO')})`);
     },
     arduino_photo_sensor_read(block: Blockly.Block) {
-        return arduinoAtomic(`analogRead(${getSensorPin(block, 'A0', 'SIG')})`);
+        // The light sensor module's analog output (its DO pin is a separate on/off signal).
+        return arduinoAtomic(`analogRead(${getSensorPin(block, 'A0', 'AO')})`);
     },
     arduino_relay_write(block: Blockly.Block) {
         const pin = getSensorPin(block, '7', 'IN');
@@ -2578,7 +2579,7 @@ registerOverrideHandlers(MICROPYTHON, {
         return mpAnalogRead('sound', getSensorPin(block, '26', 'AO'));
     },
     arduino_photo_sensor_read(block: Blockly.Block) {
-        return mpAnalogRead('photo', getSensorPin(block, '26', 'SIG'));
+        return mpAnalogRead('photo', getSensorPin(block, '26', 'AO'));
     },
     arduino_relay_write(block: Blockly.Block) {
         const relay = mpOutputPin('relay', getSensorPin(block, '7', 'IN'));

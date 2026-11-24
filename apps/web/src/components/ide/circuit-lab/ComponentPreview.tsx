@@ -5,6 +5,8 @@ import React, { useEffect, useMemo } from 'react';
 import { BreadboardSVG } from '@/lib/wiring/BreadboardSVG';
 import type { ComponentDefinition } from '@/lib/wiring/componentDefinitions';
 
+import TrafficLightVisual from './TrafficLightVisual';
+
 interface ComponentPreviewProps {
   definition: ComponentDefinition;
   className?: string;
@@ -26,6 +28,11 @@ const WOKWI_PREVIEW_COMPONENTS = new Set([
   'ULTRASONIC',
   'DHT',
   'OLED',
+  'BUZZER',
+  'RGB_LED',
+  'TRAFFIC_LIGHT',
+  'LDR',
+  'SOUND_SENSOR',
 ]);
 
 function PreviewFrame({
@@ -110,6 +117,24 @@ function WokwiPreview({ definition }: { definition: ComponentDefinition }) {
       case 'OLED': {
         const Oled = 'wokwi-ssd1306' as React.ElementType;
         return <Oled style={PREVIEW_STYLE} />;
+      }
+      case 'BUZZER': {
+        const Buzzer = 'wokwi-buzzer' as React.ElementType;
+        return <Buzzer style={PREVIEW_STYLE} />;
+      }
+      case 'RGB_LED': {
+        const RgbLed = 'wokwi-rgb-led' as React.ElementType;
+        return <RgbLed ledRed={0.9} ledGreen={0.3} ledBlue={0.9} style={PREVIEW_STYLE} />;
+      }
+      case 'TRAFFIC_LIGHT':
+        return <TrafficLightVisual red green={false} yellow />;
+      case 'LDR': {
+        const LightSensor = 'wokwi-photoresistor-sensor' as React.ElementType;
+        return <LightSensor style={PREVIEW_STYLE} />;
+      }
+      case 'SOUND_SENSOR': {
+        const SoundSensor = 'wokwi-small-sound-sensor' as React.ElementType;
+        return <SoundSensor style={PREVIEW_STYLE} />;
       }
       default:
         return null;

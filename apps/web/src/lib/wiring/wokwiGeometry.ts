@@ -126,8 +126,69 @@ export const OLED_GEOMETRY: WokwiComponentGeometry = {
   ],
 };
 
+// Pin positions below come from each @wokwi/elements part's pinInfo; sizes are its width/height
+// in px (mm x 3.7795 where the element is sized in mm).
+
+/** wokwi-buzzer: pin 1 is the negative leg, pin 2 the positive leg. */
+export const BUZZER_GEOMETRY: WokwiComponentGeometry = {
+  size: { width: 64.25, height: 75.59 },
+  pins: [
+    { id: 'NEG', name: '−', position: { x: 27, y: 84 } },
+    { id: 'POS', name: '+', position: { x: 37, y: 84 } },
+  ],
+};
+
+/** wokwi-rgb-led: one leg per colour plus the longer common leg. */
+export const RGB_LED_GEOMETRY: WokwiComponentGeometry = {
+  size: { width: 42.13, height: 72.58 },
+  pins: [
+    { id: 'R', name: 'Red', position: { x: 8.5, y: 44 } },
+    { id: 'COM', name: 'Common', position: { x: 18, y: 54 } },
+    { id: 'G', name: 'Green', position: { x: 26.4, y: 44 } },
+    { id: 'B', name: 'Blue', position: { x: 35.7, y: 44 } },
+  ],
+};
+
+/** wokwi-photoresistor-sensor: LDR module with analog (AO) and threshold (DO) outputs. */
+export const LDR_GEOMETRY: WokwiComponentGeometry = {
+  size: { width: 173.67, height: 61.48 },
+  pins: [
+    { id: 'VCC', name: 'VCC', position: { x: 172, y: 16 } },
+    { id: 'GND', name: 'GND', position: { x: 172, y: 26 } },
+    { id: 'DO', name: 'DO', position: { x: 172, y: 35.8 } },
+    { id: 'AO', name: 'AO', position: { x: 172, y: 45.5 } },
+  ],
+};
+
+/** wokwi-small-sound-sensor: microphone module with analog (AOUT) and threshold (DOUT) outputs. */
+export const SOUND_SENSOR_GEOMETRY: WokwiComponentGeometry = {
+  size: { width: 133.08, height: 50.44 },
+  pins: [
+    { id: 'AO', name: 'AOUT', position: { x: 0, y: 11 } },
+    { id: 'GND', name: 'GND', position: { x: 0, y: 20.5 } },
+    { id: 'VCC', name: 'VCC', position: { x: 0, y: 30.5 } },
+    { id: 'DO', name: 'DOUT', position: { x: 0, y: 40.5 } },
+  ],
+};
+
+/** Traffic light module (drawn by the app, not Wokwi): pins on a 0.1" pitch along the bottom. */
+export const TRAFFIC_LIGHT_GEOMETRY: WokwiComponentGeometry = {
+  size: { width: 46, height: 120 },
+  pins: [
+    { id: 'R', name: 'R', position: { x: 8.6, y: 116 } },
+    { id: 'Y', name: 'Y', position: { x: 18.2, y: 116 } },
+    { id: 'G', name: 'G', position: { x: 27.8, y: 116 } },
+    { id: 'GND', name: 'GND', position: { x: 37.4, y: 116 } },
+  ],
+};
+
 export const WOKWI_COMPONENT_GEOMETRY = {
   ARDUINO_UNO: ARDUINO_UNO_GEOMETRY,
+  BUZZER: BUZZER_GEOMETRY,
+  RGB_LED: RGB_LED_GEOMETRY,
+  LDR: LDR_GEOMETRY,
+  SOUND_SENSOR: SOUND_SENSOR_GEOMETRY,
+  TRAFFIC_LIGHT: TRAFFIC_LIGHT_GEOMETRY,
   LED: LED_GEOMETRY,
   BUTTON: BUTTON_GEOMETRY,
   RESISTOR: RESISTOR_GEOMETRY,

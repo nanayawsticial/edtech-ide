@@ -370,5 +370,190 @@ export const CIRCUIT_COMPONENT_METADATA: CircuitComponentMetadata[] = [
         }
       ]
     }
+  },
+  {
+    "id": "BUZZER",
+    "name": "Buzzer",
+    "category": "Actuators",
+    "description": "Active buzzer that beeps while its + leg is HIGH.",
+    "aliases": [
+      "buzzer",
+      "active-buzzer",
+      "beeper",
+      "piezo"
+    ],
+    "keywords": [
+      "buzzer",
+      "beep",
+      "sound",
+      "alarm",
+      "piezo",
+      "actuators",
+      "active-buzzer",
+      "beeper"
+    ],
+    "placeable": true,
+    "singleton": false,
+    "previewSourceKey": "BUZZER",
+    "defaultState": {
+      "sounding": false
+    },
+    "propertySchema": {
+      "fields": []
+    }
+  },
+  {
+    "id": "RGB_LED",
+    "name": "RGB LED",
+    "category": "Basic",
+    "description": "Red, green and blue LEDs in one, sharing a common leg.",
+    "aliases": [
+      "rgb",
+      "rgb-led",
+      "rgb_led",
+      "rgb-module"
+    ],
+    "keywords": [
+      "rgb",
+      "colour",
+      "color",
+      "led",
+      "light",
+      "rgb led",
+      "rgb_led",
+      "basic",
+      "rgb-led",
+      "rgb-module"
+    ],
+    "placeable": true,
+    "singleton": false,
+    "previewSourceKey": "RGB_LED",
+    "defaultState": {
+      "red": 0,
+      "green": 0,
+      "blue": 0
+    },
+    "propertySchema": {
+      "fields": []
+    }
+  },
+  {
+    "id": "TRAFFIC_LIGHT",
+    "name": "Traffic Light",
+    "category": "Basic",
+    "description": "Red, yellow and green lights on one module with a shared ground.",
+    "aliases": [
+      "traffic-light",
+      "traffic_light",
+      "traffic-light-module"
+    ],
+    "keywords": [
+      "traffic",
+      "light",
+      "red",
+      "yellow",
+      "green",
+      "module",
+      "traffic light",
+      "traffic_light",
+      "basic",
+      "traffic-light",
+      "traffic-light-module"
+    ],
+    "placeable": true,
+    "singleton": false,
+    "previewSourceKey": "TRAFFIC_LIGHT",
+    "defaultState": {
+      "red": false,
+      "yellow": false,
+      "green": false
+    },
+    "propertySchema": {
+      "fields": []
+    }
+  },
+  {
+    "id": "LDR",
+    "name": "Light Sensor (LDR)",
+    "category": "Sensors",
+    "description": "Light sensor module: AO gives a reading, DO switches when it gets dark.",
+    "aliases": [
+      "ldr",
+      "photoresistor",
+      "light-sensor",
+      "photo-sensor"
+    ],
+    "keywords": [
+      "ldr",
+      "light",
+      "photoresistor",
+      "brightness",
+      "dark",
+      "light sensor (ldr)",
+      "sensors",
+      "light-sensor",
+      "photo-sensor"
+    ],
+    "placeable": true,
+    "singleton": false,
+    "previewSourceKey": "LDR",
+    "defaultState": {
+      "light": 60
+    },
+    "propertySchema": {
+      "fields": [
+        {
+          "key": "light",
+          "label": "Light",
+          "type": "number",
+          "description": "How bright it is around the sensor, from 0 (dark) to 100 (bright).",
+          "min": 0,
+          "max": 100,
+          "step": 1
+        }
+      ]
+    }
+  },
+  {
+    "id": "SOUND_SENSOR",
+    "name": "Sound Sensor",
+    "category": "Sensors",
+    "description": "Microphone module: AO gives the loudness, DO switches when it is loud.",
+    "aliases": [
+      "sound-sensor",
+      "sound_sensor",
+      "microphone",
+      "mic"
+    ],
+    "keywords": [
+      "sound",
+      "microphone",
+      "noise",
+      "loudness",
+      "mic",
+      "sound sensor",
+      "sound_sensor",
+      "sensors",
+      "sound-sensor"
+    ],
+    "placeable": true,
+    "singleton": false,
+    "previewSourceKey": "SOUND_SENSOR",
+    "defaultState": {
+      "level": 20
+    },
+    "propertySchema": {
+      "fields": [
+        {
+          "key": "level",
+          "label": "Loudness",
+          "type": "number",
+          "description": "How loud it is around the sensor, from 0 (silent) to 100 (very loud).",
+          "min": 0,
+          "max": 100,
+          "step": 1
+        }
+      ]
+    }
   }
 ];

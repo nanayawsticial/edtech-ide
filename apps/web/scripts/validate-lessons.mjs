@@ -178,7 +178,7 @@ const baseContext = {
   },
   code: 'void setup() {\n  pinMode(6, OUTPUT);\n}\nvoid loop() {\n  digitalWrite(6, HIGH);\n  delay(1000);\n}\n',
   simulating: false,
-  observations: { ledToggles: 3, servoAngles: [88, 175] },
+  observations: { toggles: { LED: 3, BUZZER: 1 }, seen: ['TRAFFIC_LIGHT:red', 'RGB_LED:yellow'], servoAngles: [88, 175] },
 };
 const passes = (check) => evaluateCheck(check, baseContext).every((result) => result.passed);
 
@@ -195,6 +195,16 @@ assert.equal(passes({ kind: 'code', pattern: String.raw`digitalWrite\(\s*6\s*,\s
 assert.equal(passes({ kind: 'simulating' }), false, 'simulating: stopped');
 assert.equal(passes({ kind: 'blinked', times: 3 }), true, 'blinked: 3 toggles');
 assert.equal(passes({ kind: 'blinked', times: 4 }), false, 'blinked: not 4 yet');
+assert.equal(passes({ kind: 'blinked', times: 1, type: 'BUZZER' }), true, 'blinked: buzzer toggled once');
+assert.equal(passes({ kind: 'blinked', times: 1, type: 'TRAFFIC_LIGHT' }), false, 'blinked: traffic light never switched');
+assert.equal(passes({ kind: 'seen', tokens: ['TRAFFIC_LIGHT:red', 'RGB_LED:yellow'] }), true, 'seen: both shown');
+assert.equal(passes({ kind: 'seen', tokens: ['TRAFFIC_LIGHT:green'] }), false, 'seen: green never shown');
+{
+  const { observeVisualChange } = loader.loadModule(path.join(srcRoot, 'lib', 'lessons', 'checks.ts'));
+  assert.deepEqual(observeVisualChange('TRAFFIC_LIGHT', { red: true, yellow: true }, { red: true }), { toggles: 1, seen: ['TRAFFIC_LIGHT:red', 'TRAFFIC_LIGHT:yellow'] }, 'observe: traffic light lamps');
+  assert.deepEqual(observeVisualChange('RGB_LED', { color: 'cyan' }, { color: 'blue' }), { toggles: 1, seen: ['RGB_LED:cyan'] }, 'observe: RGB colour change');
+  assert.deepEqual(observeVisualChange('BUZZER', { sounding: false }, { sounding: true }), { toggles: 1, seen: [] }, 'observe: buzzer stops');
+}
 assert.equal(passes({ kind: 'servoReached', angles: [90, 180] }), true, 'servo: within 10 degrees');
 assert.equal(passes({ kind: 'servoReached', angles: [0] }), false, 'servo: never at 0');
 assert.deepEqual(
@@ -226,17 +236,24 @@ let solutionCount = 0;
 for (const lesson of Object.values(LESSONS)) {
   for (const activity of lesson.activities) {
     const codeChecks = [];
-    activity.steps.forEach((step) => walkChecks(step.check, (check) => check.kind === 'code' && codeChecks.push({ step: step.id, check })));
+    activity.steps.forEach((step) => walkChecks(step.check, (check) => check.kind === 'code' && codeChecks.push({ step, check })));
     if (codeChecks.length === 0) continue;
 
     assert.ok(activity.solution, `${activity.id}: has code checks but no reference solution`);
-    const code = generateArduino(activity.solution);
-    solutionCount += 1;
-    if (showSolution) console.log(`--- ${activity.id}\n${code}`);
+    const generated = new Map();
+    const codeFor = (xml) => {
+      if (!generated.has(xml)) {
+        generated.set(xml, generateArduino(xml));
+        solutionCount += 1;
+      }
+      return generated.get(xml);
+    };
+    if (showSolution) console.log(`--- ${activity.id}\n${codeFor(activity.solution)}`);
 
     for (const { step, check } of codeChecks) {
+      const code = codeFor(step.solution ?? activity.solution);
       const [result] = evaluateCheck(check, { ...baseContext, code });
-      assert.ok(result.passed, `${activity.id}/${step}: "${result.label}" (${check.pattern}) fails on the reference solution:\n${code}`);
+      assert.ok(result.passed, `${activity.id}/${step.id}: "${result.label}" (${check.pattern}) fails on the reference solution:\n${code}`);
     }
   }
 }

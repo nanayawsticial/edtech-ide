@@ -6,6 +6,7 @@ import { BreadboardSVG } from '@/lib/wiring/BreadboardSVG';
 import { WORKSPACE_SCALE } from '@/lib/wiring/componentGeometry';
 
 import type { WorldComponentNode } from './sceneTypes';
+import TrafficLightVisual from './TrafficLightVisual';
 
 interface ComponentRendererProps {
   node: WorldComponentNode;
@@ -206,6 +207,31 @@ function ComponentRenderer({
       case 'RESISTOR': {
         const Resistor = 'wokwi-resistor' as React.ElementType;
         return <Resistor value={String(state.resistance ?? '220')} style={FILL_STYLE} />;
+      }
+      case 'BUZZER': {
+        const Buzzer = 'wokwi-buzzer' as React.ElementType;
+        return <Buzzer hasSignal={Boolean(state.sounding)} style={FILL_STYLE} />;
+      }
+      case 'RGB_LED': {
+        const RgbLed = 'wokwi-rgb-led' as React.ElementType;
+        return (
+          <RgbLed
+            ledRed={Number(state.red ?? 0)}
+            ledGreen={Number(state.green ?? 0)}
+            ledBlue={Number(state.blue ?? 0)}
+            style={FILL_STYLE}
+          />
+        );
+      }
+      case 'TRAFFIC_LIGHT':
+        return <TrafficLightVisual red={Boolean(state.red)} yellow={Boolean(state.yellow)} green={Boolean(state.green)} />;
+      case 'LDR': {
+        const LightSensor = 'wokwi-photoresistor-sensor' as React.ElementType;
+        return <LightSensor ledPower={Boolean(state.powered)} ledDO={Boolean(state.bright)} style={FILL_STYLE} />;
+      }
+      case 'SOUND_SENSOR': {
+        const SoundSensor = 'wokwi-small-sound-sensor' as React.ElementType;
+        return <SoundSensor ledPower={Boolean(state.powered)} ledSignal={Boolean(state.loud)} style={FILL_STYLE} />;
       }
       default:
         return <StaticSvg svg={definition.svg} />;

@@ -11,7 +11,8 @@ import WireEngine from './WireEngine';
 // Rendered once: an inline <style> inside the canvas was rewritten on every drag frame, which made
 // the browser re-parse it and restyle every element on the page (thousands of breadboard holes).
 const CANVAS_CSS = `
-    wokwi-arduino-uno, wokwi-led, wokwi-servo, wokwi-hc-sr04, wokwi-dht22, wokwi-ssd1306, wokwi-pushbutton, wokwi-potentiometer, wokwi-lcd1602, wokwi-resistor {
+    wokwi-arduino-uno, wokwi-led, wokwi-servo, wokwi-hc-sr04, wokwi-dht22, wokwi-ssd1306, wokwi-pushbutton, wokwi-potentiometer, wokwi-lcd1602, wokwi-resistor,
+    wokwi-buzzer, wokwi-rgb-led, wokwi-photoresistor-sensor, wokwi-small-sound-sensor {
       display: block;
       width: 100%;
       height: 100%;

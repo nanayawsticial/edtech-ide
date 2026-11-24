@@ -336,6 +336,113 @@ const displaySimulator: ComponentSimulator = {
   }),
 };
 
+/** An LED-like output is on when its pin is HIGH and its return leg is LOW. */
+function isLit(pinMapping: ComponentPinMapping | undefined, pinId: string, returnPinId: string, baseNetState: Map<string, LogicalNetState>) {
+  return getConnectionState(pinMapping, pinId, baseNetState) === 'HIGH' && getConnectionState(pinMapping, returnPinId, baseNetState) === 'LOW';
+}
+
+/** Active buzzer: beeps while + is HIGH and − is LOW (a tone() on the pin also counts while it is high). */
+const buzzerSimulator: ComponentSimulator = {
+  matches: (definition) => definition.simulation?.type === 'buzzer',
+  emitVisualState: ({ pinMapping, baseNetState }) => ({ sounding: isLit(pinMapping, 'POS', 'NEG', baseNetState) }),
+};
+
+/** Traffic light module: each lamp is on while its pin is HIGH (the module's GND to ground). */
+const trafficLightSimulator: ComponentSimulator = {
+  matches: (definition) => definition.simulation?.type === 'traffic-light',
+  emitVisualState: ({ pinMapping, baseNetState }) => ({
+    red: isLit(pinMapping, 'R', 'GND', baseNetState),
+    yellow: isLit(pinMapping, 'Y', 'GND', baseNetState),
+    green: isLit(pinMapping, 'G', 'GND', baseNetState),
+  }),
+};
+
+const RGB_COLOR_NAMES: Record<string, string> = {
+  '000': 'off',
+  '100': 'red',
+  '010': 'green',
+  '001': 'blue',
+  '110': 'yellow',
+  '011': 'cyan',
+  '101': 'magenta',
+  '111': 'white',
+};
+
+/**
+ * RGB LED with a common leg. Common to GND (common cathode): a colour is on while its pin is HIGH.
+ * Common to 5V (common anode): a colour is on while its pin is LOW. Kits come in both kinds.
+ */
+const rgbLedSimulator: ComponentSimulator = {
+  matches: (definition) => definition.simulation?.type === 'rgb-led',
+  emitVisualState: ({ pinMapping, baseNetState }) => {
+    const common = getConnectionState(pinMapping, 'COM', baseNetState);
+    const on = (pinId: string) => {
+      const state = getConnectionState(pinMapping, pinId, baseNetState);
+      if (common === 'LOW') return state === 'HIGH';
+      if (common === 'HIGH') return state === 'LOW';
+      return false;
+    };
+    const [red, green, blue] = [on('R'), on('G'), on('B')];
+    return {
+      red: red ? 1 : 0,
+      green: green ? 1 : 0,
+      blue: blue ? 1 : 0,
+      color: RGB_COLOR_NAMES[`${Number(red)}${Number(green)}${Number(blue)}`],
+    };
+  },
+};
+
+/**
+ * LDR module, as on real boards: the AO reading goes DOWN as it gets brighter, and DO goes HIGH
+ * when it is dark (its on-board LED lights when it is bright). Light is 0 (dark) to 100 (bright).
+ */
+const LIGHT_DARK_THRESHOLD = 50;
+const lightSensorSimulator: ComponentSimulator = {
+  matches: (definition) => definition.simulation?.type === 'light-sensor',
+  samplePins: ({ component, definition, pinMapping, boardPinStates }) => {
+    const aoPin = getBoardPinId(pinMapping, 'AO');
+    if (!aoPin || !isPinMappingPowered(pinMapping, boardPinStates)) return [];
+    const light = clamp(Number(component.state?.light ?? definition.defaultProperties?.light ?? 60), 0, 100);
+    return [{ boardPinId: aoPin, electricalState: 'analog', source: `${component.id}:AO`, analogValue: Math.round(1023 * (1 - light / 100)) }];
+  },
+  tick: ({ component, definition, pinMapping, boardPinStates, boardInputStates }) => {
+    const doPin = getBoardPinId(pinMapping, 'DO');
+    if (!doPin || !isPinMappingPowered(pinMapping, boardPinStates)) return;
+    const light = clamp(Number(component.state?.light ?? definition.defaultProperties?.light ?? 60), 0, 100);
+    const dark = light < LIGHT_DARK_THRESHOLD;
+    boardPinStates[doPin] = dark;
+    boardInputStates[doPin] = dark;
+  },
+  emitVisualState: ({ component, definition, pinMapping, boardPinStates }) => {
+    const light = clamp(Number(component.state?.light ?? definition.defaultProperties?.light ?? 60), 0, 100);
+    return { light, powered: isPinMappingPowered(pinMapping, boardPinStates), bright: light >= LIGHT_DARK_THRESHOLD };
+  },
+};
+
+/** Sound sensor module: AO reading rises with loudness (0-100 -> 0-1023); DO goes HIGH when loud. */
+const SOUND_LOUD_THRESHOLD = 60;
+const soundSensorSimulator: ComponentSimulator = {
+  matches: (definition) => definition.simulation?.type === 'sound-sensor',
+  samplePins: ({ component, definition, pinMapping, boardPinStates }) => {
+    const aoPin = getBoardPinId(pinMapping, 'AO');
+    if (!aoPin || !isPinMappingPowered(pinMapping, boardPinStates)) return [];
+    const level = clamp(Number(component.state?.level ?? definition.defaultProperties?.level ?? 20), 0, 100);
+    return [{ boardPinId: aoPin, electricalState: 'analog', source: `${component.id}:AO`, analogValue: Math.round((1023 * level) / 100) }];
+  },
+  tick: ({ component, definition, pinMapping, boardPinStates, boardInputStates }) => {
+    const doPin = getBoardPinId(pinMapping, 'DO');
+    if (!doPin || !isPinMappingPowered(pinMapping, boardPinStates)) return;
+    const level = clamp(Number(component.state?.level ?? definition.defaultProperties?.level ?? 20), 0, 100);
+    const loud = level >= SOUND_LOUD_THRESHOLD;
+    boardPinStates[doPin] = loud;
+    boardInputStates[doPin] = loud;
+  },
+  emitVisualState: ({ component, definition, pinMapping, boardPinStates }) => {
+    const level = clamp(Number(component.state?.level ?? definition.defaultProperties?.level ?? 20), 0, 100);
+    return { level, powered: isPinMappingPowered(pinMapping, boardPinStates), loud: level >= SOUND_LOUD_THRESHOLD };
+  },
+};
+
 const simulatorRegistry: ComponentSimulator[] = [
   buttonSimulator,
   ledSimulator,
@@ -345,6 +452,11 @@ const simulatorRegistry: ComponentSimulator[] = [
   ultrasonicSimulator,
   dht22Simulator,
   displaySimulator,
+  buzzerSimulator,
+  trafficLightSimulator,
+  rgbLedSimulator,
+  lightSensorSimulator,
+  soundSensorSimulator,
 ];
 
 export function createComponentRuntimeState(): ComponentRuntimeState {

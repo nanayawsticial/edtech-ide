@@ -56,6 +56,23 @@ export const sonarReadBlock = () => `<block type="arduino_sonar_read"><field nam
 export const serialBeginBlock = (baud = 9600) => `<block type="arduino_serialBegin"><field name="BAUD">${baud}</field></block>`;
 export const serialPrintLineBlock = (value: string) => `<block type="arduino_serialPrintln"><value name="TEXT">${value}</value></block>`;
 
+export const analogReadBlock = (pin: string) => `<block type="arduino_analogRead"><field name="PIN">${pin}</field></block>`;
+export const digitalReadBlock = (pin: number) => `<block type="arduino_digitalRead"><field name="PIN">${pin}</field></block>`;
+
+export function readsAnalog(pin: string): StepCheck {
+  return { kind: 'code', pattern: `analogRead\\(\\s*${pin}\\s*\\)`, label: `Reads ${pin}` };
+}
+
+export function readsDigital(pin: number): StepCheck {
+  return { kind: 'code', pattern: `digitalRead\\(\\s*${pin}\\s*\\)`, label: `Reads pin ${pin}` };
+}
+
+export const startsSerial: StepCheck = { kind: 'code', pattern: 'Serial\\.begin\\(\\s*9600\\s*\\)', label: 'Serial Monitor is started' };
+export const printsLine: StepCheck = { kind: 'code', pattern: 'Serial\\.println\\(', label: 'Prints to the Serial Monitor' };
+
+export const RUN_STEP_BODY = 'Click Run Simulation at the top of the Blocks screen, then click Build to watch your circuit.';
+export const RERUN_STEP_BODY = 'Click Run Simulation at the top of the Blocks screen (if it is still running, stop it and run it again so it uses your new code), then click Build to watch your circuit.';
+
 export const STARTER_BOARD_PARTS = [
   { type: 'ARDUINO_UNO', label: 'Arduino Uno', count: 1 },
   { type: 'BREADBOARD', label: 'Breadboard', count: 1 },

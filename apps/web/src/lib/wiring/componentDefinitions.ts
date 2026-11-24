@@ -208,6 +208,45 @@ const breadboardSvg = `
 </svg>
 `;
 
+// Fallback drawings for the newer parts. On the canvas the Wokwi elements (and, for the traffic
+// light, TrafficLightVisual) are used; these keep previews and older renderers working.
+const buzzerSvg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64.25 75.59" width="64.25" height="75.59">
+  <circle cx="32" cy="32" r="30" fill="#1f2937" stroke="#111827" stroke-width="2" />
+  <circle cx="32" cy="32" r="6" fill="#0b0f17" />
+  <rect x="26" y="60" width="2" height="15" fill="#d5dbe4" /><rect x="36" y="60" width="2" height="15" fill="#d5dbe4" />
+</svg>`;
+
+const rgbLedSvg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 42.13 72.58" width="42.13" height="72.58">
+  <path d="M7 30 V14 a14 14 0 0 1 28 0 V30 Z" fill="#e5e7eb" stroke="#9ca3af" />
+  <rect x="5" y="30" width="32" height="5" fill="#d1d5db" />
+  <rect x="7.5" y="35" width="2" height="12" fill="#d5dbe4" /><rect x="17" y="35" width="2" height="22" fill="#d5dbe4" />
+  <rect x="25.4" y="35" width="2" height="12" fill="#d5dbe4" /><rect x="34.7" y="35" width="2" height="12" fill="#d5dbe4" />
+</svg>`;
+
+export const TRAFFIC_LIGHT_COLORS = { red: '#ef4444', yellow: '#facc15', green: '#22c55e' } as const;
+
+const trafficLightSvg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 46 120" width="46" height="120">
+  <rect x="3" y="2" width="40" height="104" rx="8" fill="#111827" stroke="#374151" stroke-width="2" />
+  <circle cx="23" cy="22" r="11" fill="#5b1a1a" /><circle cx="23" cy="53" r="11" fill="#5b4a12" /><circle cx="23" cy="84" r="11" fill="#14532d" />
+  <rect x="7.6" y="106" width="2" height="12" fill="#d5dbe4" /><rect x="17.2" y="106" width="2" height="12" fill="#d5dbe4" />
+  <rect x="26.8" y="106" width="2" height="12" fill="#d5dbe4" /><rect x="36.4" y="106" width="2" height="12" fill="#d5dbe4" />
+</svg>`;
+
+const ldrSvg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 173.67 61.48" width="173.67" height="61.48">
+  <rect x="2" y="2" width="160" height="57" rx="4" fill="#1d4ed8" />
+  <circle cx="30" cy="30" r="14" fill="#f59e0b" stroke="#78350f" stroke-width="2" />
+</svg>`;
+
+const soundSensorSvg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 133.08 50.44" width="133.08" height="50.44">
+  <rect x="8" y="2" width="123" height="46" rx="4" fill="#1d4ed8" />
+  <circle cx="108" cy="25" r="16" fill="#9ca3af" stroke="#4b5563" stroke-width="2" />
+</svg>`;
+
 const definitions: ComponentDefinition[] = [
   {
     id: 'BREADBOARD',
@@ -404,6 +443,94 @@ const definitions: ComponentDefinition[] = [
     description: '128x64 pixels I2C OLED display.',
     mountStyle: 'breadboard',
   },
+  {
+    id: 'BUZZER',
+    name: 'Buzzer',
+    category: 'Actuators',
+    svg: buzzerSvg,
+    size: { width: 64.25, height: 75.59 },
+    pins: [
+      { id: 'NEG', name: '−', type: 'ground', position: { x: 27, y: 84 } },
+      { id: 'POS', name: '+', type: 'digital', position: { x: 37, y: 84 } },
+    ],
+    defaultProperties: { sounding: false },
+    simulation: { type: 'buzzer', model: 'active-buzzer' },
+    aliases: ['buzzer', 'active-buzzer', 'beeper', 'piezo'],
+    description: 'Active buzzer that beeps while its + leg is HIGH.',
+    mountStyle: 'breadboard',
+  },
+  {
+    id: 'RGB_LED',
+    name: 'RGB LED',
+    category: 'Basic',
+    svg: rgbLedSvg,
+    size: { width: 42.13, height: 72.58 },
+    pins: [
+      { id: 'R', name: 'Red', type: 'digital', position: { x: 8.5, y: 44 } },
+      { id: 'COM', name: 'Common', type: 'passive', position: { x: 18, y: 54 } },
+      { id: 'G', name: 'Green', type: 'digital', position: { x: 26.4, y: 44 } },
+      { id: 'B', name: 'Blue', type: 'digital', position: { x: 35.7, y: 44 } },
+    ],
+    defaultProperties: { red: 0, green: 0, blue: 0 },
+    simulation: { type: 'rgb-led', model: 'rgb-led' },
+    aliases: ['rgb', 'rgb-led', 'rgb_led', 'rgb-module'],
+    description: 'Red, green and blue LEDs in one, sharing a common leg.',
+    mountStyle: 'breadboard',
+  },
+  {
+    id: 'TRAFFIC_LIGHT',
+    name: 'Traffic Light',
+    category: 'Basic',
+    svg: trafficLightSvg,
+    size: { width: 46, height: 120 },
+    pins: [
+      { id: 'R', name: 'R', type: 'digital', position: { x: 8.6, y: 116 } },
+      { id: 'Y', name: 'Y', type: 'digital', position: { x: 18.2, y: 116 } },
+      { id: 'G', name: 'G', type: 'digital', position: { x: 27.8, y: 116 } },
+      { id: 'GND', name: 'GND', type: 'ground', position: { x: 37.4, y: 116 } },
+    ],
+    defaultProperties: { red: false, yellow: false, green: false },
+    simulation: { type: 'traffic-light', model: 'traffic-light-module' },
+    aliases: ['traffic-light', 'traffic_light', 'traffic-light-module'],
+    description: 'Red, yellow and green lights on one module with a shared ground.',
+    mountStyle: 'breadboard',
+  },
+  {
+    id: 'LDR',
+    name: 'Light Sensor (LDR)',
+    category: 'Sensors',
+    svg: ldrSvg,
+    size: { width: 173.67, height: 61.48 },
+    pins: [
+      { id: 'VCC', name: 'VCC', type: 'power', position: { x: 172, y: 16 } },
+      { id: 'GND', name: 'GND', type: 'ground', position: { x: 172, y: 26 } },
+      { id: 'DO', name: 'DO', type: 'digital', position: { x: 172, y: 35.8 } },
+      { id: 'AO', name: 'AO', type: 'analog', position: { x: 172, y: 45.5 } },
+    ],
+    defaultProperties: { light: 60 },
+    simulation: { type: 'light-sensor', model: 'ldr-module' },
+    aliases: ['ldr', 'photoresistor', 'light-sensor', 'photo-sensor'],
+    description: 'Light sensor module: AO gives a reading, DO switches when it gets dark.',
+    mountStyle: 'breadboard',
+  },
+  {
+    id: 'SOUND_SENSOR',
+    name: 'Sound Sensor',
+    category: 'Sensors',
+    svg: soundSensorSvg,
+    size: { width: 133.08, height: 50.44 },
+    pins: [
+      { id: 'AO', name: 'AOUT', type: 'analog', position: { x: 0, y: 11 } },
+      { id: 'GND', name: 'GND', type: 'ground', position: { x: 0, y: 20.5 } },
+      { id: 'VCC', name: 'VCC', type: 'power', position: { x: 0, y: 30.5 } },
+      { id: 'DO', name: 'DOUT', type: 'digital', position: { x: 0, y: 40.5 } },
+    ],
+    defaultProperties: { level: 20 },
+    simulation: { type: 'sound-sensor', model: 'microphone-module' },
+    aliases: ['sound-sensor', 'sound_sensor', 'microphone', 'mic'],
+    description: 'Microphone module: AO gives the loudness, DO switches when it is loud.',
+    mountStyle: 'breadboard',
+  },
 ];
 
 definitions.forEach((definition) => applyCanonicalGeometry(definition));
@@ -509,6 +636,34 @@ assignFootprint(
     minColumnSpan: 3,
   })
 );
+assignFootprint(
+  'BUZZER',
+  createFootprint('breadboard-mountable', getDefinitionPins('BUZZER'), {
+    allowedZones: STRIP_ONLY_ZONES,
+    supportedRotations: [0, 90, 180, 270],
+    minColumnSpan: 1,
+  })
+);
+assignFootprint(
+  'RGB_LED',
+  createFootprint('breadboard-mountable', getDefinitionPins('RGB_LED'), {
+    allowedZones: STRIP_ONLY_ZONES,
+    supportedRotations: [0, 180],
+    minColumnSpan: 3,
+  })
+);
+assignFootprint(
+  'TRAFFIC_LIGHT',
+  createFootprint('module', getDefinitionPins('TRAFFIC_LIGHT'), {
+    allowedZones: STRIP_ONLY_ZONES,
+    supportedRotations: [0, 180],
+    minColumnSpan: 3,
+  })
+);
+// The LDR and sound modules have their pins on one short edge; on a breadboard they would sit
+// with the board standing up, so they are wired with jumper wires instead (like the servo).
+assignFootprint('LDR', { type: 'freeform', pins: [] });
+assignFootprint('SOUND_SENSOR', { type: 'freeform', pins: [] });
 
 export function registerComponent(definition: ComponentDefinition) {
   componentRegistry.set(definition.id, definition);

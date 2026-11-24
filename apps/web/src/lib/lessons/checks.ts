@@ -22,7 +22,52 @@ export interface LessonCheckContext {
   code: string;
   simulating: boolean;
   /** What happened in the simulation since the current step opened. */
-  observations: { ledToggles: number; servoAngles: number[] };
+  observations: LessonObservations;
+}
+
+export interface LessonObservations {
+  /** On/off switches per part type (LED, BUZZER, TRAFFIC_LIGHT, RGB_LED colour changes). */
+  toggles: Record<string, number>;
+  /** Things shown at least once, e.g. 'TRAFFIC_LIGHT:red', 'RGB_LED:yellow', 'BUZZER:on'. */
+  seen: string[];
+  servoAngles: number[];
+}
+
+export const EMPTY_OBSERVATIONS: LessonObservations = { toggles: {}, seen: [], servoAngles: [] };
+
+/**
+ * What one simulation update shows, compared with the previous one: which outputs switched and
+ * what is on now. Used by the lesson guide to build up its observations.
+ */
+export function observeVisualChange(
+  type: string,
+  visual: Record<string, unknown> | undefined,
+  before: Record<string, unknown> | undefined
+): { toggles: number; seen: string[]; angle?: number } {
+  const flag = (record: Record<string, unknown> | undefined, key: string) => Boolean(record?.[key]);
+  switch (type) {
+    case 'LED':
+      return { toggles: flag(visual, 'outputHigh') !== flag(before, 'outputHigh') ? 1 : 0, seen: flag(visual, 'outputHigh') ? ['LED:on'] : [] };
+    case 'BUZZER':
+      return { toggles: flag(visual, 'sounding') !== flag(before, 'sounding') ? 1 : 0, seen: flag(visual, 'sounding') ? ['BUZZER:on'] : [] };
+    case 'TRAFFIC_LIGHT': {
+      const lamps = ['red', 'yellow', 'green'];
+      return {
+        toggles: lamps.filter((lamp) => flag(visual, lamp) !== flag(before, lamp)).length,
+        seen: lamps.filter((lamp) => flag(visual, lamp)).map((lamp) => `TRAFFIC_LIGHT:${lamp}`),
+      };
+    }
+    case 'RGB_LED': {
+      const color = typeof visual?.color === 'string' ? visual.color : 'off';
+      const previous = typeof before?.color === 'string' ? before.color : 'off';
+      return { toggles: color !== previous ? 1 : 0, seen: color !== 'off' ? [`RGB_LED:${color}`] : [] };
+    }
+    case 'SERVO':
+    case 'MICRO_SERVO':
+      return { toggles: 0, seen: [], angle: typeof visual?.angle === 'number' ? (visual.angle as number) : undefined };
+    default:
+      return { toggles: 0, seen: [] };
+  }
 }
 
 export interface CheckResult {
@@ -38,13 +83,23 @@ export const PART_LABELS: Record<string, string> = {
   RESISTOR: 'resistor',
   SERVO: 'servo motor',
   ULTRASONIC: 'ultrasonic sensor',
+  BUZZER: 'buzzer',
+  RGB_LED: 'RGB LED',
+  TRAFFIC_LIGHT: 'traffic light',
+  LDR: 'light sensor',
+  SOUND_SENSOR: 'sound sensor',
 };
 
 /** Parts whose name takes "an": an Arduino Uno, an LED, an ultrasonic sensor. */
-const AN_PARTS = new Set(['ARDUINO_UNO', 'LED', 'ULTRASONIC']);
+const AN_PARTS = new Set(['ARDUINO_UNO', 'LED', 'ULTRASONIC', 'RGB_LED']);
 
 const PIN_LABELS: Record<string, Record<string, string>> = {
   LED: { A: '+ (long leg)', C: '− (short leg)' },
+  BUZZER: { POS: '+ leg', NEG: '− leg' },
+  RGB_LED: { R: 'red leg', G: 'green leg', B: 'blue leg', COM: 'common (longest) leg' },
+  TRAFFIC_LIGHT: { R: 'R pin', Y: 'Y pin', G: 'G pin', GND: 'GND pin' },
+  LDR: { VCC: 'VCC', GND: 'GND', DO: 'DO', AO: 'AO' },
+  SOUND_SENSOR: { VCC: 'VCC', GND: 'GND', DO: 'DOUT', AO: 'AOUT' },
   SERVO: { PWM: 'signal (orange)', VCC: 'power (red)', GND: 'ground (brown)' },
   ULTRASONIC: { VCC: 'VCC', TRIG: 'Trig', ECHO: 'Echo', GND: 'GND' },
 };
@@ -113,14 +168,20 @@ export function describeCheck(check: StepCheck): string {
       const count = check.count ?? 1;
       const part = count > 1 ? `${count} ${partLabel(check.type)}s` : partLabel(check.type);
       const from = pinName ? `${part} ${pinName}` : part;
-      return `${from} → ${boardPinLabel(check.to)}`;
+      return `${from[0].toUpperCase()}${from.slice(1)} → ${boardPinLabel(check.to)}`;
     }
     case 'code':
       return 'Code is ready';
     case 'simulating':
       return 'Simulation is running';
     case 'blinked':
-      return 'LED switches on and off';
+      return check.type === 'BUZZER'
+        ? 'Buzzer beeps on and off'
+        : check.type && check.type !== 'LED'
+          ? `${partLabel(check.type)[0].toUpperCase()}${partLabel(check.type).slice(1)} changes`
+          : 'LED switches on and off';
+    case 'seen':
+      return `Shows ${check.tokens.map((token) => token.split(':')[1] ?? token).join(', ')}`;
     case 'servoReached':
       return `Servo turns to ${check.angles.join('° and ')}°`;
     case 'all':
@@ -143,7 +204,9 @@ function evaluateOne(check: StepCheck, context: LessonCheckContext): boolean {
     case 'simulating':
       return context.simulating;
     case 'blinked':
-      return context.observations.ledToggles >= check.times;
+      return (context.observations.toggles[check.type ?? 'LED'] ?? 0) >= check.times;
+    case 'seen':
+      return check.tokens.every((token) => context.observations.seen.includes(token));
     case 'servoReached':
       return check.angles.every((angle) =>
         context.observations.servoAngles.some((seen) => Math.abs(seen - angle) <= 10)

@@ -12,9 +12,15 @@ export default function StartProjectPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { setProjectId } = useProject();
-    const { setCurrentBoard, setCodingMode, setLanguage, setGenerator, setEnvironment, setPendingProjectIntent } = useBoard();
+    const { setCurrentBoard, setCodingMode, setLanguage, setGenerator, setEnvironment, setPendingProjectIntent, hasHydrated } = useBoard();
 
     useEffect(() => {
+        // Wait for the saved board settings to load first: on a fresh page load they would
+        // otherwise overwrite this lesson's settings (and its project/lesson request) a moment later.
+        if (!hasHydrated) {
+            return;
+        }
+
         const boardParam = searchParams.get('board');
         const modeParam = searchParams.get('mode');
         const languageParam = searchParams.get('language');
@@ -38,7 +44,7 @@ export default function StartProjectPage() {
         setEnvironment(environment);
         setPendingProjectIntent({ source: 'course', projectName, lessonSlug });
         router.replace('/projects/ide');
-    }, [router, searchParams, setCodingMode, setCurrentBoard, setEnvironment, setGenerator, setLanguage, setPendingProjectIntent, setProjectId]);
+    }, [hasHydrated, router, searchParams, setCodingMode, setCurrentBoard, setEnvironment, setGenerator, setLanguage, setPendingProjectIntent, setProjectId]);
 
     return (
         <MainLayout>

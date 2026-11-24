@@ -26,8 +26,16 @@ export type StepCheck = { label?: string } & (
   | { kind: 'code'; pattern: string }
   /** The simulation is running. */
   | { kind: 'simulating' }
-  /** While this step was open, LEDs switched on and off at least `times` times in total. */
-  | { kind: 'blinked'; times: number }
+  /**
+   * While this step was open, outputs of `type` (default LED) switched on or off at least `times`
+   * times in total: LEDs, buzzers, traffic light lamps, RGB colour changes.
+   */
+  | { kind: 'blinked'; times: number; type?: string }
+  /**
+   * While this step was open, the simulation showed every one of these, e.g. 'TRAFFIC_LIGHT:red',
+   * 'RGB_LED:yellow', 'BUZZER:on'.
+   */
+  | { kind: 'seen'; tokens: string[] }
   /** While this step was open, some servo reached every angle in `angles` (within 10 degrees). */
   | { kind: 'servoReached'; angles: number[] }
   | { kind: 'all'; checks: StepCheck[] }
@@ -49,6 +57,11 @@ export interface LessonStep {
   hint?: string;
   /** Ticks the step off automatically when true. Steps without a check are ticked by the learner. */
   check?: StepCheck;
+  /**
+   * The block program at the end of this step, when it differs from the activity's final
+   * `solution` (e.g. a step that is later changed). The lesson tests use it for this step's checks.
+   */
+  solution?: string;
 }
 
 export interface LessonActivity {
