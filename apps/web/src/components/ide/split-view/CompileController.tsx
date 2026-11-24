@@ -158,8 +158,18 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
     }
 
     if (!webSerial.isConnected) {
-      webSerial.addMessage('error', 'Device not connected. Click Connect Device first.');
-      return;
+      // Connect as part of Upload: the browser shows its port list (this click counts as the permission).
+      webSerial.addMessage('system', 'Choose your board in the list that opens (usually a COM port, or "USB Serial").');
+      const connected = await webSerial.connect();
+      if (!connected) {
+        webSerial.addMessage('error', 'Upload stopped: no board was connected. Plug the board in with a USB cable and click Upload again.');
+        return;
+      }
+      if (supportsDeviceFiles) {
+        // The MicroPython file sync reads the connection state on the next render.
+        webSerial.addMessage('system', 'Board connected. Click Upload again to send your files.');
+        return;
+      }
     }
 
     if (supportsDeviceFiles) {
@@ -190,7 +200,7 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
       if (res.ok && data?.success && data?.hex) {
         clearCompileFeedback();
         webSerial.addMessage('system', 'Compilation successful. Starting upload...');
-        await webSerial.flashArduino(data.hex);
+        await webSerial.flashArduino(data.hex, currentBoard);
       } else {
         const message = data?.error || (res.ok ? 'Compilation failed. Upload aborted.' : `Compiler API error (status ${res.status}).`);
         setCompileFeedback(extractCompileFeedback(data?.log || data?.error || message, message));

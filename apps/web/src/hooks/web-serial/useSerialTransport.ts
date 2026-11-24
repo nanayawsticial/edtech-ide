@@ -13,7 +13,8 @@ export interface SerialTransportController {
   keepReadingRef: MutableRefObject<boolean>;
   pipeAbortControllerRef: MutableRefObject<AbortController | null>;
   pipeToPromiseRef: MutableRefObject<Promise<void> | null>;
-  connect: (baudRate?: number) => Promise<void>;
+  /** Asks the learner to pick a port and opens it. Resolves to true when connected. */
+  connect: (baudRate?: number) => Promise<boolean>;
   disconnect: () => Promise<void>;
   setBaudRate: (baudRate: number) => Promise<void>;
   writeText: (text: string) => Promise<void>;
@@ -156,10 +157,10 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
     await port.open({ baudRate: nextBaudRate });
   }, []);
 
-  const connect = useCallback(async (requestedBaudRate?: number) => {
+  const connect = useCallback(async (requestedBaudRate?: number): Promise<boolean> => {
     if (!(typeof navigator !== 'undefined' && 'serial' in navigator)) {
       addMessage('error', 'Web Serial API is not supported in this browser. Please use Chrome or Edge.');
-      return;
+      return false;
     }
 
     const nextBaudRate = normalizeBaudRate(requestedBaudRate ?? baudRateRef.current);
@@ -177,6 +178,7 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
 
       const info = port.getInfo();
       addMessage('system', `Connected to device (VID: ${info.usbVendorId}, PID: ${info.usbProductId}) at ${nextBaudRate} baud`);
+      return true;
     } catch (error) {
       const serialError = error as Error;
       if (serialError.name === 'NotFoundError') {
@@ -184,6 +186,7 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
       } else {
         addMessage('error', `Connection failed: ${serialError.message}`);
       }
+      return false;
     }
   }, [addMessage, resumeDecodedReadPipeline]);
 

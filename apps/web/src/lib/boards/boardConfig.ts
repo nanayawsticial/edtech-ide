@@ -57,7 +57,8 @@ export const BOARD_CONFIG: Record<string, BoardConfigItem> = {
         language: 'cpp',
         generator: 'arduino',
         compileStrategy: 'arduino-cli',
-        uploadTransport: 'arduino-stk500',
+        // The in-app uploader speaks STK500v1 (Uno/Nano bootloaders) only.
+        uploadTransport: 'unsupported',
         chip: 'ATmega2560 microcontroller',
         summary: 'High I/O count Arduino board for advanced hardware projects and larger circuits.',
         runtimeLabel: 'Arduino C++',
@@ -72,7 +73,8 @@ export const BOARD_CONFIG: Record<string, BoardConfigItem> = {
         language: 'cpp',
         generator: 'arduino',
         compileStrategy: 'arduino-cli',
-        uploadTransport: 'arduino-stk500',
+        // The in-app uploader speaks STK500v1 (Uno/Nano bootloaders) only.
+        uploadTransport: 'unsupported',
         chip: 'ATmega32u4 microcontroller',
         summary: 'USB-native Arduino board, useful for HID projects and keyboard/mouse emulation.',
         runtimeLabel: 'Arduino C++',
