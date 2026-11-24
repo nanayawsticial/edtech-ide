@@ -21,11 +21,13 @@ const TAB_OPTIONS: Array<{ id: BlockTerminalTab; label: string; icon: React.Reac
   { id: "connection", label: "Connection", icon: <Link2 size={14} /> },
 ];
 
-const BUILD_MESSAGE_PATTERN = /(compil|upload|flash|stk500|hex|syncing|synced |raw repl|main\.py|micropython sync|compiler api|files saved to the micropython device|connect device first|upload aborted|verify)/i;
+const BUILD_MESSAGE_PATTERN = /(compil|upload|flash|stk500|hex|syncing|synced |raw repl|main\.py|micropython sync|compiler api|files saved to the micropython device|connect device first|upload aborted|verify|simulation did not start)/i;
+// Compiler diagnostics such as "main.cpp:2:11: error: 'D12' was not declared in this scope".
+const COMPILER_DIAGNOSTIC_PATTERN = /^\s*\S+:\d+:(?:\d+:)?\s*(?:fatal error|error|warning|note):/i;
 const CONNECTION_MESSAGE_PATTERN = /(connected to device|disconnected|disconnect|connection failed|no port selected|web serial|device disconnected unexpectedly|usb|baud|browser)/i;
 
 function getMessageChannel(message: SerialMessage): BlockTerminalTab {
-  if (BUILD_MESSAGE_PATTERN.test(message.text)) {
+  if (BUILD_MESSAGE_PATTERN.test(message.text) || COMPILER_DIAGNOSTIC_PATTERN.test(message.text)) {
     return "build";
   }
 

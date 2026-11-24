@@ -253,7 +253,21 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
     }
 
     await simulationControls.start();
-  }, [isBlockMode, isSimulationActive, simulationControls, sourceCode, supportsSimulation, syncBlocklySourceCode]);
+
+    // The simulator only shows compile errors next to the circuit and the text editor. Put them in
+    // Build output too, so a failed run from the Blocks screen never looks like nothing happened.
+    const feedback = useSimulationStore.getState().compileFeedback;
+    if (feedback) {
+      openBlockTerminalTab('build');
+      const diagnostics = feedback.diagnostics.map((diagnostic) => diagnostic.raw.trim()).filter(Boolean);
+      if (diagnostics.length > 0) {
+        webSerial.addMessage('error', 'Simulation did not start: the code did not compile.');
+        diagnostics.forEach((line) => webSerial.addMessage('error', line));
+      } else {
+        webSerial.addMessage('error', `Simulation did not start: ${feedback.message}`);
+      }
+    }
+  }, [isBlockMode, isSimulationActive, openBlockTerminalTab, simulationControls, sourceCode, supportsSimulation, syncBlocklySourceCode, webSerial]);
 
   useEffect(() => eventBus.on('compile:verify-request', () => { void handleVerify(); }), [eventBus, handleVerify]);
   useEffect(() => eventBus.on('compile:upload-request', () => { void handleUploadToBoard(); }), [eventBus, handleUploadToBoard]);

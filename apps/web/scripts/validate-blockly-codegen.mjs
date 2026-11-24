@@ -290,6 +290,44 @@ for (const generatorName of Object.keys(generators)) {
   }
 }
 
+// Blocks for a part placed in Circuit Lab must use the board pin id (12), never its display
+// label (D12): `pinMode(D12, OUTPUT)` does not compile for an Arduino Uno.
+{
+  const snapshot = {
+    components: [{
+      componentId: 'led-1',
+      primaryBoardPinId: '12',
+      primaryBoardPin: 'D12',
+      pinMappings: { SIG: { pinId: 'SIG', boardPinId: '12', boardPinLabel: 'D12' } },
+    }],
+  };
+  const previousWindow = globalThis.window;
+  globalThis.window = { ...(previousWindow || {}), __CIRCUIT_CODING_SNAPSHOT: snapshot };
+  try {
+    for (const [generatorName, generator] of Object.entries(generators)) {
+      checked += 1;
+      const workspace = new Blockly.Workspace();
+      try {
+        const block = workspace.newBlock('arduino_led_set');
+        block.getFieldValue = (name) => ({ SENSOR: 'led-1', STATE: 'HIGH' })[name] ?? null;
+        generator.init(workspace);
+        const code = generator.blockToCode(block);
+        const everything = [code, ...Object.values(generator.setups_ || {})].join('\n');
+        if (showType === 'circuit-pins') console.log(`--- ${generatorName} circuit LED on D12 ---\n${everything}\n`);
+        if (/D12/.test(everything)) failures.push(`${generatorName.padEnd(11)} circuit LED: uses the pin label D12 instead of 12`);
+        if (!/\b12\b/.test(everything)) failures.push(`${generatorName.padEnd(11)} circuit LED: pin 12 missing from the code`);
+      } catch (error) {
+        failures.push(`${generatorName.padEnd(11)} circuit LED: throws ${String(error.message || error).slice(0, 120)}`);
+      } finally {
+        workspace.dispose();
+      }
+    }
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
+}
+
 // Syntax-check the MicroPython output in one Python process (skipped when Python isn't installed).
 const PARSE_ALL = `
 import ast, json, sys

@@ -12,7 +12,8 @@ function resolvePin(componentId: string, fallback = '2'): string {
     const snapshot = getCircuitSnapshot();
     if (!snapshot) return fallback;
     const component = snapshot.components.find((entry) => entry.componentId === componentId);
-    return component?.primaryBoardPin || fallback;
+    // Use the board's pin id (12, A0), not its display label (D12): Arduino Uno code needs `12`.
+    return component?.primaryBoardPinId || fallback;
 }
 
 function resolveNamedPin(componentId: string, pinId: string, fallback = '2'): string {
@@ -21,7 +22,7 @@ function resolveNamedPin(componentId: string, pinId: string, fallback = '2'): st
     if (!snapshot) return fallback;
     const component = snapshot.components.find((entry) => entry.componentId === componentId);
     if (!component) return fallback;
-    return component.pinMappings[pinId]?.boardPinLabel || fallback;
+    return component.pinMappings[pinId]?.boardPinId || fallback;
 }
 
 function looksLikeBoardPin(value: string) {
