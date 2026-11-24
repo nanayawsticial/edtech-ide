@@ -60,6 +60,8 @@ export function useArduinoFlash({ addMessage, transport }: UseArduinoFlashOption
       let rawReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
       let rawWriter: WritableStreamDefaultWriter<Uint8Array> | undefined;
       let streamBridge: InstanceType<typeof Duplex> | null = null;
+      // What crossed the wire, so a failed upload can say whether the board answered at all.
+      const wire = { sent: 0, received: 0, firstBytes: [] as number[], readError: '' };
 
       const releaseRawStreams = async () => {
         keepReadingBridge = false;
@@ -103,6 +105,7 @@ export function useArduinoFlash({ addMessage, transport }: UseArduinoFlashOption
             // The STK500 library pulls data from the stream; reads are pushed from the loop below.
           },
           write(chunk: Uint8Array, _encoding: BufferEncoding, callback: (error?: Error | null) => void) {
+            wire.sent += chunk.length;
             writer.write(chunk).then(() => callback()).catch((error) => callback(error));
           },
         });
@@ -115,8 +118,13 @@ export function useArduinoFlash({ addMessage, transport }: UseArduinoFlashOption
             try {
               const { value, done } = await reader.read();
               if (done) break;
-              if (value && !discardIncoming) bridge.push(Buffer.from(value));
-            } catch {
+              if (value && !discardIncoming) {
+                wire.received += value.length;
+                if (wire.firstBytes.length < 12) wire.firstBytes.push(...Array.from(value).slice(0, 12 - wire.firstBytes.length));
+                bridge.push(Buffer.from(value));
+              }
+            } catch (error) {
+              wire.readError = (error as Error)?.message || String(error);
               break;
             }
           }
@@ -141,6 +149,10 @@ export function useArduinoFlash({ addMessage, transport }: UseArduinoFlashOption
             addMessage('system', `Upload progress: ${status} ${step}%`);
           }
         });
+      } catch (error) {
+        const bytes = wire.firstBytes.map((byte) => byte.toString(16).padStart(2, '0')).join(' ');
+        const detail = `sent ${wire.sent} bytes, received ${wire.received}${bytes ? ` (${bytes})` : ''}${wire.readError ? `, read error: ${wire.readError}` : ''}`;
+        throw new Error(`${(error as Error).message} [${detail}]`);
       } finally {
         await releaseRawStreams();
       }
@@ -182,6 +194,8 @@ export function useArduinoFlash({ addMessage, transport }: UseArduinoFlashOption
         }
 
         addMessage('error', explainUploadError(lastError?.message ?? 'unknown error', board));
+        // For whoever helps the learner: what the uploader saw.
+        addMessage('system', `Upload details: ${lastError?.message ?? 'unknown error'}`);
         return false;
       } finally {
         // Back to the Serial Monitor at the learner's baud rate.
