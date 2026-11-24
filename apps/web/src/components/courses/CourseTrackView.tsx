@@ -74,7 +74,7 @@ export function CourseTrackView({ track }: { track: CourseTrack }) {
         />
 
         <motion.section
-          className='overflow-hidden rounded-[34px] border border-white/8 bg-[linear-gradient(180deg,#10131f_0%,#090c16_100%)] p-6 shadow-[0_40px_110px_-66px_rgba(0,0,0,1)] sm:p-8 lg:p-10'
+          className='ui-always-dark overflow-hidden rounded-[34px] border border-white/8 bg-[linear-gradient(180deg,#10131f_0%,#090c16_100%)] p-6 shadow-[0_40px_110px_-66px_rgba(0,0,0,1)] sm:p-8 lg:p-10'
           variants={fadeInUp}
           initial='hidden'
           animate='visible'

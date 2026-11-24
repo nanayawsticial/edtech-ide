@@ -1525,3 +1525,21 @@ html .custom-blockly-host .blocklyInputField.blocklyEditableField > text.blockly
 html[data-theme='light'] .ui-text-error {
   color: #be123c;
 }
+
+/*
+   ALWAYS-DARK SURFACES
+   Some cards stay dark in every theme (e.g. Card variant="immersive"). The light-theme
+   compatibility layer above turns white text dark, which made their headings invisible.
+   Inside .ui-always-dark, use the dark theme's colours so that layer resolves to light text.
+    */
+html[data-theme='light'] .ui-always-dark {
+  --ui-color-surface: #111c30;
+  --ui-color-text: #edf2ff;
+  --ui-color-text-muted: #a9b4cf;
+  --ui-color-text-soft: #7e8aa8;
+  --ui-border-soft: rgba(157, 178, 214, 0.14);
+  --ui-border-strong: rgba(96, 123, 247, 0.3);
+  --ui-surface-elevated: rgba(24, 32, 51, 0.94);
+  --ui-surface-quiet: rgba(13, 19, 33, 0.88);
+  color: var(--ui-color-text);
+}

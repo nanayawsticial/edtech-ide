@@ -44,7 +44,7 @@ export function CoursesCatalogView({ tracks }: { tracks: CatalogTrack[] }) {
         />
 
         <motion.section
-          className='overflow-hidden rounded-[34px] border border-white/8 bg-[linear-gradient(180deg,#10131f_0%,#090c16_100%)] p-6 shadow-[0_40px_110px_-66px_rgba(0,0,0,1)] sm:p-8 lg:p-10'
+          className='ui-always-dark overflow-hidden rounded-[34px] border border-white/8 bg-[linear-gradient(180deg,#10131f_0%,#090c16_100%)] p-6 shadow-[0_40px_110px_-66px_rgba(0,0,0,1)] sm:p-8 lg:p-10'
           variants={fadeInUp}
           initial='hidden'
           animate='visible'
@@ -98,7 +98,7 @@ export function CoursesCatalogView({ tracks }: { tracks: CatalogTrack[] }) {
                   <div className='space-y-4'>
                     <div className='flex flex-wrap gap-2'>
                       <span className='inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300'>
-                        {track.lessonCount} lessons
+                        {track.lessonCount} {track.lessonCount === 1 ? 'lesson' : 'lessons'}
                       </span>
                       <span className='inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300'>
                         Recommended start
