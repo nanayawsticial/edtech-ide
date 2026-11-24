@@ -14,6 +14,7 @@
  * - navigator.serial fires `disconnect` when an open port goes away (e.g. USB unplugged).
  */
 import { desktopErrorMessage, desktopInvoke, desktopListen } from './runtime';
+import { isBoardUsbVendor } from '@/lib/serial/boardUsbIds';
 
 type NativePortInfo = {
   path: string;
@@ -153,8 +154,9 @@ class DesktopSerialPort extends EventTarget {
 }
 
 class DesktopSerial extends EventTarget {
-  async requestPort() {
-    const info = await choosePort();
+  async requestPort(options?: { filters?: Array<{ usbVendorId?: number }> }) {
+    // With filters (as the app passes them), boards come first and other ports wait behind a button.
+    const info = await choosePort(Boolean(options?.filters?.length));
     return new DesktopSerialPort(info, () => this.dispatchEvent(new Event('disconnect')));
   }
 
@@ -182,7 +184,8 @@ const PICKER_STYLES = `
 .sticial-port-picker__actions button:focus-visible{outline:2px solid #7641ea;outline-offset:2px}
 `;
 
-function choosePort(): Promise<NativePortInfo> {
+function choosePort(boardsFirst: boolean): Promise<NativePortInfo> {
+  let showOtherPorts = !boardsFirst;
   return new Promise((resolve, reject) => {
     const previousFocus = document.activeElement as HTMLElement | null;
     const overlay = document.createElement('div');
@@ -228,15 +231,17 @@ function choosePort(): Promise<NativePortInfo> {
         return;
       }
       list.innerHTML = '';
-      if (ports.length === 0) {
+      const boardPorts = ports.filter((port) => isBoardUsbVendor(port.usbVendorId));
+      const otherPorts = ports.filter((port) => !isBoardUsbVendor(port.usbVendorId));
+      const shown = showOtherPorts ? [...boardPorts, ...otherPorts] : boardPorts;
+
+      if (shown.length === 0) {
         const item = document.createElement('li');
         item.className = 'sticial-port-picker__empty';
         item.textContent = 'No boards found. Plug your board in with a USB cable, then press Refresh.';
         list.append(item);
-        (overlay.querySelector('[data-action="refresh"]') as HTMLButtonElement).focus();
-        return;
       }
-      for (const port of ports) {
+      for (const port of shown) {
         const item = document.createElement('li');
         const button = document.createElement('button');
         button.type = 'button';
@@ -250,7 +255,25 @@ function choosePort(): Promise<NativePortInfo> {
         item.append(button);
         list.append(item);
       }
-      (list.querySelector('button') as HTMLButtonElement | null)?.focus();
+      if (!showOtherPorts && otherPorts.length > 0) {
+        const item = document.createElement('li');
+        const more = document.createElement('button');
+        more.type = 'button';
+        more.className = 'sticial-port-picker__port';
+        const title = document.createElement('strong');
+        title.textContent = `Show other ports (${otherPorts.length})`;
+        const detail = document.createElement('span');
+        detail.textContent = 'Bluetooth and built-in ports. Use this if your board is not listed above.';
+        more.append(title, detail);
+        more.addEventListener('click', () => {
+          showOtherPorts = true;
+          void render();
+        });
+        item.append(more);
+        list.append(item);
+      }
+      const firstButton = list.querySelector('button') as HTMLButtonElement | null;
+      (firstButton ?? (overlay.querySelector('[data-action="refresh"]') as HTMLButtonElement)).focus();
     };
 
     overlay.addEventListener('click', (event) => {

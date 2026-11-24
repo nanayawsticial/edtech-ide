@@ -1,6 +1,7 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import type { SerialChunkListener, SerialMessageSink } from './types';
+import { BOARD_USB_VENDOR_IDS, isBoardUsbVendor } from '@/lib/serial/boardUsbIds';
 
 export interface SerialTransportController {
   isConnected: boolean;
@@ -45,6 +46,8 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
   const pipeAbortControllerRef = useRef<AbortController | null>(null);
   const pipeToPromiseRef = useRef<Promise<void> | null>(null);
   const chunkListenerRef = useRef<SerialChunkListener>(null);
+  /** After a cancelled pick, the next list shows every port (for boards with unusual USB chips). */
+  const showAllPortsNextRef = useRef(false);
 
   const readLoop = useCallback(async () => {
     let lineBuffer = '';
@@ -157,6 +160,20 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
     await port.open({ baudRate: nextBaudRate });
   }, []);
 
+  /** A board picked before reconnects straight away; otherwise the browser shows its port list. */
+  const chooseBoardPort = useCallback(async () => {
+    const remembered = (await navigator.serial.getPorts()).filter((port) => isBoardUsbVendor(port.getInfo().usbVendorId));
+    if (remembered.length === 1) {
+      return remembered[0];
+    }
+
+    const showAll = showAllPortsNextRef.current;
+    showAllPortsNextRef.current = false;
+    return navigator.serial.requestPort(
+      { filters: showAll ? [] : BOARD_USB_VENDOR_IDS.map((usbVendorId) => ({ usbVendorId })) }
+    );
+  }, []);
+
   const connect = useCallback(async (requestedBaudRate?: number): Promise<boolean> => {
     if (!(typeof navigator !== 'undefined' && 'serial' in navigator)) {
       addMessage('error', 'Web Serial API is not supported in this browser. Please use Chrome or Edge.');
@@ -165,8 +182,9 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
 
     const nextBaudRate = normalizeBaudRate(requestedBaudRate ?? baudRateRef.current);
 
+    const askedAt = Date.now();
     try {
-      const port = await navigator.serial.requestPort();
+      const port = await chooseBoardPort();
       await port.open({ baudRate: nextBaudRate });
 
       portRef.current = port;
@@ -181,14 +199,26 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
       return true;
     } catch (error) {
       const serialError = error as Error;
-      if (serialError.name === 'NotFoundError') {
-        addMessage('error', 'No port selected.');
+      if (serialError.name === 'NotFoundError' && Date.now() - askedAt < 400) {
+        // Refused faster than anyone could click: this window never showed the board list.
+        addMessage(
+          'error',
+          'This window cannot show the list of boards. Open Sticial Studio in Chrome or Edge, or use the desktop app, to connect a board.'
+        );
+      } else if (serialError.name === 'NotFoundError') {
+        showAllPortsNextRef.current = true;
+        addMessage(
+          'error',
+          'No board was chosen. In the list, pick your board (for example "Arduino Uno (COM9)" or "USB-SERIAL CH340"). If it is not in the list, check the USB cable and try again: the next list shows every port.'
+        );
+      } else if (serialError.name === 'NetworkError' || serialError.name === 'InvalidStateError') {
+        addMessage('error', 'The board is busy. Close the Arduino IDE or any other program using it, then try again.');
       } else {
         addMessage('error', `Connection failed: ${serialError.message}`);
       }
       return false;
     }
-  }, [addMessage, resumeDecodedReadPipeline]);
+  }, [addMessage, chooseBoardPort, resumeDecodedReadPipeline]);
 
   const disconnect = useCallback(async () => {
     keepReadingRef.current = false;
