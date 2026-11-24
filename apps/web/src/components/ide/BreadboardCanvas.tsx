@@ -162,6 +162,7 @@ export default function BreadboardCanvas({
   const rotateComponent = useCircuitStore((state) => state.rotateComponent);
   const selectComponent = useCircuitStore((state) => state.selectComponent);
   const updateComponentPosition = useCircuitStore((state) => state.updateComponentPosition);
+  const moveComponentsTogether = useCircuitStore((state) => state.moveComponentsTogether);
   const updateComponentState = useCircuitStore((state) => state.updateComponentState);
   const updateNet = useCircuitStore((state) => state.updateNet);
   const simulationView = useSimulationStore(useShallow(selectCircuitLabSimulationView));
@@ -261,24 +262,52 @@ export default function BreadboardCanvas({
     return () => window.removeEventListener('keydown', handleWindowKeyDown);
   }, []);
 
-  const sceneOptions = useMemo(
-    () => ({
+  const draggedComponentId = dragPreview?.source === 'existing' ? dragPreview.componentId : null;
+  // Parts plugged into the breadboard being dragged. They ride along with it; their holes are
+  // stored by name (not position), so moving them by the same amount keeps them plugged in.
+  const carriedComponents = useMemo(() => {
+    const dragged = draggedComponentId ? components.find((component) => component.id === draggedComponentId) : null;
+    if (!dragged || getComponentDefinition(dragged.type)?.id !== 'BREADBOARD') {
+      return [];
+    }
+    return components.filter((component) => component.id !== dragged.id && component.mountedPlacement?.mounted);
+  }, [components, draggedComponentId]);
+
+  const sceneOptions = useMemo(() => {
+    let positionOverrides: Record<string, Point> | undefined;
+    if (dragPreview?.source === 'existing' && dragPreview.componentId) {
+      positionOverrides = { [dragPreview.componentId]: dragPreview.displayPosition };
+      const dragged = components.find((component) => component.id === dragPreview.componentId);
+      if (dragged && carriedComponents.length > 0) {
+        const dx = dragPreview.displayPosition.x - dragged.x;
+        const dy = dragPreview.displayPosition.y - dragged.y;
+        carriedComponents.forEach((component) => {
+          positionOverrides![component.id] = { x: component.x + dx, y: component.y + dy };
+        });
+      }
+    }
+
+    return {
       selectedComponentId,
       selectedWireId,
       hoveredComponentId,
       hoveredWireId,
-      draggingComponentId: dragPreview?.source === 'existing' ? dragPreview.componentId : null,
+      draggingComponentId: draggedComponentId,
       wireWaypointOverrides:
         Object.keys(wireWaypointOverrides).length > 0 ? wireWaypointOverrides : undefined,
-      positionOverrides:
-        dragPreview?.source === 'existing' && dragPreview.componentId
-          ? {
-              [dragPreview.componentId]: dragPreview.displayPosition,
-            }
-          : undefined,
-    }),
-    [dragPreview, hoveredComponentId, hoveredWireId, selectedComponentId, selectedWireId, wireWaypointOverrides]
-  );
+      positionOverrides,
+    };
+  }, [
+    carriedComponents,
+    components,
+    dragPreview,
+    draggedComponentId,
+    hoveredComponentId,
+    hoveredWireId,
+    selectedComponentId,
+    selectedWireId,
+    wireWaypointOverrides,
+  ]);
 
   const scene = useMemo(
     () => buildSceneGraph(circuitData, simulationView, netlist, resolvedConnections, sceneOptions),
@@ -527,7 +556,14 @@ export default function BreadboardCanvas({
 
       const component = circuitData.components.find((candidate) => candidate.id === id);
       const definition = getComponentDefinition(component?.type || '');
-      if (component && definition) {
+      if (component && definition?.id === 'BREADBOARD' && carriedComponents.length > 0) {
+        const dx = pos.x - component.x;
+        const dy = pos.y - component.y;
+        moveComponentsTogether([
+          { id, x: pos.x, y: pos.y },
+          ...carriedComponents.map((carried) => ({ id: carried.id, x: carried.x + dx, y: carried.y + dy })),
+        ]);
+      } else if (component && definition) {
         const mountedPreview = preview?.mountPreview ?? buildMountPreview(id, pos);
         if (mountedPreview?.isValid) {
           updateComponentPosition(

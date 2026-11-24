@@ -223,7 +223,8 @@ function ComponentRenderer({
         height: size.height,
         transform: `translate(${node.position.x}px, ${node.position.y}px) rotate(${rotation}deg)`,
         transformOrigin: 'center center',
-        zIndex: isSelected ? 30 : isDragging ? 28 : isHovered ? 24 : definition.id === 'BREADBOARD' ? 4 : 12,
+        // The breadboard always stays underneath, so selecting or dragging it never hides the parts plugged into it.
+        zIndex: definition.id === 'BREADBOARD' ? 4 : isSelected ? 30 : isDragging ? 28 : isHovered ? 24 : 12,
         filter: showFrame
           ? isSelected
             ? 'drop-shadow(0 0 18px rgba(34,211,238,0.42))'
