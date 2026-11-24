@@ -28,6 +28,10 @@ function toPixels(scale: number, worldDistance: number) {
   return worldDistance * Math.max(scale, 0.35);
 }
 
+function distanceBetween(a: Point, b: Point) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
@@ -270,11 +274,22 @@ export function hitTestScene(
   selectedComponentId: string | null = null
 ) {
   const selectedWireHandleHit = hitTestWireHandles(selectedWire, worldPoint, scale);
+  const precisePinHit = hitTestPins(scene, worldPoint, scale, true);
+
   if (selectedWireHandleHit) {
+    // On a crowded header the next pin sits inside the reach of the selected wire's end handle.
+    // When the pointer is nearer that other pin, the learner is starting a new wire, not moving
+    // the end of the one they just finished.
+    if (
+      selectedWireHandleHit.type === 'wire-handle' &&
+      precisePinHit?.type === 'pin' &&
+      distanceBetween(precisePinHit.pin.position, worldPoint) < distanceBetween(selectedWireHandleHit.handle.position, worldPoint)
+    ) {
+      return precisePinHit;
+    }
     return selectedWireHandleHit;
   }
 
-  const precisePinHit = hitTestPins(scene, worldPoint, scale, true);
   if (precisePinHit) {
     return precisePinHit;
   }

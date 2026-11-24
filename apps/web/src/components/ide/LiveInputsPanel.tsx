@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
 
 import { getComponentDefinition } from '@/lib/wiring/componentDefinitions';
@@ -38,12 +38,33 @@ export default function LiveInputsPanel() {
   const updateComponentState = useCircuitStore((state) => state.updateComponentState);
   const running = useSimulationStore((state) => state.simulationState.running);
   const [open, setOpen] = useState(true);
+  const panelRef = useRef<HTMLElement | null>(null);
+  const [bottom, setBottom] = useState(16);
 
   const inputs = components
     .map((component) => ({ component, definition: getComponentDefinition(component.type) }))
     .filter(({ definition }) => definition && (SLIDERS[definition.id] || definition.id === 'BUTTON'));
+  const visible = running && inputs.length > 0;
 
-  if (!running || inputs.length === 0) {
+  // Sit just above the terminal dock, so the Serial Monitor output stays readable.
+  useLayoutEffect(() => {
+    const container = panelRef.current?.offsetParent as HTMLElement | null;
+    if (!visible || !container) {
+      return;
+    }
+    const place = () => {
+      const dock = Array.from(container.querySelectorAll<HTMLElement>('[data-ide-bottom-dock]')).find((element) => element.offsetHeight > 0);
+      const containerBottom = container.getBoundingClientRect().bottom;
+      setBottom(dock ? Math.max(16, Math.round(containerBottom - dock.getBoundingClientRect().top + 12)) : 16);
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(container);
+    container.querySelectorAll('[data-ide-bottom-dock]').forEach((dock) => observer.observe(dock));
+    return () => observer.disconnect();
+  }, [visible]);
+
+  if (!visible) {
     return null;
   }
 
@@ -52,7 +73,9 @@ export default function LiveInputsPanel() {
 
   return (
     <aside
-      className="ui-always-dark pointer-events-auto absolute bottom-4 left-4 z-[55] w-[280px] max-w-[calc(100%-2rem)] rounded-2xl border border-white/10 bg-[#0d1322]/95 p-3 text-slate-100 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)] backdrop-blur"
+      ref={panelRef}
+      style={{ bottom }}
+      className="ui-always-dark pointer-events-auto absolute left-4 z-[55] w-[280px] max-w-[calc(100%-2rem)] rounded-2xl border border-white/10 bg-[#0d1322]/95 p-3 text-slate-100 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)] backdrop-blur"
       aria-label="Live inputs"
       data-testid="live-inputs-panel"
     >

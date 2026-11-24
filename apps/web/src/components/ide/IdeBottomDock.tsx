@@ -18,7 +18,7 @@ export default function IdeBottomDock({
   children,
 }: IdeBottomDockProps) {
   if (collapsed) {
-    return <div>{children}</div>;
+    return <div data-ide-bottom-dock="">{children}</div>;
   }
 
   return (
@@ -34,7 +34,7 @@ export default function IdeBottomDock({
           />
         </div>
       ) : null}
-      <div style={{ height }} className="min-h-[120px] transition-[height] duration-200">
+      <div style={{ height }} className="min-h-[120px] transition-[height] duration-200" data-ide-bottom-dock="">
         {children}
       </div>
     </>

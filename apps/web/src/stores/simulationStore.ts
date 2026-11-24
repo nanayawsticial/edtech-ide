@@ -55,6 +55,8 @@ interface SimulationStoreState {
   simulationStatus: SimulationCanvasStatus | null;
   compileFeedback: CompileFeedback | null;
   hasVisitedCodingEnvironment: boolean;
+  /** Lines the simulated board printed with Serial.println, newest last (the Serial Monitor shows them). */
+  simulatedSerialLines: string[];
 }
 
 interface SimulationStoreActions {
@@ -65,10 +67,14 @@ interface SimulationStoreActions {
   setCompileFeedback: (feedback: CompileFeedback | null) => void;
   clearCompileFeedback: () => void;
   setHasVisitedCodingEnvironment: (value: boolean) => void;
+  appendSimulatedSerialLine: (line: string) => void;
+  clearSimulatedSerialLines: () => void;
   resetSimulationStore: () => void;
 }
 
 export type SimulationStore = SimulationStoreState & SimulationStoreActions;
+
+const MAX_SIMULATED_SERIAL_LINES = 200;
 
 export const defaultSimulationState: CircuitSimulationState = {
   running: false,
@@ -159,6 +165,7 @@ export const useSimulationStore = create<SimulationStore>((set) => ({
   simulationStatus: null,
   compileFeedback: null,
   hasVisitedCodingEnvironment: false,
+  simulatedSerialLines: [],
 
   setSimulationState: (patch) =>
     set((state) => {
@@ -216,6 +223,15 @@ export const useSimulationStore = create<SimulationStore>((set) => ({
   setHasVisitedCodingEnvironment: (value) =>
     set((state) => (state.hasVisitedCodingEnvironment === value ? state : { hasVisitedCodingEnvironment: value })),
 
+  appendSimulatedSerialLine: (line) =>
+    set((state) => ({
+      // Serial.println ends lines with "\r\n"; the monitor only needs the text.
+      simulatedSerialLines: [...state.simulatedSerialLines.slice(-(MAX_SIMULATED_SERIAL_LINES - 1)), line.replace(/\r$/, '')],
+    })),
+
+  clearSimulatedSerialLines: () =>
+    set((state) => (state.simulatedSerialLines.length === 0 ? state : { simulatedSerialLines: [] })),
+
   resetSimulationStore: () =>
     set({
       simulationState: defaultSimulationState,
@@ -223,5 +239,6 @@ export const useSimulationStore = create<SimulationStore>((set) => ({
       simulationStatus: null,
       compileFeedback: null,
       hasVisitedCodingEnvironment: false,
+      simulatedSerialLines: [],
     }),
 }));

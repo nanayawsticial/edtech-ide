@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Link2, Radio, TerminalSquare, Zap } from "lucide-react";
 import ConsolePanel from "./ConsolePanel";
 import type { useWebSerial, SerialMessage } from "../../hooks/useWebSerial";
+import { useSimulationStore } from "@/stores/simulationStore";
 
 export type BlockTerminalTab = "serial" | "build" | "connection";
 
@@ -80,10 +81,12 @@ export default function BlockTerminalShell({
     [webSerial.messages]
   );
 
+  const simulatedLineCount = useSimulationStore((state) => state.simulatedSerialLines.length);
+  const isSimulating = useSimulationStore((state) => state.simulationState.running);
   const isSerialSupported = typeof navigator !== "undefined" && "serial" in navigator;
 
   const channelCounts: Record<BlockTerminalTab, number> = {
-    serial: serialMessages.length,
+    serial: serialMessages.length + simulatedLineCount,
     build: buildMessages.length,
     connection: connectionMessages.length,
   };
@@ -170,7 +173,7 @@ export default function BlockTerminalShell({
         <div className="flex min-w-0 flex-wrap items-center gap-1.5" role="group" aria-label="Terminal views">
           {TAB_OPTIONS.map((tab) => {
             const isActive = activeTab === tab.id;
-            const count = tab.id === "serial" ? serialMessages.length : tab.id === "build" ? buildMessages.length : connectionMessages.length;
+            const count = channelCounts[tab.id];
             return (
               <button
                 key={tab.id}
@@ -193,13 +196,13 @@ export default function BlockTerminalShell({
         <div className="flex items-center gap-1.5">
           <span
             className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] ${
-              webSerial.isConnected
+              webSerial.isConnected || isSimulating
                 ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
                 : "ui-pill-surface text-[var(--ui-color-text-soft)]"
             }`}
           >
             <Radio size={12} />
-            {webSerial.isConnected ? "Connected" : "Disconnected"}
+            {webSerial.isConnected ? "Connected" : isSimulating ? "Simulating" : "Disconnected"}
           </span>
           <button
             type="button"
@@ -219,7 +222,7 @@ export default function BlockTerminalShell({
             webSerial={webSerial}
             messages={serialMessages}
             emptyTitle="No serial activity yet"
-            emptyBody="Connect a board or wait for serial output to start filling this monitor."
+            emptyBody="Run the simulation or connect a board. Whatever your program prints with Serial shows up here."
           />
         ) : null}
 

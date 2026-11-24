@@ -1,7 +1,8 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+﻿import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { RotateCcw, SendHorizontal, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import type { SerialMessage, useWebSerial } from '../../hooks/useWebSerial';
+import { useSimulationStore } from '@/stores/simulationStore';
 
 interface ConsolePanelProps {
     webSerial: ReturnType<typeof useWebSerial>;
@@ -19,7 +20,16 @@ export default function ConsolePanel({
     emptyBody = 'Connect a board or run something to see messages here.',
 }: ConsolePanelProps) {
     const { isConnected, messages, writeText, clearMessages, baudRate, setBaudRate } = webSerial;
-    const visibleMessages = filteredMessages ?? messages;
+    const simulatedLines = useSimulationStore((state) => state.simulatedSerialLines);
+    const clearSimulatedLines = useSimulationStore((state) => state.clearSimulatedSerialLines);
+    // What the simulated board prints comes after the real board's messages.
+    const visibleMessages = useMemo<SerialMessage[]>(
+        () => [
+            ...(filteredMessages ?? messages),
+            ...simulatedLines.map((text, index) => ({ type: 'app' as const, text, timestamp: index, source: 'simulation' as const })),
+        ],
+        [filteredMessages, messages, simulatedLines]
+    );
     const [inputValue, setInputValue] = useState('');
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -98,7 +108,10 @@ export default function ConsolePanel({
                     </label>
                     <button
                         type="button"
-                        onClick={clearMessages}
+                        onClick={() => {
+                            clearMessages();
+                            clearSimulatedLines();
+                        }}
                         className="ui-action-quiet inline-flex h-9 items-center justify-center rounded-[12px] px-3 text-xs font-semibold uppercase tracking-[0.14em] transition-colors"
                         title="Clear terminal"
                     >
@@ -119,7 +132,7 @@ export default function ConsolePanel({
                 ) : (
                     <div className="space-y-1.5">
                         {visibleMessages.map((msg, index: number) => {
-                            let label = 'App';
+                            let label = msg.source === 'simulation' ? 'Simulation' : 'App';
                             let toneClass = 'ui-elevated-surface text-[var(--ui-color-text-on-surface)]';
 
                             switch (msg.type) {

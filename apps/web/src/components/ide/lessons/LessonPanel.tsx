@@ -338,7 +338,8 @@ export default function LessonPanel() {
     <aside
       ref={panelRef}
       className="ui-always-dark pointer-events-auto absolute z-[60] flex w-[360px] max-w-[calc(100%-2rem)] flex-col rounded-2xl border border-white/10 bg-[#0d1322]/95 p-4 text-slate-100 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)] backdrop-blur"
-      style={{ right: panelOffset.right, bottom: panelOffset.bottom }}
+      // Never taller than the space above its bottom edge, so the header stays on screen.
+      style={{ right: panelOffset.right, bottom: panelOffset.bottom, maxHeight: `calc(100% - ${panelOffset.bottom + 8}px)` }}
       aria-label="Lesson guide"
       data-testid="lesson-panel"
     >
@@ -351,7 +352,7 @@ export default function LessonPanel() {
           </p>
         ) : null
       ) : (
-        <div className="mt-3 max-h-[min(60vh,520px)] overflow-y-auto pr-1">
+        <div className="mt-3 max-h-[min(60vh,520px)] min-h-0 flex-1 overflow-y-auto pr-1">
           {stepIndex < 0 ? (
             <ActivityIntro activity={activity} onStart={() => goTo(activityIndex, 0)} />
           ) : isSummary ? (
