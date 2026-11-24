@@ -205,6 +205,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isCancelled = true;
       controller.abort();
       window.clearTimeout(timeoutId);
+      // A cancelled check never clears isLoading, so let the next mount run it again.
+      // Without this, a remount mid-check (React dev mode always does one) left the
+      // app on "Restoring your workspace" forever.
+      hasInitializedAuth.current = false;
     };
   }, [clearAuthState]);
 
