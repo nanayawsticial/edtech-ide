@@ -8,6 +8,7 @@
 //   compile_sketch                  arduino-cli compile -> .hex
 //   arduino_cli_json                arduino-cli lib list/search/install/uninstall
 //   serial_*                        native serial ports behind navigator.serial
+//                                   (serial_close_all frees ports a reloaded page forgot)
 //                                   (apps/web/src/lib/desktop/desktopSerial.ts)
 // The web side of each command lives in apps/web/src/lib/desktop/.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -326,8 +327,29 @@ fn projects_save(app: AppHandle, data: String) -> Result<(), String> {
 // ---------------------------------------------------------------------------------------------
 
 struct OpenPort {
+    path: String,
     port: Box<dyn serialport::SerialPort>,
     stop: Arc<AtomicBool>,
+    reader: Option<std::thread::JoinHandle<()>>,
+}
+
+impl OpenPort {
+    /// Stops the reader thread and waits for it, so the OS handle is really released when this
+    /// returns (Windows lets only one program open a COM port at a time).
+    fn shut(mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        drop(self.port);
+        if let Some(reader) = self.reader.take() {
+            // The thread checks `stop` after each 20 ms read timeout. Never block the app for long.
+            let deadline = std::time::Instant::now() + Duration::from_millis(500);
+            while !reader.is_finished() && std::time::Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            if reader.is_finished() {
+                let _ = reader.join();
+            }
+        }
+    }
 }
 
 #[derive(Default)]
@@ -401,6 +423,21 @@ fn serial_open(
     path: String,
     baud_rate: u32,
 ) -> Result<u32, String> {
+    // A port this app still holds for the same device (for example after the page reloaded and
+    // forgot it) is released first, or the open below would be refused.
+    let stale: Vec<OpenPort> = {
+        let mut ports = lock_ports(&state)?;
+        let ids: Vec<u32> = ports
+            .iter()
+            .filter(|(_, open)| open.path == path)
+            .map(|(id, _)| *id)
+            .collect();
+        ids.into_iter().filter_map(|id| ports.remove(&id)).collect()
+    };
+    for open in stale {
+        open.shut();
+    }
+
     let port = serialport::new(&path, baud_rate)
         .timeout(Duration::from_millis(20))
         .open()
@@ -413,7 +450,7 @@ fn serial_open(
     let events = app.clone();
 
     // Reader thread: forwards bytes to the web side until the port is closed or fails.
-    std::thread::spawn(move || {
+    let reader_thread = std::thread::spawn(move || {
         let mut buffer = [0u8; 4096];
         while !thread_stop.load(Ordering::SeqCst) {
             match reader.read(&mut buffer) {
@@ -448,7 +485,15 @@ fn serial_open(
         }
     });
 
-    lock_ports(&state)?.insert(id, OpenPort { port, stop });
+    lock_ports(&state)?.insert(
+        id,
+        OpenPort {
+            path,
+            port,
+            stop,
+            reader: Some(reader_thread),
+        },
+    );
     Ok(id)
 }
 
@@ -484,9 +529,19 @@ fn serial_set_signals(
 
 #[tauri::command]
 fn serial_close(state: State<'_, SerialState>, id: u32) -> Result<(), String> {
-    if let Some(open) = lock_ports(&state)?.remove(&id) {
-        // The reader thread notices within one read timeout (20 ms) and drops its handle.
-        open.stop.store(true, Ordering::SeqCst);
+    let open = lock_ports(&state)?.remove(&id);
+    if let Some(open) = open {
+        open.shut();
+    }
+    Ok(())
+}
+
+/// Called when the web page starts: a reloaded page has forgotten any port it opened before.
+#[tauri::command]
+fn serial_close_all(state: State<'_, SerialState>) -> Result<(), String> {
+    let all: Vec<OpenPort> = lock_ports(&state)?.drain().map(|(_, open)| open).collect();
+    for open in all {
+        open.shut();
     }
     Ok(())
 }
@@ -504,7 +559,8 @@ fn main() {
             serial_open,
             serial_write,
             serial_set_signals,
-            serial_close
+            serial_close,
+            serial_close_all
         ])
         .run(tauri::generate_context!())
         .expect("error while running Sticial Studio");

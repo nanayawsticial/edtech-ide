@@ -299,6 +299,10 @@ export function installDesktopSerial() {
   const serial = new DesktopSerial();
   Object.defineProperty(navigator, 'serial', { value: serial, configurable: true });
 
+  // A reload or page change forgets open ports while the app still holds them, which blocks the
+  // board for every uploader (here, the Arduino IDE, the browser) until the app quits.
+  void desktopInvoke<void>('serial_close_all').catch(() => undefined);
+
   void desktopListen<SerialDataEvent>('serial-data', ({ id, data }) => openPorts.get(id)?.receive(data));
   void desktopListen<SerialClosedEvent>('serial-closed', ({ id, reason }) => {
     const port = openPorts.get(id);
