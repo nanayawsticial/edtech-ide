@@ -2,6 +2,8 @@
 
 import { Check, Sparkles } from 'lucide-react';
 
+import { useLessonStore } from '@/stores/lessonStore';
+
 import { LEARNING_GUIDE_ACTION_LABELS, type CoachMilestone, type LearningGuide, type LearningGuideActionId } from './learningGuide';
 
 type CoachCardProps = {
@@ -23,6 +25,12 @@ type CoachCardProps = {
 export function CoachCard({ isOpen, onOpenChange, milestones, guide, onAction }: CoachCardProps) {
   const doneCount = milestones.filter((milestone) => milestone.done).length;
   const actionId = guide.actionId;
+  // A course lesson brings its own step-by-step guide; two guides at once would compete.
+  const lessonOpen = useLessonStore((state) => state.active !== null);
+
+  if (lessonOpen) {
+    return null;
+  }
 
   if (!isOpen) {
     return (

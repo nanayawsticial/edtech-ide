@@ -9,6 +9,8 @@ export type HardwareEnvironment = 'virtual' | 'physical';
 export interface PendingProjectIntent {
     source: 'wizard' | 'course';
     projectName?: string | null;
+    /** Course lesson to guide the learner through (see lib/lessons). */
+    lessonSlug?: string | null;
 }
 
 export interface BoardContextValue {
@@ -62,6 +64,7 @@ function normalizePendingProjectIntent(value: unknown): PendingProjectIntent | n
 
     const source = (value as PendingProjectIntent).source;
     const projectName = (value as PendingProjectIntent).projectName;
+    const lessonSlug = (value as PendingProjectIntent).lessonSlug;
     if (source !== 'wizard' && source !== 'course') {
         return null;
     }
@@ -69,6 +72,7 @@ function normalizePendingProjectIntent(value: unknown): PendingProjectIntent | n
     return {
         source,
         projectName: typeof projectName === 'string' && projectName.trim().length > 0 ? projectName.trim() : null,
+        lessonSlug: typeof lessonSlug === 'string' && lessonSlug.trim().length > 0 ? lessonSlug.trim() : null,
     };
 }
 

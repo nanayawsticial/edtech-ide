@@ -21,6 +21,7 @@ export default function StartProjectPage() {
         const generatorParam = searchParams.get('generator');
         const environmentParam = searchParams.get('environment');
         const projectName = searchParams.get('name');
+        const lessonSlug = searchParams.get('lesson');
 
         const board = boardParam && boardParam in BOARD_CONFIG ? boardParam : 'Arduino Uno';
         const boardConfig = BOARD_CONFIG[board];
@@ -35,7 +36,7 @@ export default function StartProjectPage() {
         setLanguage(language);
         setGenerator(generator);
         setEnvironment(environment);
-        setPendingProjectIntent({ source: 'course', projectName });
+        setPendingProjectIntent({ source: 'course', projectName, lessonSlug });
         router.replace('/projects/ide');
     }, [router, searchParams, setCodingMode, setCurrentBoard, setEnvironment, setGenerator, setLanguage, setPendingProjectIntent, setProjectId]);
 

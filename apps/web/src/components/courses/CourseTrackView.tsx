@@ -10,6 +10,7 @@ import { JourneyProgress } from '@/components/ui/JourneyProgress';
 import { PageLayout } from '@/components/ui/PageLayout';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { fadeInUp } from '@/components/ui/motion';
+import { getLesson } from '@/lib/lessons';
 import { ArrowLeft, ArrowRight, BookOpen, CircuitBoard, Cpu, GraduationCap, Sparkles } from 'lucide-react';
 
 interface CourseLesson {
@@ -42,7 +43,7 @@ const icons = {
 } as const;
 
 function buildLessonHref(lesson: CourseLesson) {
-  return `/projects/start?mode=${lesson.mode}&board=${encodeURIComponent(lesson.board)}&language=${lesson.language}&generator=${lesson.generator}&environment=${lesson.environment}&name=${encodeURIComponent(lesson.title)}`;
+  return `/projects/start?mode=${lesson.mode}&board=${encodeURIComponent(lesson.board)}&language=${lesson.language}&generator=${lesson.generator}&environment=${lesson.environment}&name=${encodeURIComponent(lesson.title)}&lesson=${encodeURIComponent(lesson.slug)}`;
 }
 
 function getLessonStatus(index: number) {
@@ -128,6 +129,7 @@ export function CourseTrackView({ track }: { track: CourseTrack }) {
             {track.lessons.map((lesson, index) => {
               const href = buildLessonHref(lesson);
               const status = getLessonStatus(index);
+              const guide = getLesson(lesson.slug);
 
               return (
                 <Card
@@ -135,13 +137,18 @@ export function CourseTrackView({ track }: { track: CourseTrack }) {
                   variant='immersive'
                   eyebrow={`Lesson ${index + 1}`}
                   title={lesson.title}
-                  description={lesson.summary}
+                  description={guide ? guide.activities.map((activity) => activity.title).join(' · ') : lesson.summary}
                   icon={<BookOpen size={22} />}
                   onClick={() => router.push(href)}
                   className='min-h-[260px]'
                 >
                   <div className='space-y-4'>
                     <div className='flex flex-wrap gap-2'>
+                      {guide ? (
+                        <span className='inline-flex rounded-full border border-emerald-400/30 bg-emerald-400/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-200'>
+                          Step-by-step · {guide.activities.length} {guide.activities.length === 1 ? 'activity' : 'activities'}
+                        </span>
+                      ) : null}
                       <span className='inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300'>
                         {status}
                       </span>
