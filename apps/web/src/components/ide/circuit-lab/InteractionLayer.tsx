@@ -11,6 +11,8 @@ interface InteractionLayerProps {
   highlightedPinIds: Set<string>;
   validTargetPinId: string | null;
   mountPreview: MountPreviewState | null;
+  /** While a part is dragged, the pin test markers keep their last positions until the drop. */
+  isDraggingComponent?: boolean;
   wireDraft: WireDraftState | null;
   cursor: string;
   onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
@@ -155,22 +157,146 @@ function ContinuityTargetHighlights({ pins, validTargetPinId, highlightedPinIds 
   );
 }
 
-function BreadboardPinAffordances({
-  pins,
-  highlightedPinIds,
-  validTargetPinId,
-  active,
-}: {
+// The per-pin layers below are drawn per part and memoised, so dragging one part re-renders only
+// that part's pins instead of every breadboard hole (hundreds of pins, several elements each).
+function samePinList(a: WorldPinNode[], b: WorldPinNode[]) {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) {
+    const left = a[index];
+    const right = b[index];
+    if (
+      left.id !== right.id ||
+      left.position.x !== right.position.x ||
+      left.position.y !== right.position.y ||
+      left.signalState !== right.signalState ||
+      left.isMounted !== right.isMounted ||
+      left.nodeId !== right.nodeId ||
+      left.kind !== right.kind
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Same pins, laid out the same way relative to the group's first pin. A part that only moved
+ * passes this check, so its pins are re-positioned by one group transform instead of each pin.
+ */
+function samePinLayout(a: WorldPinNode[], b: WorldPinNode[]) {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  if (a.length === 0) return true;
+  const originA = a[0].position;
+  const originB = b[0].position;
+  for (let index = 0; index < a.length; index += 1) {
+    const left = a[index];
+    const right = b[index];
+    if (
+      left.id !== right.id ||
+      left.kind !== right.kind ||
+      Math.abs(left.position.x - originA.x - (right.position.x - originB.x)) > 1e-6 ||
+      Math.abs(left.position.y - originA.y - (right.position.y - originB.y)) > 1e-6
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function sameIdSet(a: Set<string>, b: Set<string>) {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const value of a) {
+    if (!b.has(value)) return false;
+  }
+  return true;
+}
+
+function groupPinsByComponent(pins: WorldPinNode[]) {
+  const groups = new Map<string, WorldPinNode[]>();
+  for (const pin of pins) {
+    // Breadboard holes carry no component id; they all move together, so they form one group.
+    const key = pin.componentId ?? (pin.kind === 'breadboard' ? 'breadboard-holes' : `node:${pin.nodeId}`);
+    const group = groups.get(key);
+    if (group) group.push(pin);
+    else groups.set(key, [pin]);
+  }
+  return [...groups.entries()];
+}
+
+const PinSignalGroup = React.memo(
+  function PinSignalGroup({ pins }: { pins: WorldPinNode[] }) {
+    return (
+      <>
+        {pins.map((pin) => (
+          <SignalIndicator key={`${pin.id}-signal`} pin={pin} />
+        ))}
+      </>
+    );
+  },
+  (previous, next) => samePinList(previous.pins, next.pins)
+);
+
+/**
+ * Invisible markers that tests and tools use to find pins by id and position. They are frozen
+ * during a drag: rewriting their coordinates every frame restyled one element per pin (over
+ * 1,600 when the breadboard moves). They update on drop.
+ */
+const PinTestMarkerGroup = React.memo(
+  function PinTestMarkerGroup({ pins }: { pins: WorldPinNode[]; frozen: boolean }) {
+    return (
+      <>
+        {pins.map((pin) => (
+          <g
+            key={`${pin.id}-test-marker`}
+            data-pin-id={pin.id}
+            data-node-id={pin.nodeId}
+            data-pin-kind={pin.kind}
+            data-component-id={pin.componentId ?? ''}
+            data-pin-mounted={String(Boolean(pin.isMounted))}
+            data-pin-x={pin.position.x}
+            data-pin-y={pin.position.y}
+          />
+        ))}
+      </>
+    );
+  },
+  (previous, next) => (previous.frozen && next.frozen) || (previous.frozen === next.frozen && samePinList(previous.pins, next.pins))
+);
+
+interface BreadboardPinAffordancesProps {
   pins: WorldPinNode[];
   highlightedPinIds: Set<string>;
   validTargetPinId: string | null;
   active: boolean;
-}) {
+}
+
+const BreadboardPinAffordances = React.memo(
+  BreadboardPinAffordancesImpl,
+  (previous: BreadboardPinAffordancesProps, next: BreadboardPinAffordancesProps) =>
+    previous.active === next.active &&
+    previous.validTargetPinId === next.validTargetPinId &&
+    sameIdSet(previous.highlightedPinIds, next.highlightedPinIds) &&
+    samePinLayout(previous.pins, next.pins)
+);
+
+/** Drawn relative to the first pin; the caller wraps it in a translate to that pin's position. */
+function BreadboardPinAffordancesImpl({
+  pins,
+  highlightedPinIds,
+  validTargetPinId,
+  active,
+}: BreadboardPinAffordancesProps) {
+  const origin = pins[0]?.position ?? { x: 0, y: 0 };
   return (
     <g>
       {pins
         .filter((pin) => pin.kind === 'breadboard')
         .map((pin) => {
+          const x = pin.position.x - origin.x;
+          const y = pin.position.y - origin.y;
           const isTarget = validTargetPinId === pin.id;
           const isHighlighted = highlightedPinIds.has(pin.id);
           const outerOpacity = isTarget ? 0.44 : isHighlighted ? 0.24 : active ? 0.1 : 0.045;
@@ -180,8 +306,8 @@ function BreadboardPinAffordances({
 
           return (
             <g key={`${pin.id}-breadboard-affordance`}>
-              <circle cx={pin.position.x} cy={pin.position.y} r={isTarget ? 6.6 : isHighlighted ? 5.2 : 4.2} fill={fill} opacity={outerOpacity} />
-              <circle cx={pin.position.x} cy={pin.position.y} r={isTarget ? 3.9 : isHighlighted ? 3.2 : 2.6} fill="transparent" stroke={stroke} strokeWidth={isTarget ? 1.35 : 0.95} opacity={innerOpacity} />
+              <circle cx={x} cy={y} r={isTarget ? 6.6 : isHighlighted ? 5.2 : 4.2} fill={fill} opacity={outerOpacity} />
+              <circle cx={x} cy={y} r={isTarget ? 3.9 : isHighlighted ? 3.2 : 2.6} fill="transparent" stroke={stroke} strokeWidth={isTarget ? 1.35 : 0.95} opacity={innerOpacity} />
             </g>
           );
         })}
@@ -196,6 +322,7 @@ function InteractionLayerImpl({
   highlightedPinIds,
   validTargetPinId,
   mountPreview,
+  isDraggingComponent,
   wireDraft,
   cursor,
   onPointerDown,
@@ -204,10 +331,12 @@ function InteractionLayerImpl({
   onPointerCancel,
   onWheel,
 }: InteractionLayerProps) {
+  const pinGroups = React.useMemo(() => groupPinsByComponent(pins), [pins]);
+  const affordancesActive = Boolean(mountPreview || wireDraft || highlightedPinIds.size > 0 || validTargetPinId);
+
   return (
     <div
       className="absolute inset-0 touch-none"
-      style={{ cursor }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -225,16 +354,20 @@ function InteractionLayerImpl({
     >
       <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" width="100%" height="100%" aria-hidden="true">
         <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.scale})`}>
-          {pins.map((pin) => (
-            <SignalIndicator key={`${pin.id}-signal`} pin={pin} />
+          {pinGroups.map(([key, groupPins]) => (
+            <PinSignalGroup key={`${key}-signals`} pins={groupPins} />
           ))}
 
-          <BreadboardPinAffordances
-            pins={pins}
-            highlightedPinIds={highlightedPinIds}
-            validTargetPinId={validTargetPinId}
-            active={Boolean(mountPreview || wireDraft || highlightedPinIds.size > 0 || validTargetPinId)}
-          />
+          {pinGroups.map(([key, groupPins]) => (
+            <g key={`${key}-affordances`} transform={`translate(${groupPins[0].position.x} ${groupPins[0].position.y})`}>
+              <BreadboardPinAffordances
+                pins={groupPins}
+                highlightedPinIds={highlightedPinIds}
+                validTargetPinId={validTargetPinId}
+                active={affordancesActive}
+              />
+            </g>
+          ))}
 
           {pins
             .filter((pin) => visiblePinTargetIds.has(pin.id) && pin.kind !== 'breadboard')
@@ -248,19 +381,8 @@ function InteractionLayerImpl({
               );
             })}
 
-          {pins.map((pin) => (
-            <g
-              key={`${pin.id}-test-marker`}
-              data-pin-id={pin.id}
-              data-node-id={pin.nodeId}
-              data-pin-kind={pin.kind}
-              data-component-id={pin.componentId ?? ''}
-              data-pin-mounted={String(Boolean(pin.isMounted))}
-              data-pin-x={pin.position.x}
-              data-pin-y={pin.position.y}
-            >
-              <circle cx={pin.position.x} cy={pin.position.y} r={5} fill="transparent" stroke="transparent" />
-            </g>
+          {pinGroups.map(([key, groupPins]) => (
+            <PinTestMarkerGroup key={`${key}-markers`} pins={groupPins} frozen={Boolean(isDraggingComponent)} />
           ))}
 
           <ContinuityTargetHighlights pins={pins} validTargetPinId={validTargetPinId} highlightedPinIds={highlightedPinIds} />
@@ -321,6 +443,10 @@ function InteractionLayerImpl({
             })}
         </g>
       </svg>
+      {/* The cursor lives on this empty overlay (pointer events still bubble to the layer above).
+          On the layer itself, every cursor change (hover a part, grab, drop) restyled its
+          thousands of pin elements, because cursor is inherited. */}
+      <div className="absolute inset-0" style={{ cursor }} aria-hidden="true" />
     </div>
   );
 }

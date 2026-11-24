@@ -51,7 +51,8 @@ function NativeFrame({ width, height, children }: { width: number; height: numbe
   );
 }
 
-function BreadboardVisual() {
+// The breadboard drawing never changes (hundreds of holes), so render it once.
+const BreadboardVisual = React.memo(function BreadboardVisual() {
   return (
     <svg
       width="100%"
@@ -63,9 +64,47 @@ function BreadboardVisual() {
       <BreadboardSVG />
     </svg>
   );
+});
+
+function sameVisualState(a: Record<string, unknown>, b: Record<string, unknown>) {
+  if (a === b) return true;
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((key) => {
+    const left = a[key];
+    const right = b[key];
+    if (Array.isArray(left) && Array.isArray(right)) {
+      return left.length === right.length && left.every((value, index) => value === right[index]);
+    }
+    return Object.is(left, right);
+  });
 }
 
-export default function ComponentRenderer({
+/** Re-render a part only when something it draws changed (the scene is rebuilt on every drag frame). */
+function sameComponentRender(previous: ComponentRendererProps, next: ComponentRendererProps) {
+  const a = previous.node;
+  const b = next.node;
+  return (
+    previous.isHovered === next.isHovered &&
+    previous.isSelected === next.isSelected &&
+    previous.isConnected === next.isConnected &&
+    previous.isDragging === next.isDragging &&
+    a.component.id === b.component.id &&
+    Boolean(a.component.mountedPlacement?.mounted) === Boolean(b.component.mountedPlacement?.mounted) &&
+    a.definition === b.definition &&
+    a.position.x === b.position.x &&
+    a.position.y === b.position.y &&
+    a.rotation === b.rotation &&
+    a.size.width === b.size.width &&
+    a.size.height === b.size.height &&
+    a.isPowered === b.isPowered &&
+    sameVisualState(a.visualState as Record<string, unknown>, b.visualState as Record<string, unknown>)
+  );
+}
+
+export default React.memo(ComponentRenderer, sameComponentRender);
+
+function ComponentRenderer({
   node,
   isHovered = false,
   isSelected = false,
@@ -173,15 +212,16 @@ export default function ComponentRenderer({
     }
   })();
 
+  // Position with a transform (not left/top) so moving a part only shifts its layer on the GPU
+  // instead of re-laying out and repainting it on every pointer move. No transition while
+  // dragging, or the part would trail behind the pointer.
   return (
     <div
-      className={`absolute pointer-events-none select-none transition-transform duration-150 ${isSelected ? 'animate-component-selected' : ''}`}
+      className={`absolute left-0 top-0 pointer-events-none select-none ${isDragging ? '' : 'transition-transform duration-150'}`}
       style={{
-        left: node.position.x,
-        top: node.position.y,
         width: size.width,
         height: size.height,
-        transform: `rotate(${rotation}deg)`,
+        transform: `translate(${node.position.x}px, ${node.position.y}px) rotate(${rotation}deg)`,
         transformOrigin: 'center center',
         zIndex: isSelected ? 30 : isDragging ? 28 : isHovered ? 24 : definition.id === 'BREADBOARD' ? 4 : 12,
         filter: showFrame
@@ -193,7 +233,7 @@ export default function ComponentRenderer({
           : isPowered
             ? 'drop-shadow(0 0 12px rgba(16,185,129,0.14))'
             : undefined,
-        willChange: 'transform,left,top',
+        willChange: 'transform',
       }}
       data-component-id={component.id}
       data-component-type={definition.id}
@@ -214,6 +254,15 @@ export default function ComponentRenderer({
           borderRadius: definition.id === 'BREADBOARD' ? 10 : 18,
         }}
       >
+        {isSelected ? (
+          // Pulsing halo for the selected part. Only its opacity animates, which the GPU handles
+          // without repainting the part (an animated drop-shadow filter repainted it every frame).
+          <div
+            className="animate-component-selected-halo pointer-events-none absolute inset-[-6px] rounded-[20px] shadow-[0_0_16px_rgba(34,211,238,0.7)]"
+            aria-hidden="true"
+          />
+        ) : null}
+
         {usesNativeFrame ? (
           <NativeFrame width={definition.size.width} height={definition.size.height}>{content}</NativeFrame>
         ) : (

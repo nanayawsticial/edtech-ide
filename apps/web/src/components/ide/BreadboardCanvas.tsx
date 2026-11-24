@@ -988,7 +988,9 @@ export default function BreadboardCanvas({
           ids.add(pin.id);
         }
       });
-    } else {
+    } else if (interaction.mode.type !== 'DRAGGING_COMPONENT') {
+      // While a part is being dragged its pin dots are hidden: redrawing them at a new position
+      // on every pointer move was a large share of the drag's cost. They return on drop.
       scene.pins.forEach((pin) => {
         if (pin.kind === 'breadboard') {
           return;
@@ -1294,6 +1296,7 @@ export default function BreadboardCanvas({
                 ? interaction.mode.hoveredTargetPinId
                 : null,
             mountPreview: dragPreview?.mountPreview ?? null,
+            isDraggingComponent: interaction.mode.type === 'DRAGGING_COMPONENT',
             cursor,
             onPointerDown: interaction.handlePointerDown,
             onPointerMove: interaction.handlePointerMove,
