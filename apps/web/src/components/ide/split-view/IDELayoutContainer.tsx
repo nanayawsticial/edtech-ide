@@ -13,6 +13,8 @@ import { useBlocklyStore } from '@/stores/blocklyStore';
 import { useCircuitStore } from '@/stores/circuitStore';
 import { useSimulationStore } from '@/stores/simulationStore';
 import { CIRCUIT_FILE_NAME, deserializeCircuit } from '@/lib/circuit/circuitSerializer';
+import { mergeCircuitFileIntoProjectFiles } from '@/lib/projects/projectPersistence';
+import { downloadProjectFile } from '@/lib/projects/projectFileActions';
 import TopToolbar from '../TopToolbar';
 import CircuitLabTopBar from '../circuit-lab/TopBar';
 import CanvasWorkspace from '../circuit-lab/CanvasWorkspace';
@@ -128,6 +130,28 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
   const circuit = useCircuitOrchestrator();
   const compile = useCompileController();
   const autoSaveManager = useAutoSaveManager();
+
+  // Export the work as it is now (unsaved changes included) to a .sticial file.
+  const handleExportProject = React.useCallback(() => {
+    const { components, nets } = useCircuitStore.getState();
+    const files = mergeCircuitFileIntoProjectFiles({
+      files: useEditorStore.getState().files,
+      environment: editor.environment,
+      circuitData: { components, nets },
+    });
+    const fileName = downloadProjectFile(
+      projectName,
+      {
+        board: editor.currentBoard,
+        mode: editor.codingMode ?? 'block',
+        language: editor.currentLanguage ?? null,
+        generator: editor.currentGenerator ?? null,
+        environment: editor.environment,
+      },
+      files
+    );
+    webSerial.addMessage('system', `Project exported as ${fileName}. Find it in your Downloads folder.`);
+  }, [editor.codingMode, editor.currentBoard, editor.currentGenerator, editor.currentLanguage, editor.environment, projectName, webSerial]);
 
   const layout = useIDELayoutState({
     environment: editor.environment,
@@ -519,6 +543,7 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
               onSaveProject={() => eventBus.emit('project:save-request', { origin: 'manual' })}
               onOpenProject={() => router.push('/dashboard')}
               onNewSketch={handleRequestNewSketch}
+              onExportProject={handleExportProject}
               onOpenPreferences={openPreferences}
               onOpenCodingEnvironment={() => layout.setStudioView('code')}
               saveStatusText={autoSaveManager.visibleSaveStatusText}
@@ -561,6 +586,7 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
               onResetSimulation={() => circuit.simulationControls?.reset()}
               onSaveProject={() => eventBus.emit('project:save-request', { origin: 'manual' })}
               onNewSketch={handleRequestNewSketch}
+              onExportProject={handleExportProject}
               onOpenPreferences={openPreferences}
               onVerify={() => eventBus.emit('compile:verify-request', undefined)}
               onUpload={() => eventBus.emit('compile:upload-request', undefined)}

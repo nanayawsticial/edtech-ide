@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Blocks, CircuitBoard, Code2, FolderOpen, Plus, Save, Settings2, Trash2 } from 'lucide-react';
+import { Blocks, CircuitBoard, Code2, Download, FolderOpen, Plus, Save, Settings2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { fadeInUp } from '@/components/ui/motion';
@@ -24,6 +24,8 @@ interface CircuitLabTopBarProps {
   onOpenProject: () => void;
   onNewSketch: () => void;
   onOpenPreferences: () => void;
+  /** Saves the project as a .sticial file. */
+  onExportProject?: () => void;
   onOpenCodingEnvironment: () => void;
   saveStatusText?: string | null;
   saveStatusTone?: 'neutral' | 'success' | 'error';
@@ -54,6 +56,7 @@ export default function TopBar({
   onOpenProject,
   onNewSketch,
   onOpenPreferences,
+  onExportProject,
   onOpenCodingEnvironment,
   saveStatusText,
   saveStatusTone = 'neutral',
@@ -151,6 +154,17 @@ export default function TopBar({
             >
               Projects
             </Button>
+            {onExportProject ? (
+              <Button
+                variant="ghost"
+                icon={<Download size={15} />}
+                onClick={onExportProject}
+                title="Save this project as a file you can copy to another computer or hand in"
+                className="min-h-10 rounded-full border border-white/8 bg-white/[0.03] px-4 text-sm text-slate-300 hover:border-white/14 hover:bg-white/[0.06] hover:text-white"
+              >
+                Export
+              </Button>
+            ) : null}
             <Button
               variant="ghost"
               icon={<Plus size={15} />}

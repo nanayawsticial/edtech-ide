@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Blocks, CheckCircle2, ChevronRight, Code2, MoreHorizontal, Play, Plus, Rocket, RotateCcw, Save, Settings2, Square } from 'lucide-react';
+import { ArrowLeft, Blocks, CheckCircle2, ChevronRight, Code2, Download, MoreHorizontal, Play, Plus, Rocket, RotateCcw, Save, Settings2, Square } from 'lucide-react';
 import type { CodingMode } from '@/contexts/BoardContext';
 import { Button } from '@/components/ui/Button';
 import { MenuButton } from '@/components/ui/MenuButton';
@@ -32,6 +32,8 @@ interface CodingEnvironmentTopBarProps {
   onSaveProject: () => void;
   onNewSketch: () => void;
   onOpenPreferences: () => void;
+  /** Saves the project as a .sticial file. */
+  onExportProject?: () => void;
   onVerify?: () => void;
   onUpload?: () => void;
   saveStatusText?: string | null;
@@ -60,6 +62,7 @@ export default function CodingEnvironmentTopBar({
   onSaveProject,
   onNewSketch,
   onOpenPreferences,
+  onExportProject,
   onVerify,
   onUpload,
   saveStatusText,
@@ -163,6 +166,7 @@ export default function CodingEnvironmentTopBar({
               className='inline-flex min-h-11 items-center gap-2 rounded-[16px] border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white transition-colors hover:border-white/16 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50'
               items={[
                 { id: 'new-sketch', label: 'New Sketch', icon: <Plus size={15} />, onSelect: onNewSketch },
+                ...(onExportProject ? [{ id: 'export', label: 'Export project file', icon: <Download size={15} />, onSelect: onExportProject }] : []),
                 { id: 'reset', label: 'Reset simulation', icon: <RotateCcw size={15} />, onSelect: onResetSimulation, disabled: !canResetSimulation },
                 { id: 'preferences', label: 'Preferences', icon: <Settings2 size={15} />, onSelect: onOpenPreferences },
               ]}
