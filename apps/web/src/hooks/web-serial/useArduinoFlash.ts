@@ -29,7 +29,8 @@ const ATMEGA328P = { signature: new Uint8Array([0x1e, 0x95, 0x0f]), pageSize: 12
  * "old bootloader", which listens at 57600 baud instead of 115200.
  */
 const STK500_BOARDS: Record<string, BootloaderSettings[]> = {
-  'Arduino Uno': [{ baudRate: 115200 }],
+  // A second try covers a reset that lands a moment too early or late.
+  'Arduino Uno': [{ baudRate: 115200 }, { label: 'second try', baudRate: 115200 }],
   'Arduino Nano': [{ baudRate: 115200 }, { label: 'old bootloader', baudRate: 57600 }],
 };
 
@@ -82,17 +83,9 @@ export function useArduinoFlash({ addMessage, transport }: UseArduinoFlashOption
           throw new Error('Port disappeared before flashing could start.');
         }
 
-        // Pulse DTR/RTS: on Uno/Nano this resets the chip into its bootloader for about a second.
-        const serialPortWithSignals = port as SerialPort & {
-          setSignals?: (signals: { dataTerminalReady: boolean; requestToSend: boolean }) => Promise<void>;
-        };
-        await serialPortWithSignals.setSignals?.({ dataTerminalReady: false, requestToSend: false });
-        await sleep(250);
-        await serialPortWithSignals.setSignals?.({ dataTerminalReady: true, requestToSend: true });
-        await sleep(50);
-        await serialPortWithSignals.setSignals?.({ dataTerminalReady: false, requestToSend: false });
-        await sleep(50);
-
+        // Same order as the official uploader (avrdude's "arduino" programmer): open the port at the
+        // bootloader speed first, then reset the board through DTR/RTS on that open port. Reopening
+        // after the reset can reset the board again at an unknown moment and miss its ~1 s window.
         await transport.reopenPort(settings.baudRate);
 
         const flashingPort = transport.portRef.current;
@@ -115,17 +108,28 @@ export function useArduinoFlash({ addMessage, transport }: UseArduinoFlashOption
         });
         streamBridge = bridge;
 
+        // Bytes from before the reset (the old program printing) would confuse the first sync.
+        let discardIncoming = true;
         void (async () => {
           while (keepReadingBridge) {
             try {
               const { value, done } = await reader.read();
               if (done) break;
-              if (value) bridge.push(Buffer.from(value));
+              if (value && !discardIncoming) bridge.push(Buffer.from(value));
             } catch {
               break;
             }
           }
         })();
+
+        const portWithSignals = flashingPort as SerialPort & {
+          setSignals?: (signals: { dataTerminalReady: boolean; requestToSend: boolean }) => Promise<void>;
+        };
+        await portWithSignals.setSignals?.({ dataTerminalReady: false, requestToSend: false });
+        await sleep(250);
+        await portWithSignals.setSignals?.({ dataTerminalReady: true, requestToSend: true });
+        await sleep(50);
+        discardIncoming = false;
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the library types expect a Node stream
         const stk = new STK500(bridge as any, { name: 'Arduino', baudRate: settings.baudRate, ...ATMEGA328P, timeout: 400 });
@@ -167,7 +171,7 @@ export function useArduinoFlash({ addMessage, transport }: UseArduinoFlashOption
         for (const settings of attempts) {
           try {
             if (settings.label) {
-              addMessage('system', `Trying again for a board with the ${settings.label} (${settings.baudRate} baud)...`);
+              addMessage('system', settings.label === 'second try' ? 'No answer yet. Resetting the board and trying once more...' : `Trying again for a board with the ${settings.label} (${settings.baudRate} baud)...`);
             }
             await flashOnce(hexData, settings);
             addMessage('system', 'Upload complete. The board is restarting with your program.');
