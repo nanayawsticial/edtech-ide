@@ -34,7 +34,8 @@ const STORAGE_KEY = "edtech-studio-preferences";
 const LEGACY_EDITOR_FONT_SIZE_KEY = "__sticial_editor_font_size";
 
 const DEFAULT_PREFERENCES: StudioPreferencesState = {
-  autoSave: false,
+  // Saved projects save themselves a moment after each change; learners forget to press Save.
+  autoSave: true,
   showAdvancedBlocks: false,
   editorFontSize: DEFAULT_EDITOR_FONT_SIZE,
   editorWordWrap: "off",

@@ -60,6 +60,8 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const [projectNameState, setProjectNameState] = useState(UNTITLED_PROJECT_NAME);
   const [hasLoadedProjectFiles, setHasLoadedProjectFiles] = useState(() => !getStoredActiveProjectId());
   const filesRef = useRef<FileItem[]>(useEditorStore.getState().files);
+  // The project the workspace shows now: a download for a project left behind must not land in it.
+  const currentProjectIdRef = useRef<string | null>(projectId);
   const activeFileIdRef = useRef<string | null>(useEditorStore.getState().activeFileId);
   const { token } = useAuth();
   const {
@@ -136,6 +138,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   );
 
   const setProjectId = useCallback((id: string | null) => {
+    currentProjectIdRef.current = id;
     setProjectIdState(id);
     setHasLoadedProjectFiles(!id);
     if (!id) {
@@ -158,6 +161,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
     clearPendingProjectIntent();
     persistActiveProjectId(null);
+    currentProjectIdRef.current = null;
     setProjectIdState(null);
     setProjectNameState(UNTITLED_PROJECT_NAME);
     setHasLoadedProjectFiles(true);
@@ -179,6 +183,11 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         headers: { Authorization: `Bearer ${token}` },
       });
 
+      if (currentProjectIdRef.current !== projectId) {
+        // Another project (or a new sketch) was opened while this one downloaded.
+        return;
+      }
+
       if (!res.ok) {
         if (res.status === 404 || res.status === 401) {
           console.warn(`[ProjectContext] Project ${projectId} not found (${res.status}). Clearing project state.`);
@@ -197,6 +206,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await safeJson<PersistedProjectRecord | null>(res);
+      if (currentProjectIdRef.current !== projectId) {
+        return;
+      }
       const resolvedMeta = applyProjectMetaToBoardContext(data ?? {});
       const nextProjectState = resolveProjectFilesState({
         record: data,
