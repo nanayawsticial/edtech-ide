@@ -247,6 +247,20 @@ const ORDER_SAMPLES = {
   writeOnly: rootXml('', writePin13('HIGH')),
   // "set pin 13 to INPUT" then digital write: the user's explicit mode must win.
   explicitInput: rootXml('<block type="arduino_pinMode"><field name="PIN">13</field><field name="MODE">INPUT</field></block>', writePin13('HIGH')),
+  // Variables (Blockly's built-in category, not in the registry) and "count with" counting down.
+  variables: `<xml xmlns="https://developers.google.com/blockly/xml"><variables><variable id="v">count</variable></variables>
+  <block type="arduino_setup_loop" x="0" y="0"><statement name="LOOP">
+    <block type="variables_set"><field name="VAR" id="v">count</field><value name="VALUE"><shadow type="math_number"><field name="NUM">5</field></shadow></value>
+      <next><block type="math_change"><field name="VAR" id="v">count</field><value name="DELTA"><shadow type="math_number"><field name="NUM">2</field></shadow></value>
+        <next><block type="controls_for_loop"><field name="VAR" id="v">count</field>
+          <value name="FROM"><shadow type="math_number"><field name="NUM">10</field></shadow></value>
+          <value name="TO"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+          <value name="BY"><shadow type="math_number"><field name="NUM">2</field></shadow></value>
+          <statement name="DO"><block type="arduino_serialPrintln"><value name="TEXT"><block type="variables_get"><field name="VAR" id="v">count</field></block></value></block></statement>
+        </block></next>
+      </block></next>
+    </block>
+  </statement></block></xml>`,
 };
 const lineIndex = (lines, pattern) => lines.findIndex((line) => pattern.test(line));
 for (const generatorName of Object.keys(generators)) {
@@ -272,6 +286,9 @@ for (const generatorName of Object.keys(generators)) {
       if (!/^  for \(/m.test(programs.sample) || !/^    digitalWrite\(13, HIGH\)/m.test(programs.sample)) fail('loop() body should be indented 2 spaces, nested blocks 4');
       if (!/pinMode\(13, OUTPUT\);/.test(programs.writeOnly)) fail('digital write without "set pin" must add pinMode(13, OUTPUT)');
       if (/pinMode\(13, OUTPUT\)/.test(programs.explicitInput) || !/pinMode\(13, INPUT\)/.test(programs.explicitInput)) fail('an explicit "set pin 13 to INPUT" must not be replaced');
+      if (!/^long count = 0;/m.test(programs.variables)) fail('variables must be declared as globals (long count = 0;)');
+      if (!/count = 5;/.test(programs.variables) || !/count \+= 2;/.test(programs.variables)) fail('set / change variable blocks are missing');
+      if (!/for \(long count = 10; count >= 0; count -= 2\)/.test(programs.variables)) fail('"count with from 10 to 0 by 2" must count down');
     } else {
       for (const [name, code] of Object.entries(programs)) {
         const lines = code.split('\n');
@@ -284,6 +301,8 @@ for (const generatorName of Object.keys(generators)) {
       const print = lineIndex(lines, /^print\(/);
       if (pin < 0 || print < 0 || pin > print) fail('part setup (pin objects) must come before the user\'s setup blocks');
       if (!/machine\.Pin\(13, machine\.Pin\.IN\)/.test(programs.explicitInput)) fail('an explicit "set pin 13 to INPUT" must not be replaced');
+      if (!/for count in range\(10, -1, -2\)/.test(programs.variables)) fail('"count with from 10 to 0 by 2" must count down');
+      if (!/^count = 0$/m.test(programs.variables)) fail('variables must start at 0');
     }
   } catch (error) {
     fail(`throws: ${String(error.message || error).slice(0, 120)}`);

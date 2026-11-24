@@ -2295,7 +2295,37 @@ registerOverrideHandlers(ARDUINO, {
         const to = arduinoValue(block, 'TO', '10');
         const by = arduinoValue(block, 'BY', '1');
         const branch = (arduinoGenerator as any).statementToCode(block, 'DO') || '';
-        return `  for (long ${variable} = ${from}; ${variable} <= ${to}; ${variable} += ${by}) {\n${branch}  }\n`;
+        // Count in whichever direction the numbers go, like Blockly's own "count with":
+        // "from 180 to 0 by 1" counts down. It used to generate i <= 0 and never run.
+        const literal = (code: string) => (/^-?\d+(\.\d+)?$/.test(code.trim()) ? Number(code) : null);
+        const [fromValue, toValue, byValue] = [literal(from), literal(to), literal(by)];
+        if (fromValue !== null && toValue !== null && byValue !== null) {
+            const step = Math.abs(byValue) || 1;
+            return fromValue <= toValue
+                ? `  for (long ${variable} = ${from}; ${variable} <= ${to}; ${variable} += ${step}) {\n${branch}  }\n`
+                : `  for (long ${variable} = ${from}; ${variable} >= ${to}; ${variable} -= ${step}) {\n${branch}  }\n`;
+        }
+        const up = `(${from}) <= (${to})`;
+        return `  for (long ${variable} = ${from}; ${up} ? ${variable} <= (${to}) : ${variable} >= (${to}); ${variable} += ${up} ? abs(${by}) : -abs(${by})) {\n${branch}  }\n`;
+    },
+
+    // --- Variables (Blockly's built-in Variables category) ---
+    // Each variable is a global `long`, declared the first time a block uses it. A "count with"
+    // loop declares its own local copy, which shadows the global inside the loop.
+    variables_get(block: Blockly.Block) {
+        const name = variableFieldName(block, 'VAR', 'x');
+        (arduinoGenerator as any).setups_[`declare_var_${name}`] = `long ${name} = 0;`;
+        return arduinoAtomic(name);
+    },
+    variables_set(block: Blockly.Block) {
+        const name = variableFieldName(block, 'VAR', 'x');
+        (arduinoGenerator as any).setups_[`declare_var_${name}`] = `long ${name} = 0;`;
+        return `  ${name} = ${arduinoValue(block, 'VALUE', '0')};\n`;
+    },
+    math_change(block: Blockly.Block) {
+        const name = variableFieldName(block, 'VAR', 'x');
+        (arduinoGenerator as any).setups_[`declare_var_${name}`] = `long ${name} = 0;`;
+        return `  ${name} += ${arduinoValue(block, 'DELTA', '1')};\n`;
     },
 
     // --- Maths ---
@@ -2764,7 +2794,37 @@ registerOverrideHandlers(MICROPYTHON, {
     },
     controls_for_loop(block: Blockly.Block) {
         const variable = variableFieldName(block, 'VAR', 'i');
-        return `for ${variable} in range(int(${mpValue(block, 'FROM', '1')}), int(${mpValue(block, 'TO', '10')}) + 1, int(${mpValue(block, 'BY', '1')})):\n${mpBranch(block)}`;
+        const from = mpValue(block, 'FROM', '1');
+        const to = mpValue(block, 'TO', '10');
+        const by = mpValue(block, 'BY', '1');
+        // Count down when "from" is bigger than "to" (range() needs a negative step and end - 1).
+        const literal = (code: string) => (/^-?\d+$/.test(code.trim()) ? Number(code) : null);
+        const [fromValue, toValue, byValue] = [literal(from), literal(to), literal(by)];
+        if (fromValue !== null && toValue !== null && byValue !== null) {
+            const step = Math.abs(byValue) || 1;
+            return fromValue <= toValue
+                ? `for ${variable} in range(${from}, ${toValue + 1}, ${step}):\n${mpBranch(block)}`
+                : `for ${variable} in range(${from}, ${toValue - 1}, -${step}):\n${mpBranch(block)}`;
+        }
+        const up = `int(${from}) <= int(${to})`;
+        return `for ${variable} in range(int(${from}), int(${to}) + (1 if ${up} else -1), abs(int(${by})) if ${up} else -abs(int(${by}))):\n${mpBranch(block)}`;
+    },
+
+    // --- Variables (Blockly's built-in Variables category); each starts at 0 in the setup code ---
+    variables_get(block: Blockly.Block) {
+        const name = variableFieldName(block, 'VAR', 'x');
+        mpUse()[`var_${name}`] = `${name} = 0`;
+        return mpAtomic(name);
+    },
+    variables_set(block: Blockly.Block) {
+        const name = variableFieldName(block, 'VAR', 'x');
+        mpUse()[`var_${name}`] = `${name} = 0`;
+        return `${name} = ${mpValue(block, 'VALUE', '0')}\n`;
+    },
+    math_change(block: Blockly.Block) {
+        const name = variableFieldName(block, 'VAR', 'x');
+        mpUse()[`var_${name}`] = `${name} = 0`;
+        return `${name} += ${mpValue(block, 'DELTA', '1')}\n`;
     },
 
     // --- Maths ---
