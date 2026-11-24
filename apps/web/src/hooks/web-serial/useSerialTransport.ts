@@ -3,6 +3,8 @@ import type { MutableRefObject } from 'react';
 import type { SerialChunkListener, SerialMessageSink } from './types';
 import { BOARD_USB_VENDOR_IDS, isBoardUsbVendor } from '@/lib/serial/boardUsbIds';
 
+export type ConnectResult = { connected: true } | { connected: false; problem: string };
+
 export interface SerialTransportController {
   isConnected: boolean;
   baudRate: number;
@@ -14,8 +16,8 @@ export interface SerialTransportController {
   keepReadingRef: MutableRefObject<boolean>;
   pipeAbortControllerRef: MutableRefObject<AbortController | null>;
   pipeToPromiseRef: MutableRefObject<Promise<void> | null>;
-  /** Asks the learner to pick a port and opens it. Resolves to true when connected. */
-  connect: (baudRate?: number) => Promise<boolean>;
+  /** Asks the learner to pick a port and opens it. On failure, `problem` says what to do. */
+  connect: (baudRate?: number) => Promise<ConnectResult>;
   disconnect: () => Promise<void>;
   setBaudRate: (baudRate: number) => Promise<void>;
   writeText: (text: string) => Promise<void>;
@@ -174,10 +176,14 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
     );
   }, []);
 
-  const connect = useCallback(async (requestedBaudRate?: number): Promise<boolean> => {
+  const connect = useCallback(async (requestedBaudRate?: number): Promise<ConnectResult> => {
+    const fail = (problem: string): ConnectResult => {
+      addMessage('error', problem);
+      return { connected: false, problem };
+    };
+
     if (!(typeof navigator !== 'undefined' && 'serial' in navigator)) {
-      addMessage('error', 'Web Serial API is not supported in this browser. Please use Chrome or Edge.');
-      return false;
+      return fail('This browser cannot connect to boards. Open Sticial Studio in Chrome or Edge, or use the desktop app.');
     }
 
     const nextBaudRate = normalizeBaudRate(requestedBaudRate ?? baudRateRef.current);
@@ -196,27 +202,23 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
 
       const info = port.getInfo();
       addMessage('system', `Connected to device (VID: ${info.usbVendorId}, PID: ${info.usbProductId}) at ${nextBaudRate} baud`);
-      return true;
+      return { connected: true };
     } catch (error) {
       const serialError = error as Error;
       if (serialError.name === 'NotFoundError' && Date.now() - askedAt < 400) {
         // Refused faster than anyone could click: this window never showed the board list.
-        addMessage(
-          'error',
-          'This window cannot show the list of boards. Open Sticial Studio in Chrome or Edge, or use the desktop app, to connect a board.'
-        );
-      } else if (serialError.name === 'NotFoundError') {
+        return fail('This window cannot show the list of boards. Open Sticial Studio in Chrome or Edge, or use the desktop app, to connect a board.');
+      }
+      if (serialError.name === 'NotFoundError') {
         showAllPortsNextRef.current = true;
-        addMessage(
-          'error',
+        return fail(
           'No board was chosen. In the list, pick your board (for example "Arduino Uno (COM9)" or "USB-SERIAL CH340"). If it is not in the list, check the USB cable and try again: the next list shows every port.'
         );
-      } else if (serialError.name === 'NetworkError' || serialError.name === 'InvalidStateError') {
-        addMessage('error', 'The board is busy. Close the Arduino IDE or any other program using it, then try again.');
-      } else {
-        addMessage('error', `Connection failed: ${serialError.message}`);
       }
-      return false;
+      if (serialError.name === 'NetworkError' || serialError.name === 'InvalidStateError') {
+        return fail('The board is busy. Close the Arduino IDE or any other program using it, then try again.');
+      }
+      return fail(`Could not connect to the board: ${serialError.message}`);
     }
   }, [addMessage, chooseBoardPort, resumeDecodedReadPipeline]);
 

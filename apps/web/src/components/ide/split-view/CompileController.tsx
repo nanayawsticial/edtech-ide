@@ -160,9 +160,10 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
     if (!webSerial.isConnected) {
       // Connect as part of Upload: the browser shows its port list (this click counts as the permission).
       webSerial.addMessage('system', 'Choose your board in the list that opens (usually a COM port, or "USB Serial").');
-      const connected = await webSerial.connect();
-      if (!connected) {
-        webSerial.addMessage('error', 'Upload stopped: no board was connected. Plug the board in with a USB cable and click Upload again.');
+      const connection = await webSerial.connect();
+      if (!connection.connected) {
+        // Say why here too: this is the tab the learner is looking at.
+        webSerial.addMessage('error', `Upload stopped. ${connection.problem}`);
         return;
       }
       if (supportsDeviceFiles) {
