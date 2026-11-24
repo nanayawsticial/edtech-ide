@@ -11,6 +11,8 @@ on:
     paths:
       - "apps/web/**"
       - "apps/desktop/**"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/desktop-app.yml"
 
 env:
@@ -34,6 +36,12 @@ jobs:
       - name: Type-check the web app
         working-directory: apps/web
         run: npx tsc --noEmit -p .
+
+      - name: Run the web app's tests (block code generators, circuit parts, Circuit Lab model)
+        run: npm test --workspace web
+
+      - name: Lint the web app
+        run: npm run lint --workspace web
 
       - name: Build the web app for desktop (static export to apps/web/out)
         run: npm run build:desktop --workspace web
