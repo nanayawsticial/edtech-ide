@@ -1,3 +1,6 @@
+import { handleDesktopApiRequest } from './desktop/desktopApi';
+import { isDesktopApp } from './desktop/runtime';
+
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1']);
 
 function normalizeBaseUrl(url: string) {
@@ -45,7 +48,7 @@ export function buildApiUrl(path: string) {
         return path;
     }
 
-    if (typeof window !== 'undefined' && !resolveEnvBaseUrl() && path.startsWith('/api/')) {
+    if (typeof window !== 'undefined' && path.startsWith('/api/')) {
         return path;
     }
 
@@ -97,7 +100,29 @@ function isRetryableBody(body: RequestInit['body']) {
     return false;
 }
 
+/** The `/api/...` part of a request, when it targets this app's own API (relative or same origin). */
+function getOwnApiPath(path: string) {
+    if (path.startsWith('/api/')) return path;
+    try {
+        const url = new URL(path);
+        if (url.origin === window.location.origin && url.pathname.startsWith('/api/')) {
+            return `${url.pathname}${url.search}`;
+        }
+    } catch {
+        // Not an absolute URL.
+    }
+    return null;
+}
+
 export async function apiFetch(path: string, options?: RequestInit) {
+    // The desktop app has no API server: its own module answers /api/* locally (see lib/desktop).
+    if (isDesktopApp()) {
+        const ownApiPath = getOwnApiPath(path);
+        if (ownApiPath) {
+            return handleDesktopApiRequest(ownApiPath, options);
+        }
+    }
+
     const url = buildApiUrl(path);
 
     try {

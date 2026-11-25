@@ -4,13 +4,15 @@ import { buildUpstreamApiUrl } from '@/lib/api/upstream';
 export const runtime = 'nodejs';
 
 function buildProxyHeaders(request: NextRequest) {
-  const headers = new Headers(request.headers);
+  const headers = new Headers();
+  const headerNames = ['accept', 'authorization', 'content-type', 'x-request-id'];
 
-  headers.delete('connection');
-  headers.delete('content-length');
-  headers.delete('host');
-  headers.delete('origin');
-  headers.delete('referer');
+  headerNames.forEach((name) => {
+    const value = request.headers.get(name);
+    if (value) {
+      headers.set(name, value);
+    }
+  });
 
   return headers;
 }
@@ -20,8 +22,8 @@ async function readProxyBody(request: NextRequest) {
     return undefined;
   }
 
-  const body = await request.arrayBuffer();
-  return body.byteLength > 0 ? body : undefined;
+  const body = await request.text();
+  return body.length > 0 ? body : undefined;
 }
 
 async function proxyRequest(request: NextRequest) {
@@ -41,6 +43,7 @@ async function proxyRequest(request: NextRequest) {
 
     const responseHeaders = new Headers(upstreamResponse.headers);
     responseHeaders.delete('connection');
+    responseHeaders.delete('content-length');
     responseHeaders.delete('content-encoding');
     responseHeaders.delete('transfer-encoding');
 
@@ -85,3 +88,4 @@ export async function DELETE(request: NextRequest) {
 export async function OPTIONS(request: NextRequest) {
   return proxyRequest(request);
 }
+

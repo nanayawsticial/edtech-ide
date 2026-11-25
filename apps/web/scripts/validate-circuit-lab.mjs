@@ -74,8 +74,8 @@ function createTsModuleLoader(srcRoot) {
       fileName: absolutePath,
     });
 
-    const module = { exports: {} };
-    cache.set(absolutePath, module.exports);
+    const moduleRecord = { exports: {} };
+    cache.set(absolutePath, moduleRecord.exports);
 
     const localRequire = (specifier) => {
       if (specifier.startsWith('.') || specifier.startsWith('@/')) {
@@ -86,9 +86,9 @@ function createTsModuleLoader(srcRoot) {
     };
 
     const evaluator = new Function('require', 'module', 'exports', '__filename', '__dirname', transpiled.outputText);
-    evaluator(localRequire, module, module.exports, absolutePath, path.dirname(absolutePath));
-    cache.set(absolutePath, module.exports);
-    return module.exports;
+    evaluator(localRequire, moduleRecord, moduleRecord.exports, absolutePath, path.dirname(absolutePath));
+    cache.set(absolutePath, moduleRecord.exports);
+    return moduleRecord.exports;
   }
 
   return { loadModule };

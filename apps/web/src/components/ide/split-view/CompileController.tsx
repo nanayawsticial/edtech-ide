@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+﻿import React, { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { API_BASE_URL, apiFetch, safeJson } from '@/lib/api';
 import { useEditorOrchestrator } from './EditorOrchestrator';
 import { useCircuitOrchestrator } from './CircuitOrchestrator';
@@ -12,6 +12,7 @@ interface CompileResponse {
   success?: boolean;
   log?: string;
   hex?: string;
+  error?: string;
   requestId?: string;
   compiledFiles?: number;
 }
@@ -109,8 +110,8 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
         const lines = (data.log || '').split('\n').filter((line) => line.trim().length > 0);
         lines.forEach((line) => webSerial.addMessage('app', line));
       } else {
-        const message = res.ok ? 'Compilation failed.' : `Compiler API error (status ${res.status}).`;
-        setCompileFeedback(extractCompileFeedback(data?.log || message, message));
+        const message = data?.error || (res.ok ? 'Compilation failed.' : `Compiler API error (status ${res.status}).`);
+        setCompileFeedback(extractCompileFeedback(data?.log || data?.error || message, message));
         webSerial.addMessage('error', message);
         const lines = (data?.log || '').split('\n').filter((line) => line.trim().length > 0);
         lines.forEach((line) => webSerial.addMessage('error', line));
@@ -157,8 +158,19 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
     }
 
     if (!webSerial.isConnected) {
-      webSerial.addMessage('error', 'Device not connected. Click Connect Device first.');
-      return;
+      // Connect as part of Upload: the browser shows its port list (this click counts as the permission).
+      webSerial.addMessage('system', 'Choose your board in the list that opens (usually a COM port, or "USB Serial").');
+      const connection = await webSerial.connect();
+      if (!connection.connected) {
+        // Say why here too: this is the tab the learner is looking at.
+        webSerial.addMessage('error', `Upload stopped. ${connection.problem}`);
+        return;
+      }
+      if (supportsDeviceFiles) {
+        // The MicroPython file sync reads the connection state on the next render.
+        webSerial.addMessage('system', 'Board connected. Click Upload again to send your files.');
+        return;
+      }
     }
 
     if (supportsDeviceFiles) {
@@ -189,10 +201,10 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
       if (res.ok && data?.success && data?.hex) {
         clearCompileFeedback();
         webSerial.addMessage('system', 'Compilation successful. Starting upload...');
-        await webSerial.flashArduino(data.hex);
+        await webSerial.flashArduino(data.hex, currentBoard);
       } else {
-        const message = res.ok ? 'Compilation failed. Upload aborted.' : `Compiler API error (status ${res.status}).`;
-        setCompileFeedback(extractCompileFeedback(data?.log || message, message));
+        const message = data?.error || (res.ok ? 'Compilation failed. Upload aborted.' : `Compiler API error (status ${res.status}).`);
+        setCompileFeedback(extractCompileFeedback(data?.log || data?.error || message, message));
         webSerial.addMessage('error', message);
         const lines = (data?.log || '').split('\n').filter((line) => line.trim().length > 0);
         lines.forEach((line) => webSerial.addMessage('error', line));
@@ -223,9 +235,9 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
   const handleConnectDevice = useCallback(() => {
     openBlockTerminalTab('connection');
     if (webSerial.isConnected) {
-      webSerial.disconnect();
+      void webSerial.disconnect();
     } else {
-      webSerial.connect(115200);
+      void webSerial.connect();
     }
   }, [openBlockTerminalTab, webSerial]);
 
@@ -252,7 +264,21 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
     }
 
     await simulationControls.start();
-  }, [isBlockMode, isSimulationActive, simulationControls, sourceCode, supportsSimulation, syncBlocklySourceCode]);
+
+    // The simulator only shows compile errors next to the circuit and the text editor. Put them in
+    // Build output too, so a failed run from the Blocks screen never looks like nothing happened.
+    const feedback = useSimulationStore.getState().compileFeedback;
+    if (feedback) {
+      openBlockTerminalTab('build');
+      const diagnostics = feedback.diagnostics.map((diagnostic) => diagnostic.raw.trim()).filter(Boolean);
+      if (diagnostics.length > 0) {
+        webSerial.addMessage('error', 'Simulation did not start: the code did not compile.');
+        diagnostics.forEach((line) => webSerial.addMessage('error', line));
+      } else {
+        webSerial.addMessage('error', `Simulation did not start: ${feedback.message}`);
+      }
+    }
+  }, [isBlockMode, isSimulationActive, openBlockTerminalTab, simulationControls, sourceCode, supportsSimulation, syncBlocklySourceCode, webSerial]);
 
   useEffect(() => eventBus.on('compile:verify-request', () => { void handleVerify(); }), [eventBus, handleVerify]);
   useEffect(() => eventBus.on('compile:upload-request', () => { void handleUploadToBoard(); }), [eventBus, handleUploadToBoard]);
@@ -282,4 +308,5 @@ export function useCompileController() {
   }
   return context;
 }
+
 

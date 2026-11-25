@@ -27,6 +27,8 @@ interface CircuitStoreActions {
   addComponent: (component: ComponentData) => void;
   removeComponent: (id: string) => void;
   updateComponentPosition: (id: string, x: number, y: number, mountedPlacement?: MountedPlacement | null) => void;
+  /** Moves several parts in one undo step, keeping their breadboard mounts (used when a breadboard carries its parts). */
+  moveComponentsTogether: (moves: Array<{ id: string; x: number; y: number }>) => void;
   updateComponentState: (
     id: string,
     updater: Record<string, any> | ((previousState: Record<string, any>) => Record<string, any>)
@@ -156,6 +158,32 @@ export const useCircuitStore = create<CircuitStore>((set) => ({
 
         didChange = true;
         return { ...component, x, y, mountedPlacement: nextMountedPlacement };
+      });
+
+      if (!didChange) {
+        return state;
+      }
+
+      return {
+        components,
+        ...deriveCircuit(components, state.nets),
+        past: [...state.past, { components: state.components, nets: state.nets }].slice(-50),
+        future: [],
+      };
+    }),
+
+  moveComponentsTogether: (moves) =>
+    set((state) => {
+      const moveById = new Map(moves.map((move) => [move.id, move]));
+      let didChange = false;
+      const components = state.components.map((component) => {
+        const move = moveById.get(component.id);
+        if (!move || (component.x === move.x && component.y === move.y)) {
+          return component;
+        }
+
+        didChange = true;
+        return { ...component, x: move.x, y: move.y };
       });
 
       if (!didChange) {

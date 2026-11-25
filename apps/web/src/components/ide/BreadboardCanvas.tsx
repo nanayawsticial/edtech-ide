@@ -42,6 +42,8 @@ function cn(...classes: (string | boolean | undefined)[]) {
 
 const WIRE_COLORS = ['#ef4444', '#f8fafc', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
 const DEFAULT_VIEWPORT = { x: -72, y: -28, scale: 0.98 };
+const COMPACT_CIRCUIT_BREAKPOINT = 1180;
+const COMPACT_CIRCUIT_HEIGHT = 820;
 
 type PaletteCategory = 'All' | ComponentCategory;
 type PlacementPreviewSource = 'existing' | 'palette' | 'armed';
@@ -160,6 +162,7 @@ export default function BreadboardCanvas({
   const rotateComponent = useCircuitStore((state) => state.rotateComponent);
   const selectComponent = useCircuitStore((state) => state.selectComponent);
   const updateComponentPosition = useCircuitStore((state) => state.updateComponentPosition);
+  const moveComponentsTogether = useCircuitStore((state) => state.moveComponentsTogether);
   const updateComponentState = useCircuitStore((state) => state.updateComponentState);
   const updateNet = useCircuitStore((state) => state.updateNet);
   const simulationView = useSimulationStore(useShallow(selectCircuitLabSimulationView));
@@ -177,6 +180,7 @@ export default function BreadboardCanvas({
   const [selectedWireId, setSelectedWireId] = useState<string | null>(null);
   const [wireWaypointOverrides, setWireWaypointOverrides] = useState<Record<string, Point[]>>({});
   const [isPaletteVisible, setIsPaletteVisible] = useState(showPalette);
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
   const [activeCategory, setActiveCategory] = useState<PaletteCategory>('All');
   const [dragPreview, setDragPreview] = useState<DragPreviewState | null>(null);
   const [recentlyCreatedWireId, setRecentlyCreatedWireId] = useState<string | null>(null);
@@ -188,8 +192,22 @@ export default function BreadboardCanvas({
   const recentPinTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
-    setIsPaletteVisible(showPalette);
-  }, [showPalette]);
+    const updateViewportMode = () => {
+      if (typeof window === 'undefined') {
+        return;
+      }
+
+      setIsCompactViewport(window.innerWidth < COMPACT_CIRCUIT_BREAKPOINT || window.innerHeight < COMPACT_CIRCUIT_HEIGHT);
+    };
+
+    updateViewportMode();
+    window.addEventListener('resize', updateViewportMode);
+    return () => window.removeEventListener('resize', updateViewportMode);
+  }, []);
+
+  useEffect(() => {
+    setIsPaletteVisible(isCompactViewport ? false : showPalette);
+  }, [isCompactViewport, showPalette]);
 
   useEffect(() => {
     if (selectedWireId && !circuitData.nets.some((net) => net.id === selectedWireId)) {
@@ -244,24 +262,52 @@ export default function BreadboardCanvas({
     return () => window.removeEventListener('keydown', handleWindowKeyDown);
   }, []);
 
-  const sceneOptions = useMemo(
-    () => ({
+  const draggedComponentId = dragPreview?.source === 'existing' ? dragPreview.componentId : null;
+  // Parts plugged into the breadboard being dragged. They ride along with it; their holes are
+  // stored by name (not position), so moving them by the same amount keeps them plugged in.
+  const carriedComponents = useMemo(() => {
+    const dragged = draggedComponentId ? components.find((component) => component.id === draggedComponentId) : null;
+    if (!dragged || getComponentDefinition(dragged.type)?.id !== 'BREADBOARD') {
+      return [];
+    }
+    return components.filter((component) => component.id !== dragged.id && component.mountedPlacement?.mounted);
+  }, [components, draggedComponentId]);
+
+  const sceneOptions = useMemo(() => {
+    let positionOverrides: Record<string, Point> | undefined;
+    if (dragPreview?.source === 'existing' && dragPreview.componentId) {
+      positionOverrides = { [dragPreview.componentId]: dragPreview.displayPosition };
+      const dragged = components.find((component) => component.id === dragPreview.componentId);
+      if (dragged && carriedComponents.length > 0) {
+        const dx = dragPreview.displayPosition.x - dragged.x;
+        const dy = dragPreview.displayPosition.y - dragged.y;
+        carriedComponents.forEach((component) => {
+          positionOverrides![component.id] = { x: component.x + dx, y: component.y + dy };
+        });
+      }
+    }
+
+    return {
       selectedComponentId,
       selectedWireId,
       hoveredComponentId,
       hoveredWireId,
-      draggingComponentId: dragPreview?.source === 'existing' ? dragPreview.componentId : null,
+      draggingComponentId: draggedComponentId,
       wireWaypointOverrides:
         Object.keys(wireWaypointOverrides).length > 0 ? wireWaypointOverrides : undefined,
-      positionOverrides:
-        dragPreview?.source === 'existing' && dragPreview.componentId
-          ? {
-              [dragPreview.componentId]: dragPreview.displayPosition,
-            }
-          : undefined,
-    }),
-    [dragPreview, hoveredComponentId, hoveredWireId, selectedComponentId, selectedWireId, wireWaypointOverrides]
-  );
+      positionOverrides,
+    };
+  }, [
+    carriedComponents,
+    components,
+    dragPreview,
+    draggedComponentId,
+    hoveredComponentId,
+    hoveredWireId,
+    selectedComponentId,
+    selectedWireId,
+    wireWaypointOverrides,
+  ]);
 
   const scene = useMemo(
     () => buildSceneGraph(circuitData, simulationView, netlist, resolvedConnections, sceneOptions),
@@ -510,7 +556,14 @@ export default function BreadboardCanvas({
 
       const component = circuitData.components.find((candidate) => candidate.id === id);
       const definition = getComponentDefinition(component?.type || '');
-      if (component && definition) {
+      if (component && definition?.id === 'BREADBOARD' && carriedComponents.length > 0) {
+        const dx = pos.x - component.x;
+        const dy = pos.y - component.y;
+        moveComponentsTogether([
+          { id, x: pos.x, y: pos.y },
+          ...carriedComponents.map((carried) => ({ id: carried.id, x: carried.x + dx, y: carried.y + dy })),
+        ]);
+      } else if (component && definition) {
         const mountedPreview = preview?.mountPreview ?? buildMountPreview(id, pos);
         if (mountedPreview?.isValid) {
           updateComponentPosition(
@@ -840,6 +893,9 @@ export default function BreadboardCanvas({
     (type: string) => {
       if (focusSingletonComponent(type)) {
         clearArmedInsertionPreview();
+        if (isCompactViewport) {
+          setIsPaletteVisible(false);
+        }
         return;
       }
 
@@ -851,8 +907,11 @@ export default function BreadboardCanvas({
       updateInsertionPreview('armed', type);
       selectComponent(null);
       setSelectedWireId(null);
+      if (isCompactViewport) {
+        setIsPaletteVisible(false);
+      }
     },
-    [clearArmedInsertionPreview, dragPreview, focusSingletonComponent, selectComponent, updateInsertionPreview]
+    [clearArmedInsertionPreview, dragPreview, focusSingletonComponent, isCompactViewport, selectComponent, updateInsertionPreview]
   );
 
   const handleCanvasPointerMoveCapture = useCallback(
@@ -965,7 +1024,9 @@ export default function BreadboardCanvas({
           ids.add(pin.id);
         }
       });
-    } else {
+    } else if (interaction.mode.type !== 'DRAGGING_COMPONENT') {
+      // While a part is being dragged its pin dots are hidden: redrawing them at a new position
+      // on every pointer move was a large share of the drag's cost. They return on drop.
       scene.pins.forEach((pin) => {
         if (pin.kind === 'breadboard') {
           return;
@@ -1119,11 +1180,25 @@ export default function BreadboardCanvas({
   }, [eventBus, removeComponent, removeNet, selectComponent, selectedComponentId, selectedWireId]);
 
   return (
-    <div className="flex h-full w-full overflow-hidden rounded-[24px] bg-[#050913] font-sans selection:bg-cyan-400/20">
+    <div className="relative flex h-full w-full overflow-hidden rounded-[18px] bg-[#050913] font-sans selection:bg-cyan-400/20 sm:rounded-[24px]">
+      {isCompactViewport && isPaletteVisible ? (
+        <button
+          type="button"
+          aria-label="Close parts drawer"
+          onClick={() => setIsPaletteVisible(false)}
+          className="absolute inset-0 z-[220] bg-black/35 backdrop-blur-[1px]"
+        />
+      ) : null}
       <aside
         className={cn(
-          'relative z-[200] flex h-full shrink-0 border-r border-white/8 bg-[linear-gradient(180deg,#10161f_0%,#0a0f16_100%)] transition-[width,opacity] duration-200 ease-out',
-          isPaletteVisible ? 'w-[320px] opacity-100' : 'pointer-events-none w-0 border-r-0 opacity-0'
+          'flex h-full shrink-0 overflow-hidden bg-[linear-gradient(180deg,#10161f_0%,#0a0f16_100%)] transition-[width,opacity,transform] duration-200 ease-out',
+          isCompactViewport
+            ? isPaletteVisible
+              ? 'absolute inset-y-3 left-3 z-[230] w-[min(340px,calc(100%-1.5rem))] rounded-[20px] border border-white/10 opacity-100 shadow-[0_28px_68px_-36px_rgba(2,6,23,0.95)]'
+              : 'pointer-events-none absolute inset-y-3 left-3 z-[230] w-[min(340px,calc(100%-1.5rem))] -translate-x-4 rounded-[20px] border border-white/0 opacity-0'
+            : isPaletteVisible
+              ? 'relative z-[200] w-[320px] border-r border-white/8 opacity-100'
+              : 'pointer-events-none relative z-[200] w-0 border-r-0 opacity-0'
         )}
       >
         <div className="flex h-full min-h-0 w-full">
@@ -1154,9 +1229,9 @@ export default function BreadboardCanvas({
             <div className="border-b border-white/8 px-4 py-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.26em] text-white/36">Parts Drawer</div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.26em] text-white/55">Parts Drawer</div>
                   <div className="mt-1 text-[1.05rem] font-semibold text-white/90">{activeCategory === 'All' ? CATEGORY_META.All.label : componentRegistry.getCategoryLabel(activeCategory)}</div>
-                  <div className="mt-2 max-w-[220px] text-[11px] leading-4 text-white/46">
+                  <div className="mt-2 max-w-[220px] text-[11px] leading-4 text-white/60">
                     Drag a part to place it, or click a part and then click exactly where you want it to go.
                   </div>
                   {dragPreview?.source === 'armed' && palettePreviewDefinition ? (
@@ -1172,8 +1247,11 @@ export default function BreadboardCanvas({
             </div>
 
             <div className="custom-scrollbar flex-1 overflow-x-hidden overflow-y-auto px-3 py-3">
-              <div className="space-y-2.5">
-                {visiblePaletteItems.map((item) => (
+              <div className="grid grid-cols-2 gap-2">
+                {visiblePaletteItems.map((item) => {
+                  const isArmed = dragPreview?.source === 'armed' && dragPreview.componentType === item.entry.id;
+                  const description = item.alreadyPlaced ? 'Already on the canvas. Click to select it.' : item.entry.description;
+                  return (
                   <button
                     key={item.entry.id}
                     data-testid={`palette-item-${item.entry.id}`}
@@ -1200,27 +1278,30 @@ export default function BreadboardCanvas({
 
                       beginComponentInsertion(item.entry.id);
                     }}
-                    className="group flex w-full items-center gap-3 rounded-[16px] border border-white/[0.06] bg-[linear-gradient(180deg,#161d28_0%,#0d131b_100%)] px-3 py-3 text-left transition-all duration-150 hover:-translate-y-0.5 hover:border-cyan-300/18 hover:bg-[linear-gradient(180deg,#1a2230_0%,#111824_100%)]"
+                    title={description}
+                    className={cn(
+                      'group flex min-w-0 flex-col gap-2 rounded-[14px] border bg-[linear-gradient(180deg,#161d28_0%,#0d131b_100%)] p-2 text-left transition-all duration-150 hover:-translate-y-0.5 hover:border-cyan-300/18 hover:bg-[linear-gradient(180deg,#1a2230_0%,#111824_100%)]',
+                      isArmed ? 'border-cyan-300/40' : 'border-white/[0.06]'
+                    )}
                   >
-                    <div className="flex h-[94px] w-[116px] shrink-0 items-center justify-center rounded-[14px] border border-white/8 bg-[radial-gradient(circle_at_50%_35%,rgba(34,47,67,0.96),rgba(14,20,29,0.98)_74%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <div className="relative flex h-[72px] w-full items-center justify-center rounded-[10px] border border-white/8 bg-[radial-gradient(circle_at_50%_35%,rgba(34,47,67,0.96),rgba(14,20,29,0.98)_74%)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                       <ComponentPreview definition={item.definition} className="h-full w-full" />
+                      {isArmed ? (
+                        <span className="absolute right-1 top-1 rounded-full border border-cyan-300/28 bg-[#0d2a33] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-cyan-100">Placing</span>
+                      ) : item.alreadyPlaced ? (
+                        <span className="absolute right-1 top-1 rounded-full border border-white/12 bg-[#161d28] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-white/75">On canvas</span>
+                      ) : null}
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3"><div className="text-[15px] font-semibold text-white/90">{item.entry.name}</div>{dragPreview?.source === 'armed' && dragPreview.componentType === item.entry.id ? (<span className="rounded-full border border-cyan-300/28 bg-cyan-300/12 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100">Placing</span>) : null}</div>
-                      <div className="mt-2 text-[11px] uppercase tracking-[0.18em] text-white/34">{componentRegistry.getCategoryLabel(item.entry.category)}</div>
-                      <div className="mt-1 text-[11px] leading-4 text-white/38">
-                        {item.alreadyPlaced ? 'Already on the canvas. Click to select it.' : item.entry.description}
-                      </div>
-                      <div className="mt-2 text-[11px] font-medium leading-4 text-white/56">
-                        {item.alreadyPlaced
-                          ? 'This part is limited to one copy.'
-                          : dragPreview?.source === 'armed' && dragPreview.componentType === item.entry.id
-                            ? 'Click on the canvas to place it.'
-                            : 'Drag to place, or click and then click on the canvas.'}
-                      </div>
+                    <div className="min-w-0 px-0.5 pb-0.5">
+                      <div className="line-clamp-2 text-[13px] font-semibold leading-tight text-white/90">{item.entry.name}</div>
+                      <div className="mt-1 truncate text-[10px] uppercase tracking-[0.14em] text-white/55">{componentRegistry.getCategoryLabel(item.entry.category)}</div>
+                      <span className="sr-only">
+                        {description} {isArmed ? 'Click on the canvas to place it.' : item.alreadyPlaced ? 'This part is limited to one copy.' : ''}
+                      </span>
                     </div>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1251,6 +1332,7 @@ export default function BreadboardCanvas({
                 ? interaction.mode.hoveredTargetPinId
                 : null,
             mountPreview: dragPreview?.mountPreview ?? null,
+            isDraggingComponent: interaction.mode.type === 'DRAGGING_COMPONENT',
             cursor,
             onPointerDown: interaction.handlePointerDown,
             onPointerMove: interaction.handlePointerMove,
@@ -1377,41 +1459,24 @@ export default function BreadboardCanvas({
         ) : null}
 
         {interactionMode ? (
-          <>
+          <div className="pointer-events-none absolute left-1/2 top-5 z-[250] -translate-x-1/2" data-testid="circuit-mode-badge">
             <div
               className={cn(
-                'pointer-events-none absolute inset-[10px] z-[14] rounded-[24px] border transition-all duration-150',
+                'rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] shadow-[0_18px_34px_-24px_rgba(2,6,23,0.95)] backdrop-blur-xl',
                 interactionMode.tone === 'placing'
-                  ? 'border-cyan-300/16 shadow-[0_0_0_1px_rgba(34,211,238,0.06),0_0_42px_rgba(34,211,238,0.08)]'
+                  ? 'border-cyan-300/26 bg-cyan-300/12 text-cyan-100'
                   : interactionMode.tone === 'invalid'
-                    ? 'border-rose-300/18 shadow-[0_0_0_1px_rgba(248,113,113,0.06),0_0_42px_rgba(248,113,113,0.08)]'
+                    ? 'border-rose-300/30 bg-rose-500/14 text-rose-100'
                     : interactionMode.tone === 'valid'
-                      ? 'border-emerald-300/18 shadow-[0_0_0_1px_rgba(52,211,153,0.06),0_0_42px_rgba(52,211,153,0.08)]'
+                      ? 'border-emerald-300/28 bg-emerald-500/14 text-emerald-100'
                       : interactionMode.tone === 'wiring'
-                        ? 'border-sky-300/14 shadow-[0_0_0_1px_rgba(56,189,248,0.05),0_0_34px_rgba(56,189,248,0.06)]'
-                        : 'border-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]'
+                        ? 'border-sky-300/24 bg-sky-300/12 text-sky-100'
+                        : 'border-white/12 bg-[#08111d]/88 text-white/80'
               )}
-              data-testid="circuit-mode-frame"
-            />
-            <div className="pointer-events-none absolute left-1/2 top-5 z-[250] -translate-x-1/2" data-testid="circuit-mode-badge">
-              <div
-                className={cn(
-                  'rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] shadow-[0_18px_34px_-24px_rgba(2,6,23,0.95)] backdrop-blur-xl',
-                  interactionMode.tone === 'placing'
-                    ? 'border-cyan-300/26 bg-cyan-300/12 text-cyan-100'
-                    : interactionMode.tone === 'invalid'
-                      ? 'border-rose-300/30 bg-rose-500/14 text-rose-100'
-                      : interactionMode.tone === 'valid'
-                        ? 'border-emerald-300/28 bg-emerald-500/14 text-emerald-100'
-                        : interactionMode.tone === 'wiring'
-                          ? 'border-sky-300/24 bg-sky-300/12 text-sky-100'
-                          : 'border-white/12 bg-[#08111d]/88 text-white/80'
-                )}
-              >
-                {interactionMode.label} � {interactionMode.detail}
-              </div>
+            >
+              {interactionMode.label} · {interactionMode.detail}
             </div>
-          </>
+          </div>
         ) : null}
 
         <InteractionManager

@@ -4,7 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { useAuth } from "./AuthContext";
 import { useBoard } from "./BoardContext";
 import { apiFetch, safeJson } from "@/lib/api";
-import { parseProjectMeta } from "@/lib/projects/projectMeta";
+import { parseProjectMeta, type ProjectMeta } from "@/lib/projects/projectMeta";
 import {
   buildProjectPayload,
   getStoredActiveProjectId,
@@ -31,6 +31,8 @@ export interface ProjectContextValue {
   refreshProjectFiles: () => Promise<void>;
   saveProject: () => Promise<void>;
   saveAsProject: (name: string) => Promise<string>;
+  /** Creates a saved project from files (an import); does not open it. Resolves to its id. */
+  createProjectFromFiles: (name: string, files: FileItem[], meta: Omit<ProjectMeta, "version">) => Promise<string>;
   startNewSketch: () => void;
 }
 
@@ -60,6 +62,8 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const [projectNameState, setProjectNameState] = useState(UNTITLED_PROJECT_NAME);
   const [hasLoadedProjectFiles, setHasLoadedProjectFiles] = useState(() => !getStoredActiveProjectId());
   const filesRef = useRef<FileItem[]>(useEditorStore.getState().files);
+  // The project the workspace shows now: a download for a project left behind must not land in it.
+  const currentProjectIdRef = useRef<string | null>(projectId);
   const activeFileIdRef = useRef<string | null>(useEditorStore.getState().activeFileId);
   const { token } = useAuth();
   const {
@@ -136,6 +140,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   );
 
   const setProjectId = useCallback((id: string | null) => {
+    currentProjectIdRef.current = id;
     setProjectIdState(id);
     setHasLoadedProjectFiles(!id);
     if (!id) {
@@ -158,6 +163,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
     clearPendingProjectIntent();
     persistActiveProjectId(null);
+    currentProjectIdRef.current = null;
     setProjectIdState(null);
     setProjectNameState(UNTITLED_PROJECT_NAME);
     setHasLoadedProjectFiles(true);
@@ -179,6 +185,11 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         headers: { Authorization: `Bearer ${token}` },
       });
 
+      if (currentProjectIdRef.current !== projectId) {
+        // Another project (or a new sketch) was opened while this one downloaded.
+        return;
+      }
+
       if (!res.ok) {
         if (res.status === 404 || res.status === 401) {
           console.warn(`[ProjectContext] Project ${projectId} not found (${res.status}). Clearing project state.`);
@@ -197,6 +208,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await safeJson<PersistedProjectRecord | null>(res);
+      if (currentProjectIdRef.current !== projectId) {
+        return;
+      }
       const resolvedMeta = applyProjectMetaToBoardContext(data ?? {});
       const nextProjectState = resolveProjectFilesState({
         record: data,
@@ -269,8 +283,8 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     }
   }, [buildCurrentProjectPayload, projectId, refreshProjectFiles, token]);
 
-  const saveAsProject = useCallback(
-    async (name: string) => {
+  const createProjectFromFiles = useCallback(
+    async (name: string, files: FileItem[], meta: Omit<ProjectMeta, "version">) => {
       if (!token) {
         throw new Error("Your session ended. Sign in again to save this project.");
       }
@@ -280,17 +294,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         throw new Error("Enter a project name before saving.");
       }
 
-      const projectPayload = buildProjectPayload({
-        projectName: trimmedName,
-        files: buildCurrentProjectFiles(),
-        meta: {
-          board: currentBoard,
-          mode: codingMode ?? "block",
-          language,
-          generator,
-          environment,
-        },
-      });
+      const projectPayload = buildProjectPayload({ projectName: trimmedName, files, meta });
 
       const createRes = await apiFetch("/api/projects", {
         method: "POST",
@@ -326,12 +330,28 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         throw new Error(data?.error || "Failed to upload files to the new project.");
       }
 
+      return newId;
+    },
+    [token],
+  );
+
+  const saveAsProject = useCallback(
+    async (name: string) => {
+      const trimmedName = name.trim();
+      const newId = await createProjectFromFiles(trimmedName, buildCurrentProjectFiles(), {
+        board: currentBoard,
+        mode: codingMode ?? "block",
+        language,
+        generator,
+        environment,
+      });
+
       setProjectId(newId);
       setProjectNameState(trimmedName);
       useEditorStore.getState().setHasUnsavedChanges(false);
       return newId;
     },
-    [buildCurrentProjectFiles, codingMode, currentBoard, environment, generator, language, setProjectId, token],
+    [buildCurrentProjectFiles, codingMode, createProjectFromFiles, currentBoard, environment, generator, language, setProjectId],
   );
 
   const value: ProjectContextValue = {
@@ -343,6 +363,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     refreshProjectFiles,
     saveProject,
     saveAsProject,
+    createProjectFromFiles,
     startNewSketch,
   };
 

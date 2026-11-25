@@ -21,6 +21,11 @@ const COMPONENT_BLOCK_RULES: Record<string, ComponentBlockRule[]> = {
   ULTRASONIC: [{ blocks: ["arduino_ultrasonic"], requiredPins: ["TRIG", "ECHO"] }],
   DHT: [{ blocks: ["arduino_dht_read"], requiredPins: ["DATA"] }],
   OLED: [{ blocks: ["oled_init", "oled_clear", "oled_print", "oled_draw_pixel", "oled_draw_line", "oled_draw_rect", "oled_draw_circle", "oled_draw_triangle"], requiredPins: ["SCL", "SDA"] }],
+  BUZZER: [{ blocks: ["arduino_active_buzzer_set", "arduino_buzzer_tone", "arduino_buzzer_stop"], requiredPins: ["SIG"] }],
+  RGB_LED: [{ blocks: ["arduino_rgb_set"], requiredPins: ["R", "G", "B"] }],
+  TRAFFIC_LIGHT: [{ blocks: ["arduino_traffic_light_set"], requiredPins: ["R", "Y", "G"] }],
+  LDR: [{ blocks: ["arduino_photo_sensor_read"], requiredPins: ["AO"] }],
+  SOUND_SENSOR: [{ blocks: ["arduino_sound_sensor_read"], requiredPins: ["AO"] }],
 };
 
 const OPTIONAL_COMPONENT_BLOCKS = new Set<string>([

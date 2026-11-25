@@ -1,6 +1,6 @@
 import * as Blockly from 'blockly';
 
-import { actuatorsBlocks } from './blocks/actuators';
+import { actuatorsBlocks, registerActuatorExtensions } from './blocks/actuators';
 import { coreBlocks } from './blocks/core';
 import { displayBlocks, registerDisplayExtensions } from './blocks/display';
 import { hardwareInstanceBlocks, registerHardwareInstanceExtensions } from './blocks/hardware_instances';
@@ -28,6 +28,7 @@ const customBlockDefinitions: JsonBlockDefinition[] = [
 let customBlocksDefined = false;
 
 export function defineCustomBlocks() {
+  registerActuatorExtensions();
   registerDisplayExtensions();
   registerHardwareInstanceExtensions();
 

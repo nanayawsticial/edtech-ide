@@ -1,0 +1,59 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Sticial Studio",
+  "version": "0.1.0",
+  "identifier": "com.sticialstudio.ide",
+  "build": {
+    "frontendDist": "../../web/out"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Sticial Studio",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 680,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "bin/arduino-cli.exe": "bin/arduino-cli.exe",
+      "bin/LICENSE.txt": "bin/arduino-cli-LICENSE.txt",
+      "arduino-staging/": "arduino-staging/"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY4MzMxNTlBN0E5MERGMTgKUldRWTM1QjZtaFV6K0VCUEIvMGJiZ05nZGhjcW5hQTNDVk9ZMG5kRHlBTVYyU3NWb1E4VnA5c2kK",
+      "endpoints": [
+        "https://github.com/nanayawsticial/edtech-ide/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}

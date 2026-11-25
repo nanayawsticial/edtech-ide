@@ -12,6 +12,29 @@ if (!(Test-Path $webPath)) {
     exit 1
 }
 
+function Read-JwtSecretFromFile {
+    param([string]$Path)
+
+    if (!(Test-Path $Path)) {
+        return $null
+    }
+
+    $line = Get-Content $Path | Where-Object { $_ -match '^\s*JWT_SECRET\s*=' } | Select-Object -First 1
+    if (-not $line) {
+        return $null
+    }
+
+    return ($line -replace '^\s*JWT_SECRET\s*=\s*', '').Trim().Trim('"').Trim("'")
+}
+
+if (-not $env:JWT_SECRET) {
+    $env:JWT_SECRET = Read-JwtSecretFromFile (Join-Path $apiPath '.env')
+}
+
+if (-not $env:JWT_SECRET) {
+    $env:JWT_SECRET = Read-JwtSecretFromFile (Join-Path $webPath '.env.local')
+}
+
 if (-not $env:JWT_SECRET) {
     $env:JWT_SECRET = 'dev-secret'
 }

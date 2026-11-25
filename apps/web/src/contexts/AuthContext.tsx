@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { apiFetch, safeJson } from '@/lib/api';
@@ -38,8 +38,10 @@ function clearPersistedAuth() {
   } catch {}
 }
 
+// apiFetch('/api/session') is the same request as fetch('/api/session') on the web; on the desktop
+// it is answered locally (lib/desktop/desktopApi.ts).
 async function syncSessionCookie(token: string) {
-  const response = await fetch('/api/session', {
+  const response = await apiFetch('/api/session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
@@ -53,7 +55,7 @@ async function syncSessionCookie(token: string) {
 }
 
 async function clearSessionCookie() {
-  await fetch('/api/session', {
+  await apiFetch('/api/session', {
     method: 'DELETE',
     credentials: 'same-origin',
   }).catch(() => undefined);
@@ -89,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const hasInitializedAuth = useRef(false);
 
-  const publicRoutes = ['/', '/login', '/register', '/auth/callback'];
+  const publicRoutes = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/auth/callback'];
 
   const clearAuthState = useCallback(async () => {
     clearPersistedAuth();
@@ -203,6 +205,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isCancelled = true;
       controller.abort();
       window.clearTimeout(timeoutId);
+      // A cancelled check never clears isLoading, so let the next mount run it again.
+      // Without this, a remount mid-check (React dev mode always does one) left the
+      // app on "Restoring your workspace" forever.
+      hasInitializedAuth.current = false;
     };
   }, [clearAuthState]);
 
@@ -273,3 +279,4 @@ export function useAuth() {
   }
   return context;
 }
+

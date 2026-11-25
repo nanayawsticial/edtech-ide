@@ -82,6 +82,13 @@ function SelectModeContent() {
     setCodingMode(mode);
     setEnvironment(nextEnvironment);
 
+    // Signal to the IDE that it should open directly in the coding view.
+    // This is consumed once by useIDELayoutState on mount and then discarded.
+    // Only skip this for circuit-lab entry, where opening Circuit Lab first is intentional.
+    if (!isCircuitEntry && typeof window !== 'undefined') {
+      window.sessionStorage.setItem('edtech:ide-start-view', 'code');
+    }
+
     if (isCircuitEntry) {
       params.set("entry", "circuit-lab");
       router.push(`/projects/select-language?${params.toString()}`);

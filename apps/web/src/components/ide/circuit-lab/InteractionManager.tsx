@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React from 'react';
 import { LayoutGrid, Maximize, RefreshCcw } from 'lucide-react';
@@ -49,7 +49,7 @@ export default function InteractionManager({
   onResetView,
 }: InteractionManagerProps) {
   return (
-    <div className="absolute right-4 top-4 z-50 flex items-center gap-1.5 rounded-full border border-white/8 bg-[#07101c]/78 p-1.5 shadow-[0_22px_44px_-28px_rgba(2,6,23,0.95)] backdrop-blur-xl">
+    <div className="absolute right-3 top-3 z-50 flex items-center gap-1 rounded-full border border-white/8 bg-[#07101c]/78 p-1 shadow-[0_22px_44px_-28px_rgba(2,6,23,0.95)] backdrop-blur-xl sm:right-4 sm:top-4 sm:gap-1.5 sm:p-1.5">
       <ToolbarButton
         label={showPalette ? 'Hide parts' : 'Show parts'}
         icon={<LayoutGrid size={15} />}

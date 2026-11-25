@@ -5,6 +5,7 @@ interface CompileHexResponse {
   success?: boolean;
   hex?: string;
   log?: string;
+  error?: string;
 }
 
 export async function compileToHex(cppCode: string, board = 'Arduino Uno'): Promise<string> {
@@ -26,9 +27,9 @@ export async function compileToHex(cppCode: string, board = 'Arduino Uno'): Prom
   const data = await safeJson<CompileHexResponse>(response);
 
   if (!response.ok || !data?.success) {
-    throw new CompileToHexError(
-      extractCompileFeedback(data?.log, data?.log ? 'Compilation failed.' : `Compilation failed (${response.status}).`)
-    );
+    // Compiler output when there is some; otherwise the service's own error (e.g. it could not start).
+    const fallback = data?.log ? 'Compilation failed.' : data?.error || `Compilation failed (${response.status}).`;
+    throw new CompileToHexError(extractCompileFeedback(data?.log || data?.error, fallback));
   }
 
   if (typeof data.hex === 'string' && data.hex.trim().length > 0) {

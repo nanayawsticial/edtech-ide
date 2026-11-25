@@ -132,6 +132,56 @@
           }
         ]
       }
+    },
+    "BUZZER": {
+      "keywords": ["buzzer", "beep", "sound", "alarm", "piezo"],
+      "propertySchema": {
+        "fields": []
+      }
+    },
+    "RGB_LED": {
+      "keywords": ["rgb", "colour", "color", "led", "light"],
+      "propertySchema": {
+        "fields": []
+      }
+    },
+    "TRAFFIC_LIGHT": {
+      "keywords": ["traffic", "light", "red", "yellow", "green", "module"],
+      "propertySchema": {
+        "fields": []
+      }
+    },
+    "LDR": {
+      "keywords": ["ldr", "light", "photoresistor", "brightness", "dark"],
+      "propertySchema": {
+        "fields": [
+          {
+            "key": "light",
+            "label": "Light",
+            "type": "number",
+            "description": "How bright it is around the sensor, from 0 (dark) to 100 (bright).",
+            "min": 0,
+            "max": 100,
+            "step": 1
+          }
+        ]
+      }
+    },
+    "SOUND_SENSOR": {
+      "keywords": ["sound", "microphone", "noise", "loudness", "mic"],
+      "propertySchema": {
+        "fields": [
+          {
+            "key": "level",
+            "label": "Loudness",
+            "type": "number",
+            "description": "How loud it is around the sensor, from 0 (silent) to 100 (very loud).",
+            "min": 0,
+            "max": 100,
+            "step": 1
+          }
+        ]
+      }
     }
   }
 }

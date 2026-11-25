@@ -9,6 +9,9 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useBoard } from '@/contexts/BoardContext';
 import { apiFetch, API_BASE_URL, safeJson } from '@/lib/api';
 import { getProjectMetaSummary, parseProjectMeta, type ProjectMeta } from '@/lib/projects/projectMeta';
+import { parseProjectFile } from '@/lib/projects/projectFile';
+import { downloadProjectFile, pickProjectFile } from '@/lib/projects/projectFileActions';
+import type { FileItem } from '@/stores/editorStore';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -22,12 +25,14 @@ import {
   CalendarClock,
   CircuitBoard,
   Code2,
+  Download,
   Edit2,
   FolderOpen,
   GraduationCap,
   Plus,
   Sparkles,
   Trash2,
+  Upload,
   X,
   Zap,
 } from 'lucide-react';
@@ -148,7 +153,7 @@ function getProjectMode(meta: ProjectMeta | null) {
 export default function DashboardPage() {
   const { user, token } = useAuth();
   const router = useRouter();
-  const { setProjectId } = useProject();
+  const { setProjectId, createProjectFromFiles } = useProject();
   const { setCodingMode, setLanguage, setCurrentBoard, setGenerator, setEnvironment } = useBoard();
 
   const [projects, setProjects] = useState<ProjectData[]>([]);
@@ -160,6 +165,8 @@ export default function DashboardPage() {
   const [projectToDelete, setProjectToDelete] = useState<ProjectData | null>(null);
   const [isDeletingProject, setIsDeletingProject] = useState(false);
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [fileNotice, setFileNotice] = useState<{ tone: 'success' | 'warning'; text: string } | null>(null);
 
   const apiHealthUrl = `${API_BASE_URL}/api/health`;
 
@@ -239,6 +246,48 @@ export default function DashboardPage() {
 
     setProjectId(project.id);
     router.push('/projects/ide');
+  };
+
+  // Import a .sticial file as a new saved project, then open it.
+  const handleImportProject = async () => {
+    setFileNotice(null);
+    const text = await pickProjectFile();
+    if (text === null) return;
+
+    setIsImporting(true);
+    try {
+      const imported = parseProjectFile(text);
+      const nameTaken = projects.some((project) => project.name.trim().toLowerCase() === imported.name.toLowerCase());
+      const name = nameTaken ? `${imported.name} (imported)` : imported.name;
+      const id = await createProjectFromFiles(name, imported.files, imported.meta);
+      setIsProjectModalOpen(false);
+      handleOpenProject({ id, name, description: null, ...imported.meta, codingMode: imported.meta.mode, updatedAt: new Date().toISOString() });
+    } catch (error) {
+      setFileNotice({ tone: 'warning', text: error instanceof Error ? error.message : 'Could not import that file.' });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Download a saved project as a .sticial file.
+  const handleExportSavedProject = async (project: ProjectData) => {
+    if (!token) return;
+    setFileNotice(null);
+    try {
+      const res = await apiFetch(`/api/projects/${project.id}`, { headers: { Authorization: `Bearer ${token}` } });
+      const record = res.ok ? await safeJson<ProjectData & { files?: FileItem[] }>(res) : null;
+      if (!record || !Array.isArray(record.files)) {
+        throw new Error(`Could not read "${project.name}" to export it. Try again.`);
+      }
+      const meta = parseProjectMeta(record) ?? parseProjectMeta(project);
+      if (!meta) {
+        throw new Error(`"${project.name}" has no board settings yet. Open it once, then export it.`);
+      }
+      const fileName = downloadProjectFile(record.name || project.name, meta, record.files);
+      setFileNotice({ tone: 'success', text: `Saved ${fileName} to your Downloads folder.` });
+    } catch (error) {
+      setFileNotice({ tone: 'warning', text: error instanceof Error ? error.message : 'Could not export that project.' });
+    }
   };
 
   const handleConfirmDeleteProject = async () => {
@@ -474,6 +523,15 @@ export default function DashboardPage() {
                   </h2>
                 </div>
                 <div className='flex items-center gap-3'>
+                  <Button
+                    variant='inverse'
+                    icon={<Upload size={16} />}
+                    onClick={() => void handleImportProject()}
+                    disabled={isImporting}
+                    title='Open a .sticial project file, for example from a USB stick or a classmate'
+                  >
+                    {isImporting ? 'Importing...' : 'Import'}
+                  </Button>
                   <Button icon={<Plus size={16} />} onClick={() => { setIsProjectModalOpen(false); handleStartBuild(); }}>
                     New Project
                   </Button>
@@ -490,6 +548,11 @@ export default function DashboardPage() {
 
               {/* Modal Body */}
               <div className='flex-1 overflow-y-auto p-6 space-y-3'>
+                {fileNotice ? (
+                  <StatusBanner tone={fileNotice.tone} title={fileNotice.tone === 'success' ? 'Project exported' : 'Project file problem'}>
+                    {fileNotice.text}
+                  </StatusBanner>
+                ) : null}
                 {isLoading ? (
                   <div className='space-y-3'>
                     {[0, 1, 2].map((i) => (
@@ -568,6 +631,18 @@ export default function DashboardPage() {
                               <CalendarClock size={12} />
                               {formatProjectDate(project.updatedAt)}
                             </span>
+                            <button
+                              type='button'
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleExportSavedProject(project);
+                              }}
+                              className='rounded-2xl p-2.5 text-[color:var(--ui-color-text-soft)] transition-colors hover:bg-[color:var(--ui-surface-quiet)] hover:text-[color:var(--ui-color-text)]'
+                              title='Export as a .sticial file'
+                              aria-label={`Export ${project.name}`}
+                            >
+                              <Download size={15} />
+                            </button>
                             <button
                               type='button'
                               onClick={(event) => handleStartRename(event, project)}

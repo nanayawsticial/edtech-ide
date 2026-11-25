@@ -54,7 +54,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
   const iconOnly = !children && (icon || trailingIcon);
 
   return (
-    <motion.div className={cn("inline-flex", fullWidth && "w-full")} {...motionProps}>
+    // tabIndex={-1}: Framer Motion makes elements with tap animations focusable (tabindex="0")
+    // unless they already have a tabindex. That gave every Button a second, unnamed Tab stop.
+    <motion.div className={cn("inline-flex", fullWidth && "w-full")} tabIndex={-1} {...motionProps}>
       <button
         ref={ref}
         type={type}

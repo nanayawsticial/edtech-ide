@@ -1,7 +1,8 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
-import { Link as LinkIcon, RotateCcw, SendHorizontal, Terminal, Unlink } from 'lucide-react';
+﻿import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { RotateCcw, SendHorizontal, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import type { SerialMessage, useWebSerial } from '../../hooks/useWebSerial';
+import { useSimulationStore } from '@/stores/simulationStore';
 
 interface ConsolePanelProps {
     webSerial: ReturnType<typeof useWebSerial>;
@@ -10,29 +11,31 @@ interface ConsolePanelProps {
     emptyBody?: string;
 }
 
+const BAUD_OPTIONS = [9600, 19200, 38400, 57600, 115200];
+
 export default function ConsolePanel({
     webSerial,
     messages: filteredMessages,
     emptyTitle = 'No output yet',
     emptyBody = 'Connect a board or run something to see messages here.',
 }: ConsolePanelProps) {
-    const { isConnected, messages, connect, disconnect, writeText, clearMessages } = webSerial;
-    const visibleMessages = filteredMessages ?? messages;
-    const [baudRate, setBaudRate] = useState(9600);
+    const { isConnected, messages, writeText, clearMessages, baudRate, setBaudRate } = webSerial;
+    const simulatedLines = useSimulationStore((state) => state.simulatedSerialLines);
+    const clearSimulatedLines = useSimulationStore((state) => state.clearSimulatedSerialLines);
+    // What the simulated board prints comes after the real board's messages.
+    const visibleMessages = useMemo<SerialMessage[]>(
+        () => [
+            ...(filteredMessages ?? messages),
+            ...simulatedLines.map((text, index) => ({ type: 'app' as const, text, timestamp: index, source: 'simulation' as const })),
+        ],
+        [filteredMessages, messages, simulatedLines]
+    );
     const [inputValue, setInputValue] = useState('');
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [visibleMessages]);
-
-    const handleConnectClick = () => {
-        if (isConnected) {
-            disconnect();
-        } else {
-            connect(baudRate);
-        }
-    };
 
     const [history, setHistory] = useState<string[]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
@@ -82,18 +85,6 @@ export default function ConsolePanel({
                         <Terminal size={14} />
                         Terminal
                     </span>
-                    <Button
-                        variant="secondary"
-                        icon={isConnected ? <Unlink size={14} /> : <LinkIcon size={14} />}
-                        onClick={handleConnectClick}
-                        className={`min-h-9 rounded-[12px] px-3 py-2 text-xs ${
-                            isConnected
-                                ? 'border-emerald-400/20 bg-emerald-400/12 text-emerald-100 hover:border-emerald-300/30 hover:bg-emerald-400/16'
-                                : 'ui-action-quiet'
-                        }`}
-                    >
-                        {isConnected ? 'Connected' : 'Connect'}
-                    </Button>
                     <span className="ui-pill-surface rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]">
                         {visibleMessages.length} messages
                     </span>
@@ -104,20 +95,23 @@ export default function ConsolePanel({
                         <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--ui-color-text-soft)]">Baud</span>
                         <select
                             value={baudRate}
-                            onChange={(e) => setBaudRate(Number(e.target.value))}
-                            disabled={isConnected}
-                            className="bg-transparent text-[var(--ui-color-text)] outline-none disabled:opacity-50"
+                            onChange={(e) => {
+                                void setBaudRate(Number(e.target.value));
+                            }}
+                            className="bg-transparent text-[var(--ui-color-text)] outline-none"
+                            title={isConnected ? 'Change the live serial connection baud rate.' : 'Choose the baud rate for the next connection.'}
                         >
-                            <option value={9600}>9600</option>
-                            <option value={19200}>19200</option>
-                            <option value={38400}>38400</option>
-                            <option value={57600}>57600</option>
-                            <option value={115200}>115200</option>
+                            {BAUD_OPTIONS.map((option) => (
+                                <option key={option} value={option}>{option}</option>
+                            ))}
                         </select>
                     </label>
                     <button
                         type="button"
-                        onClick={clearMessages}
+                        onClick={() => {
+                            clearMessages();
+                            clearSimulatedLines();
+                        }}
                         className="ui-action-quiet inline-flex h-9 items-center justify-center rounded-[12px] px-3 text-xs font-semibold uppercase tracking-[0.14em] transition-colors"
                         title="Clear terminal"
                     >
@@ -138,7 +132,7 @@ export default function ConsolePanel({
                 ) : (
                     <div className="space-y-1.5">
                         {visibleMessages.map((msg, index: number) => {
-                            let label = 'App';
+                            let label = msg.source === 'simulation' ? 'Simulation' : 'App';
                             let toneClass = 'ui-elevated-surface text-[var(--ui-color-text-on-surface)]';
 
                             switch (msg.type) {

@@ -65,15 +65,18 @@ for (const { source } of blockSources) {
 
 const missingExtensionRegistrations = [...usedExtensions].filter((name) => !registeredExtensions.has(name));
 const missingExtensionBootstrapCalls = [];
-const requiredArduinoGeneratorBlocks = ['arduino_tft_init', 'arduino_tft_clear', 'arduino_tft_print', 'arduino_board_led', 'arduino_led_set', 'arduino_tone_pin', 'arduino_tone_pin_duration', 'arduino_no_tone_pin'];
+// Starter timing blocks are in every beginner's palette; they had no generator until 2026-11.
+const STARTER_TIMING_BLOCKS = ['time_delay', 'time_wait_seconds', 'time_wait_until'];
+const requiredArduinoGeneratorBlocks = ['arduino_tft_init', 'arduino_tft_clear', 'arduino_tft_print', 'arduino_board_led', 'arduino_led_set', 'arduino_tone_pin', 'arduino_tone_pin_duration', 'arduino_no_tone_pin', ...STARTER_TIMING_BLOCKS];
 const missingRequiredArduinoGenerators = requiredArduinoGeneratorBlocks.filter((type) => {
-  const directHandler = new RegExp(`forBlock\\['${type}'\\]`).test(generatorSource);
+  // Scoped to the Arduino generator so a MicroPython handler can't satisfy it.
+  const directHandler = new RegExp(`\\(arduinoGenerator as any\\)\\.forBlock\\['${type}'\\]`).test(generatorSource);
   const overrideHandler = new RegExp(`\\b${type}\\(block: Blockly\\.Block\\)`).test(generatorSource);
   return !directHandler && !overrideHandler;
 });
 
 
-const requiredMicroPythonGeneratorBlocks = ['arduino_board_led', 'arduino_led_set', 'arduino_tone_pin', 'arduino_tone_pin_duration', 'arduino_no_tone_pin'];
+const requiredMicroPythonGeneratorBlocks = ['arduino_board_led', 'arduino_led_set', 'arduino_tone_pin', 'arduino_tone_pin_duration', 'arduino_no_tone_pin', ...STARTER_TIMING_BLOCKS];
 const micropythonSectionStart = generatorSource.indexOf('export const micropythonGenerator');
 const micropythonSection = micropythonSectionStart === -1 ? '' : generatorSource.slice(micropythonSectionStart);
 const missingRequiredMicroPythonGenerators = requiredMicroPythonGeneratorBlocks.filter((type) => {

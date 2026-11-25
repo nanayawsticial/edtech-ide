@@ -6,6 +6,10 @@ import { useBoard } from '@/contexts/BoardContext';
 import { useProject } from '@/contexts/ProjectContext';
 import MainLayout from '@/components/layout/MainLayout';
 import SplitView from '@/components/ide/SplitView';
+import LessonPanel from '@/components/ide/lessons/LessonPanel';
+import LiveInputsPanel from '@/components/ide/LiveInputsPanel';
+import { getLesson } from '@/lib/lessons';
+import { useLessonStore } from '@/stores/lessonStore';
 
 function LoadingWorkspaceCard({ title, description }: { title: string; description: string }) {
     return (
@@ -58,6 +62,16 @@ export default function Workspace() {
             setProjectName(suggestedName);
         }
 
+        // A new project from a course lesson opens its guide; any other new project closes it.
+        if (pendingProjectIntent) {
+            const lesson = getLesson(pendingProjectIntent.lessonSlug);
+            if (lesson) {
+                useLessonStore.getState().startLesson(lesson.slug);
+            } else {
+                useLessonStore.getState().endLesson();
+            }
+        }
+
         clearPendingProjectIntent();
     }, [clearPendingProjectIntent, codingMode, currentBoard, environment, hasHydrated, pendingProjectIntent, projectId, setProjectName]);
 
@@ -74,10 +88,12 @@ export default function Workspace() {
 
     return (
         <MainLayout>
-            <div className={environment === 'virtual' ? 'circuit-lab-page flex h-full min-h-0 flex-col' : 'ui-foundation-shell flex h-full min-h-0 flex-col'}>
+            <div className={environment === 'virtual' ? 'circuit-lab-page relative flex h-full min-h-0 flex-col' : 'ui-foundation-shell relative flex h-full min-h-0 flex-col'}>
                 <div className="min-h-0 flex-1">
                     <SplitView />
                 </div>
+                <LessonPanel />
+                <LiveInputsPanel />
             </div>
         </MainLayout>
     );

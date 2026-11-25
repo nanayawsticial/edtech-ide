@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Link2, Radio, TerminalSquare, Zap } from "lucide-react";
 import ConsolePanel from "./ConsolePanel";
 import type { useWebSerial, SerialMessage } from "../../hooks/useWebSerial";
+import { useSimulationStore } from "@/stores/simulationStore";
 
 export type BlockTerminalTab = "serial" | "build" | "connection";
 
@@ -21,11 +22,13 @@ const TAB_OPTIONS: Array<{ id: BlockTerminalTab; label: string; icon: React.Reac
   { id: "connection", label: "Connection", icon: <Link2 size={14} /> },
 ];
 
-const BUILD_MESSAGE_PATTERN = /(compil|upload|flash|stk500|hex|syncing|synced |raw repl|main\.py|micropython sync|compiler api|files saved to the micropython device|connect device first|upload aborted|verify)/i;
+const BUILD_MESSAGE_PATTERN = /(compil|upload|flash|stk500|hex|syncing|synced |raw repl|main\.py|micropython sync|compiler api|files saved to the micropython device|connect device first|upload aborted|verify|simulation did not start)/i;
+// Compiler diagnostics such as "main.cpp:2:11: error: 'D12' was not declared in this scope".
+const COMPILER_DIAGNOSTIC_PATTERN = /^\s*\S+:\d+:(?:\d+:)?\s*(?:fatal error|error|warning|note):/i;
 const CONNECTION_MESSAGE_PATTERN = /(connected to device|disconnected|disconnect|connection failed|no port selected|web serial|device disconnected unexpectedly|usb|baud|browser)/i;
 
 function getMessageChannel(message: SerialMessage): BlockTerminalTab {
-  if (BUILD_MESSAGE_PATTERN.test(message.text)) {
+  if (BUILD_MESSAGE_PATTERN.test(message.text) || COMPILER_DIAGNOSTIC_PATTERN.test(message.text)) {
     return "build";
   }
 
@@ -78,34 +81,87 @@ export default function BlockTerminalShell({
     [webSerial.messages]
   );
 
+  const simulatedLineCount = useSimulationStore((state) => state.simulatedSerialLines.length);
+  const isSimulating = useSimulationStore((state) => state.simulationState.running);
   const isSerialSupported = typeof navigator !== "undefined" && "serial" in navigator;
+
+  const channelCounts: Record<BlockTerminalTab, number> = {
+    serial: serialMessages.length + simulatedLineCount,
+    build: buildMessages.length,
+    connection: connectionMessages.length,
+  };
+
+  // Messages that arrived while the dock was folded count as "new" until it is opened again.
+  const [seenCounts, setSeenCounts] = useState<Record<BlockTerminalTab, number>>(channelCounts);
+  useEffect(() => {
+    if (collapsed) return;
+    setSeenCounts((previous) =>
+      previous.serial === channelCounts.serial && previous.build === channelCounts.build && previous.connection === channelCounts.connection
+        ? previous
+        : { ...channelCounts }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collapsed, channelCounts.serial, channelCounts.build, channelCounts.connection]);
+
+  const latestMessage = webSerial.messages.length > 0 ? webSerial.messages[webSerial.messages.length - 1] : null;
 
   const handleTabChange = (tab: BlockTerminalTab) => {
     setActiveTab(tab);
     onTabChange?.(tab);
   };
 
+  const openOnTab = (tab: BlockTerminalTab) => {
+    handleTabChange(tab);
+    onToggleCollapsed();
+  };
+
   if (collapsed) {
     return (
-      <section className="ui-foundation-panel flex h-12 items-center justify-between rounded-[22px] px-4 shadow-[0_20px_40px_-32px_rgba(0,0,0,0.42)]">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] border border-[color:var(--ui-color-primary)]/24 bg-[color:var(--ui-color-primary)]/12 text-[var(--ui-color-primary)]">
-            <TerminalSquare size={14} />
-          </span>
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--ui-color-text)]">Terminal</p>
-            <p className="truncate text-xs text-[var(--ui-color-text-soft)]">
-              {webSerial.isConnected ? "Connected to board" : "Disconnected"} - {webSerial.messages.length} messages
-            </p>
-          </div>
+      <section
+        aria-label="Terminal status"
+        className="ui-foundation-panel flex h-11 items-center gap-3 rounded-[18px] px-3 shadow-[0_20px_40px_-32px_rgba(0,0,0,0.42)]"
+      >
+        <span className="flex shrink-0 items-center gap-2 text-xs font-semibold text-[var(--ui-color-text-soft)]">
+          <span
+            className={`h-2 w-2 rounded-full ${webSerial.isConnected ? "bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.2)]" : "border border-[color:var(--ui-color-text-soft)]"}`}
+            aria-hidden="true"
+          />
+          {webSerial.isConnected ? "Connected" : "Not connected"}
+        </span>
+        <span className="h-5 w-px shrink-0 bg-[color:var(--ui-border-soft)]" aria-hidden="true" />
+        <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Open the terminal on">
+          {TAB_OPTIONS.map((tab) => {
+            const unread = Math.max(0, channelCounts[tab.id] - seenCounts[tab.id]);
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => openOnTab(tab.id)}
+                className="inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold text-[var(--ui-color-text-soft)] transition-colors hover:bg-[color:var(--ui-surface-elevated)] hover:text-[var(--ui-color-text-on-surface)]"
+              >
+                {tab.icon}
+                {tab.id === "serial" ? "Serial" : tab.id === "build" ? "Build" : "Connection"}
+                {unread > 0 ? (
+                  <span className="rounded-full bg-[color:var(--ui-color-primary)] px-1.5 py-0.5 text-[10px] font-bold text-white">{unread} new</span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
+        <p
+          className={`min-w-0 flex-1 truncate text-xs ${latestMessage?.type === "error" ? "font-semibold ui-text-error" : "text-[var(--ui-color-text-soft)]"}`}
+          title={latestMessage?.text}
+        >
+          {latestMessage ? latestMessage.text : "No messages yet. Verify, upload or connect a board to see output here."}
+        </p>
         <button
           type="button"
           onClick={onToggleCollapsed}
-          className="ui-action-quiet inline-flex h-8 items-center gap-2 rounded-[10px] px-3 text-xs font-semibold transition-all"
+          aria-label="Open terminal"
+          title="Open terminal"
+          className="ui-action-quiet inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] transition-all"
         >
-          Open
-          <ChevronUp size={14} />
+          <ChevronUp size={15} />
         </button>
       </section>
     );
@@ -113,54 +169,51 @@ export default function BlockTerminalShell({
 
   return (
     <section className="ui-foundation-panel flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] shadow-[0_28px_70px_-42px_rgba(0,0,0,0.42)]">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--ui-border-soft)] px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--ui-color-primary)]/76">Terminal Dock</p>
-          <p className="mt-1 text-sm ui-panel-copy-soft">Serial, upload, and device feedback for block projects.</p>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[color:var(--ui-border-soft)] px-3 py-1.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5" role="group" aria-label="Terminal views">
+          {TAB_OPTIONS.map((tab) => {
+            const isActive = activeTab === tab.id;
+            const count = channelCounts[tab.id];
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                aria-pressed={isActive}
+                onClick={() => handleTabChange(tab.id)}
+                className={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs font-semibold transition-all ${
+                  isActive
+                    ? 'ui-tab-active shadow-[0_14px_26px_-18px_rgba(0,0,0,0.28)]'
+                    : 'ui-pill-surface text-[var(--ui-color-text-soft)] hover:bg-[color:var(--ui-surface-elevated)] hover:text-[var(--ui-color-text-on-surface)]'
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+                <span className="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px] font-bold opacity-90">{count}</span>
+              </button>
+            );
+          })}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <span
-            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
-              webSerial.isConnected
+            className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] ${
+              webSerial.isConnected || isSimulating
                 ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
                 : "ui-pill-surface text-[var(--ui-color-text-soft)]"
             }`}
           >
             <Radio size={12} />
-            {webSerial.isConnected ? "Connected" : "Disconnected"}
+            {webSerial.isConnected ? "Connected" : isSimulating ? "Simulating" : "Disconnected"}
           </span>
           <button
             type="button"
             onClick={onToggleCollapsed}
-            className="ui-action-quiet inline-flex h-9 items-center gap-2 rounded-[12px] px-3 text-xs font-semibold transition-all"
+            aria-label="Collapse terminal"
+            title="Collapse terminal"
+            className="ui-action-quiet inline-flex h-8 w-8 items-center justify-center rounded-[10px] transition-all"
           >
-            Collapse
-            <ChevronDown size={14} />
+            <ChevronDown size={15} />
           </button>
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 border-b border-[color:var(--ui-border-soft)] px-4 py-2.5">
-        {TAB_OPTIONS.map((tab) => {
-          const isActive = activeTab === tab.id;
-          const count = tab.id === "serial" ? serialMessages.length : tab.id === "build" ? buildMessages.length : connectionMessages.length;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => handleTabChange(tab.id)}
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
-                isActive
-                  ? 'ui-tab-active shadow-[0_14px_26px_-18px_rgba(0,0,0,0.28)]'
-                  : 'ui-pill-surface text-[var(--ui-color-text-soft)] hover:bg-[color:var(--ui-surface-elevated)] hover:text-[var(--ui-color-text-on-surface)]'
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-              <span className="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px] font-bold opacity-90">{count}</span>
-            </button>
-          );
-        })}
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
@@ -169,16 +222,13 @@ export default function BlockTerminalShell({
             webSerial={webSerial}
             messages={serialMessages}
             emptyTitle="No serial activity yet"
-            emptyBody="Connect a board or wait for serial output to start filling this monitor."
+            emptyBody="Run the simulation or connect a board. Whatever your program prints with Serial shows up here."
           />
         ) : null}
 
         {activeTab === "build" ? (
           <div className="flex h-full min-h-0 flex-col">
-            <div className="border-b border-[color:var(--ui-border-soft)] px-4 py-3 text-xs ui-panel-copy-quiet">
-              Verify, upload, sync, and flash events appear here while the block project talks to the board toolchain.
-            </div>
-            <div className="custom-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
+            <div className="custom-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
               {buildMessages.length > 0 ? (
                 buildMessages.map((message, index) => (
                   <div key={`${message.timestamp}-${index}`} className={`rounded-[12px] px-3 py-2 ${toneForMessage(message.type)}`}>
@@ -187,10 +237,10 @@ export default function BlockTerminalShell({
                   </div>
                 ))
               ) : (
-                <div className="flex h-full min-h-[120px] items-center justify-center text-center">
-                  <div className="space-y-2">
+                <div className="flex h-full min-h-[72px] items-center justify-center text-center">
+                  <div className="space-y-1.5">
                     <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--ui-color-text-soft)]">No build activity yet</p>
-                    <p className="text-xs ui-panel-copy-quiet">Run Verify or Upload to start filling this stream.</p>
+                    <p className="text-xs ui-panel-copy-quiet">Run Verify or Upload. Compile, upload and sync events show up here.</p>
                   </div>
                 </div>
               )}

@@ -18,7 +18,7 @@ import { useEditorStore, type FileItem } from '@/stores/editorStore';
 import { useSplitViewEventBus } from './split-view/SplitViewEventBus';
 import { fadeInUp } from '@/components/ui/motion';
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type UITreeNode = FileItem & { children?: UITreeNode[] };
 
@@ -30,7 +30,7 @@ function inferFileType(filename: string): string {
     return 'text';
 }
 
-// â”€â”€â”€ Helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helper ───────────────────────────────────────────────────────────────────
 
 function nodeMatchesQuery(item: UITreeNode, query: string): boolean {
   if (!query) return true;
@@ -38,7 +38,7 @@ function nodeMatchesQuery(item: UITreeNode, query: string): boolean {
   return Boolean(item.children?.some((child) => nodeMatchesQuery(child, query)));
 }
 
-// â”€â”€â”€ FileNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── FileNode ─────────────────────────────────────────────────────────────────
 
 interface FileNodeProps {
   item: UITreeNode;
@@ -226,7 +226,7 @@ function FileNode({
   );
 }
 
-// â”€â”€â”€ FileExplorer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── FileExplorer ─────────────────────────────────────────────────────────────
 
 export default function FileExplorer() {
   const files = useEditorStore((state) => state.files);
@@ -277,7 +277,7 @@ export default function FileExplorer() {
     return tree;
   }, [files]);
 
-  // filteredQuery IS in deps here â€” no stale closure
+  // filteredQuery IS in deps here — no stale closure
   const visibleTree = useMemo(
     () => fileTree.filter((file) => nodeMatchesQuery(file, filteredQuery)),
     [fileTree, filteredQuery]

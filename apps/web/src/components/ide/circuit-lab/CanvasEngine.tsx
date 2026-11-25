@@ -8,12 +8,52 @@ import InteractionLayer from './InteractionLayer';
 import type { CanvasTransform, MountPreviewState, SceneGraph, WireDraftState, WorldPinNode } from './sceneTypes';
 import WireEngine from './WireEngine';
 
+// Rendered once: an inline <style> inside the canvas was rewritten on every drag frame, which made
+// the browser re-parse it and restyle every element on the page (thousands of breadboard holes).
+const CANVAS_CSS = `
+    wokwi-arduino-uno, wokwi-led, wokwi-servo, wokwi-hc-sr04, wokwi-dht22, wokwi-ssd1306, wokwi-pushbutton, wokwi-potentiometer, wokwi-lcd1602, wokwi-resistor,
+    wokwi-buzzer, wokwi-rgb-led, wokwi-photoresistor-sensor, wokwi-small-sound-sensor {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    @keyframes wire-pulse {
+      0%   { filter: drop-shadow(0 0 4px var(--wire-color)); opacity: 0.16; }
+      50%  { filter: drop-shadow(0 0 12px var(--wire-color)) drop-shadow(0 0 24px var(--wire-color)); opacity: 0.55; }
+      100% { filter: drop-shadow(0 0 4px var(--wire-color)); opacity: 0.16; }
+    }
+    @keyframes wire-draw {
+      from { stroke-dashoffset: 1000; }
+      to   { stroke-dashoffset: 0; }
+    }
+    @keyframes wire-preview-flow {
+      from { stroke-dashoffset: 0; }
+      to   { stroke-dashoffset: -40; }
+    }
+    @keyframes led-glow {
+      0%   { filter: drop-shadow(0 0 10px var(--led-color)); box-shadow: inset 0 0 10px var(--led-color); opacity: 0.7; }
+      50%  { filter: drop-shadow(0 0 25px var(--led-color)); box-shadow: inset 0 0 20px var(--led-color); opacity: 1; }
+      100% { filter: drop-shadow(0 0 10px var(--led-color)); box-shadow: inset 0 0 10px var(--led-color); opacity: 0.7; }
+    }
+    @keyframes component-selected-halo {
+      0%, 100% { opacity: 0.3; }
+      50%      { opacity: 0.9; }
+    }
+    .animate-wire-draw { stroke-dasharray: 1000; animation: wire-draw 400ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+    .animate-wire-preview { animation: wire-preview-flow 1s linear infinite; }
+    .animate-wire-pulse { animation: wire-pulse 2s ease-in-out infinite; }
+    .animate-led-glow { animation: led-glow 1.5s ease-in-out infinite; }
+    .animate-component-selected-halo { animation: component-selected-halo 2s ease-in-out infinite; will-change: opacity; }
+`;
+const CANVAS_STYLE = <style dangerouslySetInnerHTML={{ __html: CANVAS_CSS }} />;
+
 interface CanvasInteractionProps {
   pins: WorldPinNode[];
   visiblePinTargetIds: Set<string>;
   highlightedPinIds: Set<string>;
   validTargetPinId: string | null;
   mountPreview: MountPreviewState | null;
+  isDraggingComponent?: boolean;
   wireDraft: WireDraftState | null;
   cursor: string;
   onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
@@ -59,49 +99,11 @@ export default function CanvasEngine({
   return (
     <div
       ref={containerRef}
-      className="relative h-full w-full overflow-hidden rounded-[20px] bg-[#050a12] ring-1 ring-white/5"
+      className="relative h-full w-full overflow-hidden rounded-[20px] bg-[#050a12]"
       data-canvas-root="true"
       data-testid="circuit-canvas-root"
     >
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-            wokwi-arduino-uno, wokwi-led, wokwi-servo, wokwi-hc-sr04, wokwi-dht22, wokwi-ssd1306, wokwi-pushbutton, wokwi-potentiometer, wokwi-lcd1602, wokwi-resistor {
-              display: block;
-              width: 100%;
-              height: 100%;
-            }
-            @keyframes wire-pulse {
-              0%   { filter: drop-shadow(0 0 4px var(--wire-color)); opacity: 0.16; }
-              50%  { filter: drop-shadow(0 0 12px var(--wire-color)) drop-shadow(0 0 24px var(--wire-color)); opacity: 0.55; }
-              100% { filter: drop-shadow(0 0 4px var(--wire-color)); opacity: 0.16; }
-            }
-            @keyframes wire-draw {
-              from { stroke-dashoffset: 1000; }
-              to   { stroke-dashoffset: 0; }
-            }
-            @keyframes wire-preview-flow {
-              from { stroke-dashoffset: 0; }
-              to   { stroke-dashoffset: -40; }
-            }
-            @keyframes led-glow {
-              0%   { filter: drop-shadow(0 0 10px var(--led-color)); box-shadow: inset 0 0 10px var(--led-color); opacity: 0.7; }
-              50%  { filter: drop-shadow(0 0 25px var(--led-color)); box-shadow: inset 0 0 20px var(--led-color); opacity: 1; }
-              100% { filter: drop-shadow(0 0 10px var(--led-color)); box-shadow: inset 0 0 10px var(--led-color); opacity: 0.7; }
-            }
-            @keyframes component-selected-glow {
-              0%   { filter: drop-shadow(0 0 6px rgba(34,211,238,0.35)); }
-              50%  { filter: drop-shadow(0 0 14px rgba(34,211,238,0.72)); }
-              100% { filter: drop-shadow(0 0 6px rgba(34,211,238,0.35)); }
-            }
-            .animate-wire-draw { stroke-dasharray: 1000; animation: wire-draw 400ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
-            .animate-wire-preview { animation: wire-preview-flow 1s linear infinite; }
-            .animate-wire-pulse { animation: wire-pulse 2s ease-in-out infinite; }
-            .animate-led-glow { animation: led-glow 1.5s ease-in-out infinite; }
-            .animate-component-selected { animation: component-selected-glow 2s ease-in-out infinite; }
-          `,
-        }}
-      />
+      {CANVAS_STYLE}
 
       <div className="absolute inset-0 z-0 bg-[linear-gradient(180deg,rgba(10,16,26,0.96)_0%,rgba(4,8,14,1)_100%)]" aria-hidden="true" />
 

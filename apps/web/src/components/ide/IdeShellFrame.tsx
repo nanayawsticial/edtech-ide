@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React from "react";
 
@@ -24,9 +24,9 @@ export default function IdeShellFrame({
   rightWidth,
 }: IdeShellFrameProps) {
   return (
-    <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-0">
       <div
-        className="grid min-h-0 flex-1 gap-4 transition-[grid-template-columns] duration-200"
+        className="grid min-h-0 flex-1 gap-0 transition-[grid-template-columns] duration-200"
         style={{
           gridTemplateColumns: `${leftCollapsed ? "0px" : `${leftWidth}px`} minmax(0,1fr) ${
             rightCollapsed ? "0px" : `${rightWidth}px`

@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useBoard } from '@/contexts/BoardContext';
 import { useProject } from '@/contexts/ProjectContext';
 import ThemeToggle from './ThemeToggle';
+import BackHomeButtons from './BackHomeButtons';
 
 export default function Navbar() {
     const router = useRouter();
@@ -23,7 +24,7 @@ export default function Navbar() {
     }
 
     return (
-        <header className="flex h-14 items-center justify-between border-b border-panel-border bg-panel px-4 text-foreground backdrop-blur-xl transition-colors">
+        <header className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-panel-border bg-panel px-4 py-2 text-foreground backdrop-blur-xl transition-colors">
             <div className="flex items-center gap-4">
                 <button
                     type="button"
@@ -47,7 +48,13 @@ export default function Navbar() {
                 ) : null}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+                <BackHomeButtons
+                    backFallbackHref="/"
+                    variant="ghost"
+                    size="sm"
+                    buttonClassName="rounded-lg border border-panel-border bg-panel px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-muted hover:border-accent/50 hover:bg-panel hover:text-foreground"
+                />
                 {isDashboard && projectId ? (
                     <button
                         type="button"

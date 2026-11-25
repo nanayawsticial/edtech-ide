@@ -2,11 +2,13 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Blocks, CheckCircle2, Code2, Play, Plus, Rocket, RotateCcw, Save, Settings2, Square } from 'lucide-react';
+import { ArrowLeft, Blocks, CheckCircle2, ChevronRight, Code2, Download, MoreHorizontal, Play, Plus, Rocket, RotateCcw, Save, Settings2, Square } from 'lucide-react';
 import type { CodingMode } from '@/contexts/BoardContext';
 import { Button } from '@/components/ui/Button';
+import { MenuButton } from '@/components/ui/MenuButton';
 import { fadeInUp } from '@/components/ui/motion';
 import ThemeToggle from '@/components/layout/ThemeToggle';
+import BackHomeButtons from '@/components/layout/BackHomeButtons';
 
 interface CodingEnvironmentTopBarProps {
   projectName: string;
@@ -30,6 +32,8 @@ interface CodingEnvironmentTopBarProps {
   onSaveProject: () => void;
   onNewSketch: () => void;
   onOpenPreferences: () => void;
+  /** Saves the project as a .sticial file. */
+  onExportProject?: () => void;
   onVerify?: () => void;
   onUpload?: () => void;
   saveStatusText?: string | null;
@@ -58,6 +62,7 @@ export default function CodingEnvironmentTopBar({
   onSaveProject,
   onNewSketch,
   onOpenPreferences,
+  onExportProject,
   onVerify,
   onUpload,
   saveStatusText,
@@ -75,14 +80,13 @@ export default function CodingEnvironmentTopBar({
   if (activeMode === 'block') {
     return (
       <motion.header
-        className='overflow-hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,#15121f_0%,#111019_100%)] shadow-[0_24px_64px_-44px_rgba(0,0,0,1)]'
+        className='overflow-hidden rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,#15121f_0%,#111019_100%)] shadow-[0_24px_64px_-44px_rgba(0,0,0,1)] sm:rounded-[24px]'
         variants={fadeInUp}
         initial='hidden'
         animate='visible'
       >
-        <div className='flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5'>
-          <div className='flex min-w-0 flex-col gap-3'>
-            <div className='flex min-w-0 flex-wrap items-center gap-2'>
+        <div className='flex flex-wrap items-center gap-3 px-3 py-2.5 sm:px-4'>
+          <div className='flex min-w-0 flex-wrap items-center gap-2'>
               <div className='inline-flex items-center gap-1 rounded-[16px] border border-white/10 bg-white/[0.04] p-1.5'>
                 <button
                   type='button'
@@ -105,29 +109,48 @@ export default function CodingEnvironmentTopBar({
                 {boardName}
               </span>
               {saveStatusText ? <span className={`rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] ${saveStatusClass}`}>{saveStatusText}</span> : null}
-            </div>
-            <div className='flex flex-wrap items-center gap-2'>
-              <span className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${componentCount > 0 ? 'border-emerald-300/24 bg-emerald-400/12 text-emerald-100' : 'border-white/10 bg-white/[0.04] text-slate-400'}`}>
-                1 Build
-              </span>
-              <span className='rounded-full border border-violet-300/24 bg-violet-400/14 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-violet-100'>
-                2 Code
-              </span>
-              <span className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${canUploadAndSimulate || isSimulationActive ? 'border-cyan-300/24 bg-cyan-400/12 text-cyan-100' : 'border-white/10 bg-white/[0.04] text-slate-400'}`}>
-                3 Run
-              </span>
-            </div>
           </div>
 
-          <div className='flex flex-wrap items-center gap-2'>
-            <Button
-              variant='secondary'
-              icon={<ArrowLeft size={16} />}
+          <nav aria-label='Project steps' className='mx-auto flex items-center gap-1 rounded-[16px] border border-white/10 bg-white/[0.04] p-1.5'>
+            <button
+              type='button'
               onClick={onBackToCircuitLab}
-              className='min-h-11 rounded-[16px] border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white hover:border-white/16 hover:bg-white/[0.08] hover:text-white'
+              title='Go to Circuit Lab to build your circuit'
+              className={`inline-flex h-9 items-center gap-2 rounded-[12px] px-3 text-xs font-semibold uppercase tracking-[0.16em] transition-all hover:bg-white/[0.06] ${componentCount > 0 ? 'text-emerald-100' : 'text-slate-300'}`}
             >
-              Back to Circuit
-            </Button>
+              <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${componentCount > 0 ? 'bg-emerald-400/20 text-emerald-200' : 'bg-white/[0.08] text-slate-300'}`}>
+                {componentCount > 0 ? <CheckCircle2 size={13} aria-hidden='true' /> : '1'}
+              </span>
+              Build
+            </button>
+            <ChevronRight size={14} className='text-slate-500' aria-hidden='true' />
+            <span
+              aria-current='step'
+              className='inline-flex h-9 items-center gap-2 rounded-[12px] border border-violet-300/24 bg-violet-400/14 px-3 text-xs font-semibold uppercase tracking-[0.16em] text-violet-100'
+            >
+              <span className='flex h-5 w-5 items-center justify-center rounded-full bg-violet-300/25 text-[10px]'>2</span>
+              Code
+            </span>
+            <ChevronRight size={14} className='text-slate-500' aria-hidden='true' />
+            <button
+              type='button'
+              onClick={onUploadAndSimulate}
+              disabled={simulationDisabled || isSimulationActive}
+              title={canUploadAndSimulate ? 'Run your code in the simulator' : 'Add blocks and a circuit first'}
+              className={`inline-flex h-9 items-center gap-2 rounded-[12px] px-3 text-xs font-semibold uppercase tracking-[0.16em] transition-all enabled:hover:bg-white/[0.06] disabled:cursor-default ${canUploadAndSimulate || isSimulationActive ? 'text-cyan-100' : 'text-slate-400'}`}
+            >
+              <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${canUploadAndSimulate || isSimulationActive ? 'bg-cyan-400/20 text-cyan-100' : 'bg-white/[0.08] text-slate-400'}`}>3</span>
+              Run
+            </button>
+          </nav>
+
+          <div className='flex w-full items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 md:w-auto md:pb-0'>
+            <BackHomeButtons
+              backFallbackHref="/dashboard"
+              variant="inverse"
+              size="sm"
+              buttonClassName="min-h-11 rounded-[16px] border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white hover:border-white/16 hover:bg-white/[0.08] hover:text-white"
+            />
             <Button
               variant='secondary'
               icon={<Save size={16} />}
@@ -137,31 +160,17 @@ export default function CodingEnvironmentTopBar({
             >
               {isSaving ? 'Saving...' : 'Save'}
             </Button>
-            <Button
-              variant='secondary'
-              icon={<Plus size={16} />} 
-              onClick={onNewSketch}
-              className='min-h-11 rounded-[16px] border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white hover:border-white/16 hover:bg-white/[0.08] hover:text-white'
-            >
-              New Sketch
-            </Button>
-            <Button
-              variant='secondary'
-              icon={<RotateCcw size={16} />}
-              onClick={onResetSimulation}
-              disabled={!canResetSimulation}
-              className='min-h-11 rounded-[16px] border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white hover:border-white/16 hover:bg-white/[0.08] hover:text-white'
-            >
-              Reset
-            </Button>
-            <Button
-              variant='secondary'
-              icon={<Settings2 size={16} />}
-              onClick={onOpenPreferences}
-              className='min-h-11 rounded-[16px] border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white hover:border-white/16 hover:bg-white/[0.08] hover:text-white'
-            >
-              Preferences
-            </Button>
+            <MenuButton
+              label='More'
+              icon={<MoreHorizontal size={16} aria-hidden='true' />}
+              className='inline-flex min-h-11 items-center gap-2 rounded-[16px] border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white transition-colors hover:border-white/16 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50'
+              items={[
+                { id: 'new-sketch', label: 'New Sketch', icon: <Plus size={15} />, onSelect: onNewSketch },
+                ...(onExportProject ? [{ id: 'export', label: 'Export project file', icon: <Download size={15} />, onSelect: onExportProject }] : []),
+                { id: 'reset', label: 'Reset simulation', icon: <RotateCcw size={15} />, onSelect: onResetSimulation, disabled: !canResetSimulation },
+                { id: 'preferences', label: 'Preferences', icon: <Settings2 size={15} />, onSelect: onOpenPreferences },
+              ]}
+            />
             <Button
               icon={isSimulationActive ? <Square size={16} /> : <Play size={16} />}
               onClick={() => {
@@ -192,12 +201,12 @@ export default function CodingEnvironmentTopBar({
 
   return (
     <motion.header
-      className='flex-shrink-0 overflow-hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,#15121f_0%,#111019_100%)] shadow-[0_24px_64px_-44px_rgba(0,0,0,1)]'
+      className='flex-shrink-0 overflow-hidden rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,#15121f_0%,#111019_100%)] shadow-[0_24px_64px_-44px_rgba(0,0,0,1)] sm:rounded-[24px]'
       variants={fadeInUp}
       initial='hidden'
       animate='visible'
     >
-      <div className='flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 sm:px-5'>
+      <div className='flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 sm:px-5'>
         {/* ── Left: mode switcher + board chip + status ──────────── */}
         <div className='flex min-w-0 flex-wrap items-center gap-2'>
 
@@ -275,7 +284,13 @@ export default function CodingEnvironmentTopBar({
         </div>
 
         {/* ── Right: action buttons ──────────────────────────────── */}
-        <div className='flex flex-wrap items-center gap-2'>
+        <div className='flex w-full items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 md:w-auto md:pb-0'>
+          <BackHomeButtons
+            backFallbackHref="/dashboard"
+            variant="inverse"
+            size="sm"
+            buttonClassName="min-h-9 rounded-[12px] border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white hover:border-white/16 hover:bg-white/[0.08] hover:text-white"
+          />
           <Button
             variant='secondary'
             icon={<ArrowLeft size={14} />}
@@ -337,5 +352,8 @@ export default function CodingEnvironmentTopBar({
     </motion.header>
   );
 }
+
+
+
 
 

@@ -1,4 +1,13 @@
-﻿import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type MouseEvent as ReactMouseEvent,
+  type MutableRefObject,
+  type SetStateAction,
+} from 'react';
 import type { StudioView } from '../../TopToolbar';
 import type { BlockTerminalTab } from '../../BlockTerminalShell';
 import {
@@ -6,12 +15,23 @@ import {
   BLOCK_TERMINAL_DEFAULT_HEIGHT,
   BLOCK_TERMINAL_HEIGHT_STORAGE_KEY,
   BLOCK_TERMINAL_TAB_STORAGE_KEY,
+  COMPACT_WORKSPACE_BREAKPOINT,
+  SHORT_WORKSPACE_HEIGHT,
+  getPhysicalTextViewportMode,
+  type PhysicalTextViewportMode,
 } from '../constants';
 import { clampBlockTerminalHeight, getInitialStudioView } from '../helpers';
 import { useSplitViewEventBus } from '../SplitViewEventBus';
 
 const RIGHT_EDITOR_FOCUS_THRESHOLD = 20;
 const LEFT_EDITOR_FOCUS_THRESHOLD = 26;
+const START_VIEW_OVERRIDE_KEY = 'edtech:ide-start-view';
+
+function readStartViewOverride(): StudioView | null {
+  if (typeof window === 'undefined') return null;
+  const stored = window.sessionStorage.getItem(START_VIEW_OVERRIDE_KEY);
+  return stored === 'code' || stored === 'circuit' ? stored : null;
+}
 
 interface UseIDELayoutStateOptions {
   environment: string;
@@ -20,39 +40,74 @@ interface UseIDELayoutStateOptions {
   editorFontSize: number;
 }
 
+function syncAutoCollapsedPanel(
+  shouldCollapse: boolean,
+  setCollapsed: Dispatch<SetStateAction<boolean>>,
+  autoCollapsedRef: MutableRefObject<boolean>,
+) {
+  if (shouldCollapse) {
+    setCollapsed((prev) => {
+      if (prev) {
+        return prev;
+      }
+
+      autoCollapsedRef.current = true;
+      return true;
+    });
+    return;
+  }
+
+  if (autoCollapsedRef.current) {
+    autoCollapsedRef.current = false;
+    setCollapsed(false);
+  }
+}
+
 export function useIDELayoutState({ environment, isBlockMode, supportsDeviceFiles, editorFontSize }: UseIDELayoutStateOptions) {
   const eventBus = useSplitViewEventBus();
   const [terminalHeight, setTerminalHeight] = useState(BLOCK_TERMINAL_DEFAULT_HEIGHT);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
-  const [bottomCollapsed, setBottomCollapsed] = useState(false);
+  // Block mode starts with the terminal folded into its status line; a saved preference wins, and
+  // compile/upload open it on the Build tab (CompileController emits layout:block-terminal-request).
+  const [bottomCollapsed, setBottomCollapsed] = useState(true);
   const [blockTerminalTab, setBlockTerminalTab] = useState<BlockTerminalTab>('serial');
   const [hasLoadedBlockTerminalPrefs, setHasLoadedBlockTerminalPrefs] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(() => (typeof window === 'undefined' ? 1440 : window.innerWidth));
+  const [physicalTextViewportMode, setPhysicalTextViewportMode] = useState<PhysicalTextViewportMode>(() =>
+    typeof window === 'undefined' ? 'wide' : getPhysicalTextViewportMode(window.innerWidth),
+  );
   const [leftRailView, setLeftRailView] = useState('files');
-  const [rightPanelView, setRightPanelView] = useState('status');
+  const [rightPanelView, setRightPanelView] = useState('terminal');
   const autoFocusCollapsedLeftRef = useRef(false);
   const autoFocusCollapsedRightRef = useRef(false);
+  const autoViewportCollapsedLeftRef = useRef(false);
+  const autoViewportCollapsedRightRef = useRef(false);
+  const autoViewportCollapsedBottomRef = useRef(false);
   const leftFocusThresholdReachedRef = useRef(false);
   const rightFocusThresholdReachedRef = useRef(false);
+  const lastPhysicalTextViewportModeRef = useRef<PhysicalTextViewportMode | null>(null);
+
+  void supportsDeviceFiles;
 
   // One-shot override: the wizard stores 'edtech:ide-start-view' in sessionStorage
   // when the user explicitly picked a coding mode (not from Circuit Lab).
-  // We consume it exactly once here so the env-reset effect below doesn't clobber it.
-  const startViewOverrideRef = useRef(false);
-  const [activeView, setActiveView] = useState<StudioView>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = window.sessionStorage.getItem('edtech:ide-start-view');
-      if (stored === 'code' || stored === 'circuit') {
-        window.sessionStorage.removeItem('edtech:ide-start-view');
-        startViewOverrideRef.current = true;
-        return stored as StudioView;
-      }
-    }
-    return getInitialStudioView(environment);
-  });
+  // We read it once on mount (render stays side-effect free) and clear it in an effect,
+  // so the env-reset effect below doesn't clobber it.
+  const [startViewOverride] = useState<StudioView | null>(readStartViewOverride);
+  const startViewOverrideRef = useRef(startViewOverride !== null);
+  const [activeView, setActiveView] = useState<StudioView>(
+    () => startViewOverride ?? getInitialStudioView(environment),
+  );
 
-  const defaultRightView = supportsDeviceFiles ? 'device' : 'ai-chat';
+  useEffect(() => {
+    if (startViewOverride !== null) {
+      window.sessionStorage.removeItem(START_VIEW_OVERRIDE_KEY);
+    }
+  }, [startViewOverride]);
+
+  const defaultRightView = 'terminal';
   const effectiveBlockTerminalHeight = isCompact ? Math.min(terminalHeight, 180) : terminalHeight;
 
   const setStudioView = useCallback(
@@ -124,26 +179,64 @@ export function useIDELayoutState({ environment, isBlockMode, supportsDeviceFile
   }, [blockTerminalTab, bottomCollapsed, hasLoadedBlockTerminalPrefs, isBlockMode, terminalHeight]);
 
   useEffect(() => {
-    const updateViewportMode = () => {
-      const compact = window.innerWidth < 1280;
-      setIsCompact(compact);
+    if (typeof window === 'undefined') {
+      return;
+    }
 
-      if (compact) {
-        setLeftCollapsed(true);
-        setRightCollapsed(true);
-        if (window.innerHeight < 820) {
-          setBottomCollapsed(true);
+    lastPhysicalTextViewportModeRef.current = null;
+
+    const updateViewportMode = () => {
+      const nextViewportWidth = window.innerWidth;
+      const nextViewportHeight = window.innerHeight;
+      const nextIsCompact = nextViewportWidth < COMPACT_WORKSPACE_BREAKPOINT;
+      const nextPhysicalTextViewportMode = getPhysicalTextViewportMode(nextViewportWidth);
+      const shouldAutoCollapseBottom = isBlockMode && nextIsCompact && nextViewportHeight < SHORT_WORKSPACE_HEIGHT;
+
+      setViewportWidth(nextViewportWidth);
+      setIsCompact(nextIsCompact);
+      setPhysicalTextViewportMode(nextPhysicalTextViewportMode);
+
+      if (!isBlockMode && environment === 'physical') {
+        const viewportModeChanged = lastPhysicalTextViewportModeRef.current !== nextPhysicalTextViewportMode;
+
+        if (viewportModeChanged) {
+          syncAutoCollapsedPanel(
+            nextPhysicalTextViewportMode === 'compact',
+            setLeftCollapsed,
+            autoViewportCollapsedLeftRef,
+          );
+          syncAutoCollapsedPanel(
+            nextPhysicalTextViewportMode !== 'wide',
+            setRightCollapsed,
+            autoViewportCollapsedRightRef,
+          );
         }
       }
+
+      if (shouldAutoCollapseBottom) {
+        setBottomCollapsed((prev) => {
+          if (prev) {
+            return prev;
+          }
+
+          autoViewportCollapsedBottomRef.current = true;
+          return true;
+        });
+      } else if (autoViewportCollapsedBottomRef.current) {
+        autoViewportCollapsedBottomRef.current = false;
+        setBottomCollapsed(false);
+      }
+
+      lastPhysicalTextViewportModeRef.current = nextPhysicalTextViewportMode;
     };
 
     updateViewportMode();
     window.addEventListener('resize', updateViewportMode);
     return () => window.removeEventListener('resize', updateViewportMode);
-  }, []);
+  }, [environment, isBlockMode]);
 
   useEffect(() => {
-    if (environment !== 'physical' || isBlockMode || isCompact) {
+    if (environment !== 'physical' || isBlockMode || physicalTextViewportMode !== 'wide') {
       leftFocusThresholdReachedRef.current = false;
       rightFocusThresholdReachedRef.current = false;
       autoFocusCollapsedLeftRef.current = false;
@@ -180,7 +273,7 @@ export function useIDELayoutState({ environment, isBlockMode, supportsDeviceFile
 
     rightFocusThresholdReachedRef.current = shouldCollapseRightForFocus;
     leftFocusThresholdReachedRef.current = shouldCollapseLeftForFocus;
-  }, [editorFontSize, environment, isBlockMode, isCompact, leftCollapsed, rightCollapsed]);
+  }, [editorFontSize, environment, isBlockMode, leftCollapsed, physicalTextViewportMode, rightCollapsed]);
 
   useEffect(() => {
     if (!isBlockMode) {
@@ -208,12 +301,16 @@ export function useIDELayoutState({ environment, isBlockMode, supportsDeviceFile
       setBottomCollapsed(false);
       setBlockTerminalTab('serial');
       setLeftRailView('files');
-      setRightPanelView('status');
+      setRightPanelView(defaultRightView);
       setActiveView(getInitialStudioView('virtual'));
       autoFocusCollapsedLeftRef.current = false;
       autoFocusCollapsedRightRef.current = false;
+      autoViewportCollapsedLeftRef.current = false;
+      autoViewportCollapsedRightRef.current = false;
+      autoViewportCollapsedBottomRef.current = false;
       leftFocusThresholdReachedRef.current = false;
       rightFocusThresholdReachedRef.current = false;
+      lastPhysicalTextViewportModeRef.current = null;
 
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(BLOCK_TERMINAL_HEIGHT_STORAGE_KEY);
@@ -221,7 +318,7 @@ export function useIDELayoutState({ environment, isBlockMode, supportsDeviceFile
         window.localStorage.removeItem(BLOCK_TERMINAL_TAB_STORAGE_KEY);
       }
     });
-  }, [eventBus]);
+  }, [defaultRightView, eventBus]);
 
   const handleTerminalResize = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -247,11 +344,13 @@ export function useIDELayoutState({ environment, isBlockMode, supportsDeviceFile
 
   const toggleLeftCollapsed = useCallback(() => {
     autoFocusCollapsedLeftRef.current = false;
+    autoViewportCollapsedLeftRef.current = false;
     setLeftCollapsed((prev) => !prev);
   }, []);
 
   const toggleRightCollapsed = useCallback(() => {
     autoFocusCollapsedRightRef.current = false;
+    autoViewportCollapsedRightRef.current = false;
     setRightCollapsed((prev) => !prev);
   }, []);
 
@@ -269,6 +368,8 @@ export function useIDELayoutState({ environment, isBlockMode, supportsDeviceFile
     blockTerminalTab,
     setBlockTerminalTab,
     isCompact,
+    viewportWidth,
+    physicalTextViewportMode,
     leftRailView,
     setLeftRailView,
     rightPanelView,

@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
 import ThemeToggle from "@/components/layout/ThemeToggle";
+import BackHomeButtons from "@/components/layout/BackHomeButtons";
 import { JourneyProgress } from "@/components/ui/JourneyProgress";
 
 type JourneyStep = {
@@ -26,7 +27,6 @@ export default function OnboardingShell({
   children,
   headerActions,
   backHref,
-  backLabel = "Back",
   steps,
   activeIndex = 0,
   contentClassName,
@@ -46,29 +46,19 @@ export default function OnboardingShell({
             <span className="text-base font-bold tracking-tight text-[color:var(--ui-color-text)]">Sticial Studio</span>
           </Link>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <BackHomeButtons
+              backFallbackHref={backHref ?? "/"}
+              buttonClassName="min-h-11 rounded-[18px] px-4 py-2.5 text-sm font-semibold tracking-[-0.01em]"
+            />
             {headerActions}
             <ThemeToggle className="ui-foundation-panel-quiet text-[color:var(--ui-color-text)] hover:border-[color:var(--ui-border-strong)]" showLabel />
           </div>
         </div>
 
-        {(backHref || steps?.length) ? (
-          <div className="mt-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              {backHref ? (
-                <Link
-                  href={backHref}
-                  className="ui-foundation-panel-quiet inline-flex min-h-[46px] items-center gap-2 px-5 py-2.5 text-sm font-bold tracking-tight text-[color:var(--ui-color-text)] transition-transform duration-300 hover:-translate-y-1 hover:shadow-lg"
-                >
-                  <ArrowLeft size={16} />
-                  {backLabel}
-                </Link>
-              ) : null}
-            </div>
-
-            {steps?.length ? (
-              <JourneyProgress steps={steps} activeIndex={activeIndex} tone="immersive" className="justify-start lg:justify-end" />
-            ) : null}
+        {steps?.length ? (
+          <div className="mt-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-end">
+            <JourneyProgress steps={steps} activeIndex={activeIndex} tone="immersive" className="justify-start lg:justify-end" />
           </div>
         ) : null}
 

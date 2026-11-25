@@ -9,6 +9,7 @@ import type {
   SimulationSerialConfig,
   SimulationTraceEvent,
 } from '@/lib/simulator/simulationTypes';
+import { useSimulationStore } from '@/stores/simulationStore';
 
 type WorkerInMessage =
   | { type: 'run'; hex: string }
@@ -186,6 +187,8 @@ export function useAvrSimulation(): UseAvrSimulationReturn {
         }
         case 'serial-line':
           setSerialLines((previous) => [...previous.slice(-199), message.value]);
+          // The Serial Monitor in the terminal dock shows what the simulated board prints.
+          useSimulationStore.getState().appendSimulatedSerialLine(message.value);
           break;
         case 'serial-config':
           setSerialConfig(message.config);
@@ -227,6 +230,7 @@ export function useAvrSimulation(): UseAvrSimulationReturn {
     setBusEvents([]);
     setTraceEvents([]);
     setSerialLines([]);
+    useSimulationStore.getState().clearSimulatedSerialLines();
     setSerialConfig(null);
     lastHighCycleRef.current = new Map();
   }, []);

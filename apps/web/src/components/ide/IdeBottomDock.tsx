@@ -18,15 +18,15 @@ export default function IdeBottomDock({
   children,
 }: IdeBottomDockProps) {
   if (collapsed) {
-    return <div>{children}</div>;
+    return <div data-ide-bottom-dock="">{children}</div>;
   }
 
   return (
     <>
       {!isCompact ? (
-        <div className="px-1">
+        <div>
           <div
-            className="h-2 cursor-row-resize rounded-full bg-[linear-gradient(90deg,rgba(48,71,166,0.24),rgba(19,131,111,0.2))] transition-transform hover:scale-y-110"
+            className="h-1.5 cursor-row-resize bg-[linear-gradient(90deg,rgba(48,71,166,0.24),rgba(19,131,111,0.2))] transition-transform hover:scale-y-110"
             onMouseDown={onResizeStart}
             role="separator"
             aria-orientation="horizontal"
@@ -34,7 +34,7 @@ export default function IdeBottomDock({
           />
         </div>
       ) : null}
-      <div style={{ height }} className="min-h-[160px] transition-[height] duration-200">
+      <div style={{ height }} className="min-h-[120px] transition-[height] duration-200" data-ide-bottom-dock="">
         {children}
       </div>
     </>
