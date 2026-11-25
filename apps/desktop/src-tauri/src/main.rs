@@ -7,6 +7,8 @@
 //                                   bundled download cache when present)
 //   compile_sketch                  arduino-cli compile -> .hex
 //   arduino_cli_json                arduino-cli lib list/search/install/uninstall
+//   update_check / update_install   new versions from GitHub Releases (tauri-plugin-updater;
+//                                   endpoint and public key in tauri.conf.json)
 //   serial_*                        native serial ports behind navigator.serial
 //                                   (serial_close_all frees ports a reloaded page forgot)
 //                                   (apps/web/src/lib/desktop/desktopSerial.ts)
@@ -546,8 +548,59 @@ fn serial_close_all(state: State<'_, SerialState>) -> Result<(), String> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------------------------
+// Updates
+// ---------------------------------------------------------------------------------------------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateInfo {
+    current_version: String,
+    version: String,
+    notes: Option<String>,
+}
+
+/// Asks GitHub Releases whether a newer version exists. `None` when this is the latest.
+#[tauri::command]
+async fn update_check(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let update = app
+        .updater()
+        .map_err(|error| error.to_string())?
+        .check()
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(update.map(|update| UpdateInfo {
+        current_version: update.current_version.clone(),
+        version: update.version.clone(),
+        notes: update.body.clone(),
+    }))
+}
+
+/// Downloads the new version, checks its signature, and runs its installer. On Windows the
+/// installer closes the app, updates it, and opens it again.
+#[tauri::command]
+async fn update_install(app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let update = app
+        .updater()
+        .map_err(|error| error.to_string())?
+        .check()
+        .await
+        .map_err(|error| error.to_string())?;
+    let Some(update) = update else {
+        return Err("Sticial Studio is already up to date.".into());
+    };
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|error| error.to_string())?;
+    app.restart();
+}
+
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(SerialState::default())
         .invoke_handler(tauri::generate_handler![
             projects_load,
@@ -560,7 +613,9 @@ fn main() {
             serial_write,
             serial_set_signals,
             serial_close,
-            serial_close_all
+            serial_close_all,
+            update_check,
+            update_install
         ])
         .run(tauri::generate_context!())
         .expect("error while running Sticial Studio");

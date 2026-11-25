@@ -25,7 +25,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -40,6 +42,17 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY4MzMxNTlBN0E5MERGMTgKUldRWTM1QjZtaFV6K0VCUEIvMGJiZ05nZGhjcW5hQTNDVk9ZMG5kRHlBTVYyU3NWb1E4VnA5c2kK",
+      "endpoints": [
+        "https://github.com/nanayawsticial/edtech-ide/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
       }
     }
   }

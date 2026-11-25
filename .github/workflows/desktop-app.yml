@@ -3,11 +3,22 @@
 # Runs on GitHub's Windows machines, which already have Rust and the Visual Studio C++ tools.
 # Start it from the Actions tab ("Run workflow"), or push changes under apps/web or apps/desktop.
 # The installer is attached to the run as the artifact "sticial-studio-windows".
+#
+# Releases: push a version tag (git tag v0.2.0 && git push origin v0.2.0). The build then takes its
+# version from the tag, signs the update with the TAURI_SIGNING_PRIVATE_KEY secret, and publishes
+# a GitHub Release with:
+#   Sticial-Studio-Setup.exe        same name every release, so this link always gets the newest:
+#                                   https://github.com/nanayawsticial/edtech-ide/releases/latest/download/Sticial-Studio-Setup.exe
+#   Sticial-Studio-Setup-<ver>.exe  the same installer, named by version
+#   latest.json                     what installed apps read to find updates (tauri.conf.json -> plugins.updater)
 name: Desktop app (Windows)
 
 on:
   workflow_dispatch:
   push:
+    branches: ["**"]
+    # Path filters do not apply to tag pushes, so every v* tag builds a release.
+    tags: ["v*"]
     paths:
       - "apps/web/**"
       - "apps/desktop/**"
@@ -22,6 +33,10 @@ jobs:
   windows-installer:
     runs-on: windows-latest
     timeout-minutes: 60
+    permissions:
+      contents: write # create the GitHub Release on tag builds
+    env:
+      IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -98,9 +113,77 @@ jobs:
         working-directory: apps/desktop/src-tauri
         run: npx --yes @tauri-apps/cli@2 icon ../app-icon.png
 
+      - name: Set the app version from the release tag
+        if: env.IS_RELEASE == 'true'
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Release tags look like v1.2.3 (got ${{ github.ref_name }})" }
+          $path = "apps/desktop/src-tauri/tauri.conf.json"
+          $config = Get-Content $path -Raw | ConvertFrom-Json
+          $config.version = $version
+          $config | ConvertTo-Json -Depth 20 | Set-Content $path -Encoding utf8
+          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "Building release $version"
+
       - name: Build the installer
+        if: env.IS_RELEASE != 'true'
         working-directory: apps/desktop/src-tauri
         run: npx --yes @tauri-apps/cli@2 build
+
+      - name: Build the signed release installer
+        if: env.IS_RELEASE == 'true'
+        working-directory: apps/desktop/src-tauri
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) { throw "Add the TAURI_SIGNING_PRIVATE_KEY secret (Settings > Secrets and variables > Actions) before releasing." }
+          '{"bundle":{"createUpdaterArtifacts":true}}' | Set-Content release.conf.json -Encoding utf8
+          npx --yes @tauri-apps/cli@2 build --config release.conf.json
+          if ($LASTEXITCODE -ne 0) { throw "tauri build failed" }
+
+      - name: Prepare the release files
+        if: env.IS_RELEASE == 'true'
+        shell: pwsh
+        run: |
+          $nsis = "apps/desktop/src-tauri/target/release/bundle/nsis"
+          $installer = Get-ChildItem $nsis -Filter "*-setup.exe" | Select-Object -First 1
+          if (-not $installer) { throw "Installer not found in $nsis" }
+          $signature = Get-Content "$($installer.FullName).sig" -Raw
+          New-Item -ItemType Directory -Force release | Out-Null
+          $versioned = "Sticial-Studio-Setup-$env:RELEASE_VERSION.exe"
+          Copy-Item $installer.FullName "release/$versioned"
+          Copy-Item $installer.FullName "release/Sticial-Studio-Setup.exe"
+          $manifest = [ordered]@{
+            version   = $env:RELEASE_VERSION
+            notes     = "Sticial Studio $env:RELEASE_VERSION"
+            pub_date  = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            platforms = [ordered]@{
+              "windows-x86_64" = [ordered]@{
+                signature = $signature.Trim()
+                url       = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$versioned"
+              }
+            }
+          }
+          $manifest | ConvertTo-Json -Depth 5 | Set-Content release/latest.json -Encoding utf8
+          Get-ChildItem release | ForEach-Object { "{0}  {1:N1} MB" -f $_.Name, ($_.Length / 1MB) }
+
+      - name: Publish the GitHub Release
+        if: env.IS_RELEASE == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Sticial Studio ${{ env.RELEASE_VERSION }}
+          generate_release_notes: true
+          body: |
+            **Install on a new computer:** download `Sticial-Studio-Setup.exe` below and run it. If Windows shows "Windows protected your PC", click **More info**, then **Run anyway**.
+
+            **Already installed?** The app finds this version by itself and offers to update.
+          files: |
+            release/Sticial-Studio-Setup.exe
+            release/Sticial-Studio-Setup-${{ env.RELEASE_VERSION }}.exe
+            release/latest.json
 
       - uses: actions/upload-artifact@v4
         with:
