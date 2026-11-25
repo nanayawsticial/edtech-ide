@@ -2,10 +2,8 @@ const express = require('express');
 const { execFile } = require('child_process');
 const fs = require('fs').promises;
 const path = require('path');
-const os = require('os');
-const crypto = require('crypto');
-
 const { getArduinoCliConfig } = require('../lib/arduinoCli');
+const { acquireBuildSlot } = require('../lib/buildSlots');
 const { logApiEvent, sendApiError, serializeError } = require('../lib/telemetry');
 
 const router = express.Router();
@@ -147,15 +145,15 @@ router.post('/arduino', async (req, res) => {
     });
   }
 
-  const sessionId = `sketch_${crypto.randomBytes(16).toString('hex')}`;
-  const sketchDir = path.join(os.tmpdir(), sessionId);
-  const buildPath = path.join(sketchDir, 'build');
+  // A reusable sketch + build folder: arduino-cli then skips what it built last time.
+  let slot = null;
 
   try {
-    await fs.mkdir(sketchDir, { recursive: true });
+    slot = await acquireBuildSlot(fqbn);
+    const { sketchDir, buildPath, sketchName } = slot;
     const compilePlan = await writeCompileProjectFiles({
       sketchDir,
-      sessionId,
+      sessionId: sketchName,
       files,
       entryFilePath,
       fallbackSourceCode: typeof sourceCode === 'string' ? sourceCode : '',
@@ -168,7 +166,7 @@ router.post('/arduino', async (req, res) => {
 
       if (!error) {
         try {
-          hex = await fs.readFile(path.join(buildPath, `${sessionId}.ino.hex`), 'utf8');
+          hex = await fs.readFile(path.join(buildPath, `${sketchName}.ino.hex`), 'utf8');
         } catch (hexError) {
           logApiEvent('warn', 'Hex extraction failed after successful compile', {
             requestId: req.requestId,
@@ -178,15 +176,7 @@ router.post('/arduino', async (req, res) => {
         }
       }
 
-      try {
-        await fs.rm(sketchDir, { recursive: true, force: true });
-      } catch (cleanupError) {
-        logApiEvent('warn', 'Failed to cleanup compile temp directory', {
-          requestId: req.requestId,
-          sketchDir,
-          error: serializeError(cleanupError),
-        });
-      }
+      slot.release();
 
       if (error) {
         logApiEvent('warn', 'Arduino compile failed', {
@@ -232,11 +222,7 @@ router.post('/arduino', async (req, res) => {
       error: serializeError(error),
     });
 
-    try {
-      await fs.rm(sketchDir, { recursive: true, force: true });
-    } catch {
-      // ignore cleanup errors after a crash
-    }
+    slot?.release();
 
     return sendApiError(res, 500, {
       message: `Backend execution error: ${error.message}`,

@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::path::BaseDirectory;
@@ -71,9 +71,24 @@ fn arduino_staging_dir(app: &AppHandle) -> Option<PathBuf> {
         .filter(|path| path.exists())
 }
 
+/// The app's own Arduino data folder (boards platforms and their indexes). Kept apart from the
+/// shared Arduino15 folder: the Arduino IDE often fills that with ESP32, RP2040 and other
+/// platforms (gigabytes), and arduino-cli loads every installed platform on each compile, which
+/// made a compile take ~20 s instead of ~4 s. Libraries still use the usual sketchbook folder.
+fn arduino_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("arduino");
+    fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
+    Ok(dir)
+}
+
 fn run_cli(app: &AppHandle, args: &[String]) -> Result<CliOutput, String> {
     let mut command = Command::new(cli_path(app)?);
     command.args(args);
+    command.env("ARDUINO_DIRECTORIES_DATA", arduino_data_dir(app)?);
     if let Some(staging) = arduino_staging_dir(app) {
         command.env("ARDUINO_DIRECTORIES_DOWNLOADS", staging);
     }
@@ -112,12 +127,7 @@ fn core_installed(app: &AppHandle, core: &str) -> Result<bool, String> {
 
 /// arduino-cli needs package_index.json before it can install from the bundled cache.
 fn seed_package_index(app: &AppHandle, staging: &Path) -> Result<(), String> {
-    let output = run_cli(app, &to_args(&["config", "get", "directories.data"]))?;
-    let data_dir = PathBuf::from(output.stdout.trim().trim_matches('"'));
-    if output.code != 0 || data_dir.as_os_str().is_empty() {
-        return Ok(());
-    }
-    fs::create_dir_all(&data_dir).map_err(|error| error.to_string())?;
+    let data_dir = arduino_data_dir(app)?;
     for name in ["package_index.json", "package_index.json.sig"] {
         let source = staging.join(name);
         let target = data_dir.join(name);
@@ -224,16 +234,22 @@ fn compile_blocking(
         return Err(format!("Unsupported board: {fqbn}"));
     }
 
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or(0);
-    let name = format!("sketch_{stamp}");
-    let sketch_dir = std::env::temp_dir().join("sticial-studio").join(&name);
-    let build_dir = sketch_dir.join("build");
+    // One compile at a time: they share the board's folders below.
+    let _compiling = COMPILE_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+
+    // The same sketch and build folders every time for a board, so arduino-cli reuses what it
+    // built before (core, libraries, unchanged files). The sketch folder is emptied first so
+    // files from the last compile cannot leak in; the build folder is kept.
+    let name = "sketch";
+    let board_dir = std::env::temp_dir()
+        .join("sticial-studio")
+        .join(fqbn.replace(|c: char| !c.is_ascii_alphanumeric(), "-"));
+    let sketch_dir = board_dir.join(name);
+    let build_dir = board_dir.join("build");
     let sketch_file = sketch_dir.join(format!("{name}.ino"));
 
     let outcome = (|| -> Result<CompileOutcome, String> {
+        let _ = fs::remove_dir_all(&sketch_dir);
         fs::create_dir_all(&sketch_dir).map_err(|error| error.to_string())?;
         fs::write(&sketch_file, primary).map_err(|error| error.to_string())?;
         for file in files {
@@ -271,9 +287,11 @@ fn compile_blocking(
         })
     })();
 
-    let _ = fs::remove_dir_all(&sketch_dir);
     outcome
 }
+
+/// Serialises compiles (see compile_blocking).
+static COMPILE_LOCK: Mutex<()> = Mutex::new(());
 
 #[tauri::command]
 async fn compile_sketch(
