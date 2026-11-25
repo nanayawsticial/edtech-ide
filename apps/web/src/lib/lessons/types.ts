@@ -22,7 +22,10 @@ export type StepCheck = { label?: string } & (
    * With `count`, at least that many different parts must be wired this way.
    */
   | { kind: 'wired'; type: string; pin?: string; to: BoardPinRef; viaResistor?: boolean; count?: number }
-  /** The code made from the blocks matches this regular expression (source string). */
+  /**
+   * The learner's code matches this regular expression (source string): the code made from the
+   * blocks, or in a typed-code project the code in the editor.
+   */
   | { kind: 'code'; pattern: string }
   /** The simulation is running. */
   | { kind: 'simulating' }
@@ -53,6 +56,8 @@ export interface LessonStep {
   blocks?: string[];
   /** The C++ these blocks make, as taught in the manual. */
   cpp?: string;
+  /** MicroPython for the learner to copy into main.py (typed-code lessons), with a Copy button. */
+  python?: string;
   /** Extra help shown on request. */
   hint?: string;
   /** Ticks the step off automatically when true. Steps without a check are ticked by the learner. */
@@ -62,6 +67,8 @@ export interface LessonStep {
    * `solution` (e.g. a step that is later changed). The lesson tests use it for this step's checks.
    */
   solution?: string;
+  /** Like `solution`, for typed-code lessons: the code at the end of this step. */
+  solutionCode?: string;
 }
 
 export interface LessonActivity {
@@ -71,8 +78,13 @@ export interface LessonActivity {
   goal: string;
   /** Where this is used in real life. */
   realWorld: string;
-  /** Parts this activity needs in total (not only the new ones). */
+  /**
+   * Parts this activity needs in total (not only the new ones). For Circuit Lab activities `type`
+   * is a Circuit Lab part type; for activities on real hardware it is only a key.
+   */
   parts: Array<{ type: string; label: string; count: number }>;
+  /** Built on a real board instead of in Circuit Lab: no circuit or simulation checks. */
+  onRealHardware?: boolean;
   /** Block categories this activity needs; the toolbox is raised to this level, never lowered. */
   learningLevel?: ToolboxLearningLevel;
   steps: LessonStep[];
@@ -81,6 +93,11 @@ export interface LessonActivity {
    * C++ and require every code check in the activity to pass on it.
    */
   solution?: string;
+  /**
+   * The finished program as typed code (typed-code lessons). The lesson tests require every code
+   * check in the activity to pass on it, with the Wi-Fi placeholders filled in.
+   */
+  solutionCode?: string;
   /** What the learner should see when it works. */
   observe: string;
   /** One or two sentences to close. */

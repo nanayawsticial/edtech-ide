@@ -1,4 +1,5 @@
 import type { Lesson } from './types';
+import { wifiBuzzerLesson, wifiLedLesson, wifiRelayLesson } from './content/aider';
 import { buzzerLesson } from './content/buzzer';
 import { ledLesson } from './content/led';
 import { pushButtonLesson } from './content/pushButton';
@@ -22,6 +23,9 @@ export const LESSONS: Record<string, Lesson> = Object.fromEntries(
     servoLesson,
     ultrasonicLesson,
     soundSensorLesson,
+    wifiLedLesson,
+    wifiBuzzerLesson,
+    wifiRelayLesson,
   ].map((lesson) => [lesson.slug, lesson])
 );
 

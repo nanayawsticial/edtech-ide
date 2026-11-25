@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { createTsModuleLoader } from './ts-module-loader.mjs';
 
 const require = createRequire(import.meta.url);
@@ -44,7 +45,10 @@ for (const lesson of Object.values(LESSONS)) {
       assert.ok(activity[field]?.trim(), `${activity.id}: missing ${field}`);
     }
     for (const part of activity.parts) {
-      assert.ok(getComponentDefinition(part.type), `${activity.id}: unknown part type ${part.type}`);
+      assert.ok(part.label?.trim() && part.count > 0, `${activity.id}: part ${part.type} needs a label and a count`);
+      if (!activity.onRealHardware) {
+        assert.ok(getComponentDefinition(part.type), `${activity.id}: unknown part type ${part.type}`);
+      }
     }
 
     const stepIds = new Set();
@@ -56,6 +60,9 @@ for (const lesson of Object.values(LESSONS)) {
       assert.ok(step.title?.trim() && step.body?.trim(), `${where}: missing title or body`);
 
       walkChecks(step.check, (check) => {
+        if (activity.onRealHardware) {
+          assert.equal(check.kind === 'all' || check.kind === 'code', true, `${where}: real-hardware steps can only check code (got ${check.kind})`);
+        }
         if (check.kind === 'code') {
           assert.doesNotThrow(() => new RegExp(check.pattern), `${where}: invalid code pattern ${check.pattern}`);
         }
@@ -145,11 +152,50 @@ function generateArduino(xml) {
 
 const showSolution = process.argv.includes('--show-solutions');
 let solutionCount = 0;
+let typedSolutionCount = 0;
+let pythonChecked = 0;
+
+function fillPlaceholders(code) {
+  return code.replace(/YOUR_WIFI_NAME/g, 'ClassroomWiFi').replace(/YOUR_PASSWORD/g, 'example-password');
+}
+
+// MicroPython is Python syntax: parse it with the local Python when there is one (CI has it).
+const pythonCommand = ['python', 'python3', 'py'].find((command) => {
+  const probe = spawnSync(command, ['-c', 'import ast'], { encoding: 'utf8' });
+  return probe.status === 0;
+});
+function checkPythonSyntax(code, where) {
+  if (!pythonCommand) return;
+  const result = spawnSync(pythonCommand, ['-c', 'import ast, sys; ast.parse(sys.stdin.read())'], { input: code, encoding: 'utf8' });
+  assert.equal(result.status, 0, `${where}: the MicroPython does not parse:
+${result.stderr}`);
+  pythonChecked += 1;
+}
 for (const lesson of Object.values(LESSONS)) {
   for (const activity of lesson.activities) {
     const codeChecks = [];
     activity.steps.forEach((step) => walkChecks(step.check, (check) => check.kind === 'code' && codeChecks.push({ step, check })));
     if (codeChecks.length === 0) continue;
+
+    if (activity.solutionCode !== undefined) {
+      // Typed-code lessons: the checks run on the finished code, with the Wi-Fi placeholders
+      // filled in as a learner would.
+      for (const { step, check } of codeChecks) {
+        const code = fillPlaceholders(step.solutionCode ?? activity.solutionCode);
+        const [result] = evaluateCheck(check, { ...baseContext, code });
+        assert.ok(result.passed, `${activity.id}/${step.id}: "${result.label}" (${check.pattern}) fails on the reference code`);
+        // The untouched code must still fail the "fill in your Wi-Fi details" checks.
+        if (/YOUR_WIFI_NAME|YOUR_PASSWORD/.test(check.pattern)) {
+          const [unfilled] = evaluateCheck(check, { ...baseContext, code: step.solutionCode ?? activity.solutionCode });
+          assert.ok(!unfilled.passed, `${activity.id}/${step.id}: "${unfilled.label}" passes before the learner fills anything in`);
+        }
+      }
+      for (const code of new Set([activity.solutionCode, ...activity.steps.map((step) => step.python).filter(Boolean)])) {
+        checkPythonSyntax(code, activity.id);
+      }
+      typedSolutionCount += 1;
+      continue;
+    }
 
     assert.ok(activity.solution, `${activity.id}: has code checks but no reference solution`);
     const generated = new Map();
@@ -172,5 +218,7 @@ for (const lesson of Object.values(LESSONS)) {
 
 console.log(
   `Validated ${Object.keys(LESSONS).length} lessons (${activityCount} activities, ${stepCount} steps), ` +
-    `the lesson step checks, and ${solutionCount} reference solutions against the real code generator.`
+    `the lesson step checks, ${solutionCount} block solutions against the real code generator, and ` +
+    `${typedSolutionCount} typed-code solutions` +
+    (pythonCommand ? ` (${pythonChecked} MicroPython programs parsed).` : ' (Python not found: MicroPython syntax not checked).')
 );

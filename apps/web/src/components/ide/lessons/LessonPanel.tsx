@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Circle, Lightbulb, X } from 'lucide-react';
+import { BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Circle, Copy, Lightbulb, X } from 'lucide-react';
+
+import { useBoard } from '@/contexts/BoardContext';
 
 import { getLesson } from '@/lib/lessons';
 import { EMPTY_OBSERVATIONS, evaluateCheck, observeVisualChange, type LessonCheckContext, type LessonObservations } from '@/lib/lessons/checks';
@@ -10,6 +12,7 @@ import type { ToolboxLearningLevel } from '@/lib/blockly/guidedToolbox';
 import { normalizeComponentType } from '@/lib/wiring/componentDefinitions';
 import { useBlocklyStore } from '@/stores/blocklyStore';
 import { useCircuitStore } from '@/stores/circuitStore';
+import { useEditorStore } from '@/stores/editorStore';
 import { useLessonStore } from '@/stores/lessonStore';
 import { useSimulationStore } from '@/stores/simulationStore';
 
@@ -81,8 +84,21 @@ function useSimulationObservations(resetKey: string, componentTypes: Record<stri
 function useLessonCheckContext(): Omit<LessonCheckContext, 'observations'> & { componentTypes: Record<string, string> } {
   const components = useCircuitStore((state) => state.components);
   const connections = useCircuitStore((state) => state.resolvedConnections);
-  const code = useBlocklyStore((state) => state.generatedPreviewCode);
+  const blockCode = useBlocklyStore((state) => state.generatedPreviewCode);
   const simulating = useSimulationStore((state) => state.simulationState.running);
+  const { codingMode } = useBoard();
+  const files = useEditorStore((state) => state.files);
+  // In a typed-code project the checks read what the learner typed, not code made from blocks.
+  const code = useMemo(
+    () =>
+      codingMode === 'text'
+        ? files
+            .filter((file) => file.type !== 'folder' && file.type !== 'blockly' && file.name !== 'circuit.json')
+            .map((file) => file.content)
+            .join('\n')
+        : blockCode,
+    [blockCode, codingMode, files]
+  );
 
   return useMemo(() => {
     const typed = components.map((component) => ({ id: component.id, type: normalizeComponentType(component.type) }));
@@ -148,6 +164,61 @@ function ActivityIntro({ activity, onStart }: { activity: LessonActivity; onStar
   );
 }
 
+/** Code for the learner to put in main.py, with a Copy button (falls back to selecting it). */
+function CodeToCopy({ code }: { code: string }) {
+  const preRef = useRef<HTMLPreElement | null>(null);
+  const [status, setStatus] = useState<'idle' | 'copied' | 'selected'>('idle');
+
+  const selectCode = () => {
+    const element = preRef.current;
+    if (!element) return;
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    setStatus('selected');
+  };
+
+  const copy = () => {
+    if (!navigator.clipboard?.writeText) {
+      selectCode();
+      return;
+    }
+    navigator.clipboard.writeText(code).then(
+      () => {
+        setStatus('copied');
+        window.setTimeout(() => setStatus('idle'), 2000);
+      },
+      selectCode
+    );
+  };
+
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">MicroPython</p>
+        <button
+          type="button"
+          onClick={copy}
+          className="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2 py-1 text-slate-200 hover:bg-white/15"
+        >
+          <Copy size={13} />
+          <span className="text-[12px] font-semibold">
+            {status === 'copied' ? 'Copied' : status === 'selected' ? 'Selected: press Ctrl+C' : 'Copy'}
+          </span>
+        </button>
+      </div>
+      <pre
+        ref={preRef}
+        className="mt-1.5 max-h-56 overflow-auto rounded-lg border border-white/10 bg-black/40 px-3 py-2 font-mono text-[12px] leading-5 text-emerald-200"
+      >
+        {code}
+      </pre>
+    </div>
+  );
+}
+
 function StepView({ step, context }: { step: LessonStep; context: LessonCheckContext }) {
   const [showHint, setShowHint] = useState(false);
   const [showCpp, setShowCpp] = useState(true);
@@ -188,6 +259,8 @@ function StepView({ step, context }: { step: LessonStep; context: LessonCheckCon
           ) : null}
         </div>
       ) : null}
+
+      {step.python ? <CodeToCopy code={step.python} /> : null}
 
       <StepChecklist step={step} context={context} />
 
