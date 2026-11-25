@@ -1,5 +1,5 @@
 import type { Point } from '@/lib/wiring/componentGeometry';
-import { findClosestSegmentHit } from '@/vendor/velxio-adapter';
+import { pickWireSegment } from '@/lib/wiring/wireLayout';
 
 import type { HitResult, SceneGraph, WorldComponentNode, WorldPinNode, WorldWireNode } from './sceneTypes';
 
@@ -131,7 +131,7 @@ function hitTestWires(scene: SceneGraph, worldPoint: Point, scale: number): HitR
   let closestDistance = Number.POSITIVE_INFINITY;
 
   scene.wires.forEach((wire) => {
-    const segmentHit = findClosestSegmentHit(wire.interactionPoints, worldPoint, tolerance);
+    const segmentHit = pickWireSegment(wire.interactionPoints, worldPoint, tolerance);
     if (!segmentHit || segmentHit.distance >= closestDistance) {
       return;
     }
@@ -141,7 +141,7 @@ function hitTestWires(scene: SceneGraph, worldPoint: Point, scale: number): HitR
       type: 'wire-segment',
       wire,
       segmentIndex: segmentHit.segmentIndex,
-      point: segmentHit.projection,
+      point: segmentHit.nearest,
     };
   });
 

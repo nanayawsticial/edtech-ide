@@ -1,16 +1,13 @@
 import type { Point } from '@/lib/wiring/componentGeometry';
-import { applyOffsetToRoute, calculateWireOffsets, type AdapterWireRoute } from '@/vendor/velxio-adapter';
+import { shiftWire, spreadSharedLines, type WireRoute } from '@/lib/wiring/wireLayout';
 
-interface RouteWire extends AdapterWireRoute {
-  points: Point[];
-}
-
-export function calculateRenderedWirePoints(wires: RouteWire[]) {
-  const offsets = calculateWireOffsets(wires);
+/** Where each wire is drawn: wires sharing a line are spread side by side. */
+export function calculateRenderedWirePoints(wires: WireRoute[]) {
+  const shifts = spreadSharedLines(wires);
   const renderedPoints = new Map<string, Point[]>();
 
   wires.forEach((wire) => {
-    renderedPoints.set(wire.id, applyOffsetToRoute(wire.points, offsets.get(wire.id) ?? 0));
+    renderedPoints.set(wire.id, shiftWire(wire.points, shifts.get(wire.id) ?? 0));
   });
 
   return renderedPoints;
