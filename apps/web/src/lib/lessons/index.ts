@@ -19,6 +19,20 @@ import {
   oledDashboardLesson,
   timerSwitchLesson,
 } from './content/aiderControl';
+import {
+  alarmClockLesson,
+  colorControlLesson,
+  motionCounterLesson,
+  plantStatusLesson,
+  rainAlertLesson,
+  relaySchedulerLesson,
+  safetyAlertLesson,
+  smartLightLesson,
+  soilDrynessLesson,
+  temperatureAlertLesson,
+  touchSwitchLesson,
+  waterPumpLesson,
+} from './content/aiderAutomation';
 import { buzzerLesson } from './content/buzzer';
 import { ledLesson } from './content/led';
 import { pushButtonLesson } from './content/pushButton';
@@ -60,6 +74,18 @@ export const LESSONS: Record<string, Lesson> = Object.fromEntries(
     timerSwitchLesson,
     irrigationLesson,
     environmentLoggerLesson,
+    smartLightLesson,
+    relaySchedulerLesson,
+    alarmClockLesson,
+    motionCounterLesson,
+    soilDrynessLesson,
+    colorControlLesson,
+    touchSwitchLesson,
+    waterPumpLesson,
+    rainAlertLesson,
+    safetyAlertLesson,
+    plantStatusLesson,
+    temperatureAlertLesson,
   ].map((lesson) => [lesson.slug, lesson])
 );
 

@@ -36,17 +36,32 @@ state = {
     "pins": {},
     "display": [],
     "irq": [],
+    "next_irq": 0,
+    "timers": [],
+    "in_event": False,
     "levels": {},
 }
+
+
+def fire_events():
+    """Time has passed: every timer fires, and one pin's interrupt (in turn), as a sensor would."""
+    for timer, fire in list(state["timers"]):
+        fire(timer)
+    if state["irq"]:
+        pin, handler = state["irq"][state["next_irq"] % len(state["irq"])]
+        state["next_irq"] += 1
+        handler(pin)
 
 
 def advance(seconds):
     state["now"] += max(0.0, float(seconds))
     state["sleeps"] += 1
-    # A sensor's interrupt fires now and then, as a real one would.
-    if state["sleeps"] % 7 == 0:
-        for pin, handler in list(state["irq"]):
-            handler(pin)
+    if state["sleeps"] % 7 == 0 and not state["in_event"]:
+        state["in_event"] = True
+        try:
+            fire_events()
+        finally:
+            state["in_event"] = False
     if state["sleeps"] > MAX_SLEEPS:
         raise ProgramStopped("ran for %d sleeps" % MAX_SLEEPS)
 
@@ -219,9 +234,8 @@ class FakeSocket:
         if not self.queue:
             raise ProgramStopped("all requests served")
         advance(1)  # a second passes between page loads
-        # Between two page loads the sensors' interrupts fire, as a person would wave or press.
-        for pin, handler in list(state["irq"]):
-            handler(pin)
+        # Between two page loads the timers fire, and a sensor or button (in turn) is triggered.
+        fire_events()
         path = self.queue.pop(0)
         connection = FakeConnection(path, self.last_page)
         self.last_page = path
@@ -319,7 +333,8 @@ class Pin:
 
 class ADC:
     CORE_TEMP = 4
-    READINGS = [5000, 30000, 61000, 45000, 15000, 52000]
+    # An odd number of readings, so a program that reads twice per page still sees all of them.
+    READINGS = [5000, 30000, 61000, 45000, 15000, 52000, 64000]
 
     def __init__(self, pin):
         number = pin if isinstance(pin, int) else gpio_number(pin)
@@ -394,7 +409,7 @@ class Timer:
         self._mode = mode
         self._callback = callback
         self._entry = (self, Timer._fire)
-        state["irq"].append(self._entry)
+        state["timers"].append(self._entry)
 
     def _fire(self):
         if self._mode == Timer.ONE_SHOT:
@@ -402,8 +417,8 @@ class Timer:
         self._callback(self)
 
     def deinit(self):
-        if self._entry in state["irq"]:
-            state["irq"].remove(self._entry)
+        if self._entry in state["timers"]:
+            state["timers"].remove(self._entry)
         self._entry = None
 
 

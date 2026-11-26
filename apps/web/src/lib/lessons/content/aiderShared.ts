@@ -176,6 +176,15 @@ try:
 except OSError:
     print("Could not get the time from the internet: the clock shown may be wrong")`;
 
+/** Local time from the internet clock, for programs that act at set times (follows CLOCK_FROM_INTERNET). */
+export const LOCAL_TIME = String.raw`# Your time zone: hours ahead of UTC (0 in Ghana, 1 in Nigeria, 2 in South Africa, 3 in Kenya)
+UTC_OFFSET = 0
+
+def local_time():
+    """The time where you are, as (hour, minute, second)"""
+    t = time.localtime(time.time() + UTC_OFFSET * 3600)
+    return t[3], t[4], t[5]`;
+
 /**
  * Starts the web server and answers every request. `handle` (indented 8 spaces) can read
  * `request` (text) and must set `response` to the page to send.

@@ -303,11 +303,85 @@ const FAKE_PICO_EXPECTATIONS = {
     ]),
   'aider-48-irrigation': (run) => expectLevels(run, '0', { '/on': 0, '/off': 1 }),
   'aider-49-env-log': (run) => assert.match(pages(run), /<tr><td>[2-9]<\/td><td>09:00:\d\d<\/td><td>\d+\.\d\dC<\/td><td>\d+\.\d\d%<\/td><\/tr>/, 'the timer should log readings with their time'),
+  'aider-50-smart-light': (run) => {
+    expectLevels(run, '0', { '/on': 0, '/off': 1 });
+    assert.ok(shown(run, 'Light: (ON|OFF) \\(mode AUTO\\)').size === 2, 'in AUTO mode the light should follow the changing light level');
+  },
+  'aider-51-scheduler': (run) => {
+    expectLevels(run, '0', { '/': 1, '/toggle': 0 }); // OFF until toggled: 09:00 is not in the schedule
+    assert.ok(run.display.includes('IP:') && run.display.includes('Time: 09:00'), 'the screen should show the time and the IP address');
+  },
+  'aider-52-alarm': (run) => {
+    assert.ok(run.pins['0']?.includes(1), 'the alarm should ring once set to the current time and enabled');
+    assert.ok(run.pins.pwm1?.includes(65535), 'the LED should flash red');
+    assert.match(run.printed, /Alarm set for 09:00/);
+    assert.equal(run.printed.match(/ALARM!/g)?.length, 1, 'the alarm should ring once for its minute');
+  },
+  'aider-53-motion-counter': (run) => {
+    const counts = shown(run, 'font-size:60px">(\\d+)<');
+    assert.ok(counts.has('0') && [...counts].some((count) => Number(count) > 0), 'the count should go up with motion and back to 0 on reset');
+    assert.ok(run.display.includes('Motion:'), 'the screen should show the count');
+  },
+  'aider-54-soil-alert': (run) => {
+    assert.ok(run.pins['0']?.includes(1), 'the buzzer should beep for dry soil');
+    assert.ok(run.display.includes('DRY - WATER!'), 'the screen should say DRY - WATER!');
+  },
+  'aider-55-color': (run) => {
+    for (const [pin, duty] of [['pwm12', 65535], ['pwm13', 32896], ['pwm14', 0]]) {
+      assert.equal(run.responses.find((response) => response.path === '/?r=255&g=128&b=0')?.levels[pin], duty, `${pin} should be ${duty}`);
+    }
+    assert.match(pages(run), /background: rgb\(255,128,0\)/, 'the box on the page should show the same colour');
+  },
+  'aider-56-touch': (run) => {
+    assert.ok(run.pins['0']?.includes(0), 'the relay should switch');
+    for (const response of run.responses.filter((candidate) => '0' in candidate.levels)) {
+      assert.equal(response.levels['2'], 1 - response.levels['0'], `after ${response.path}, the LED should show the relay's state`);
+    }
+  },
+  'aider-57-pump': (run) => {
+    const started = run.responses.findIndex((response, index) => index > 5 && response.path === '/on' && response.levels['0'] === 0);
+    assert.ok(started > 0, 'START should switch the pump on when the tank is not full');
+    assert.ok(run.responses.slice(started + 1).some((response) => response.levels['0'] === 1), 'the pump should stop by itself when the tank is full');
+    assert.match(run.printed, /Tank full: pump OFF/);
+  },
+  'aider-58-rain-alert': (run) => {
+    assert.deepEqual([...new Set(run.pins['2'])].sort(), [0, 1], 'the LED should light while wet and go out when dry');
+    assert.ok(run.pins['0']?.includes(1), 'the buzzer should beep while wet');
+    assert.ok(shown(run, 'class="alert">(RAIN DETECTED!|No Rain)<').size === 2, 'the page should follow the sensor');
+  },
+  'aider-59-safety': (run) => {
+    assert.ok(run.pins['0']?.includes(1), 'the buzzer should sound');
+    assert.match(pages(run), /Alerts sent: 1/);
+    assert.doesNotMatch(pages(run), /Alerts sent: 2/, 'only the button sounds the alarm: not the icon request that follows it');
+  },
+  'aider-60-plant': (run) => {
+    assert.ok(run.display.includes('Plant Status'), 'the screen should show the title');
+    assert.ok(run.display.some((line) => /^Soil: \d+% (DRY|WET)$/.test(line)), 'the screen should show the soil');
+    assert.match(pages(run), /Temperature: \d+\.\d\dC/);
+  },
+  'aider-62-temp-alert': (run) => {
+    assert.ok(shown(run, 'Status: (Normal|TOO HOT!|TOO COLD!)<').size >= 2, 'the status should follow the temperature');
+    assert.deepEqual([...new Set(run.pins['0'])].sort(), [0, 1], 'the LED should light outside the range and go out inside it');
+  },
+};
+/** Runs of a changed copy of the program, with what they must show, by activity id. */
+const FAKE_PICO_VARIANTS = {
+  // The fake clock says 09:00: a schedule entry for then must switch the relay on by itself.
+  'aider-51-scheduler': {
+    change: (program) => program.replace('(8, 0, 1)', '(9, 0, 1)'),
+    expect: (run) => {
+      assert.equal(run.responses[0].levels['0'], 0, 'the schedule should switch the relay ON at 09:00');
+      assert.match(run.printed, /Schedule: ON at 09:00/);
+    },
+  },
 };
 /** Form submissions to make after the page and its links, by activity id. */
 const FAKE_PICO_FORMS = {
   'aider-45-brightness': ['/?level=50', '/?level=100', '/?level=0'],
   'aider-46-timer': ['/?duration=30', '/', '/?duration=5', '/stop'],
+  'aider-52-alarm': ['/?hour=9&minute=0', '/enable', '/', '/', '/'],
+  'aider-55-color': ['/?r=255&g=128&b=0'],
+  'aider-57-pump': ['/', '/on', '/', '/', '/', '/'],
 };
 const pages = (run) => run.responses.map((response) => response.text).join('\n');
 /** These requests, in this order (others may come between), leave `pin` at these levels. */
@@ -359,7 +433,15 @@ if (pythonCommand) {
       const programs = new Set([activity.solutionCode, ...activity.steps.map((step) => step.python).filter(Boolean)]);
       for (const program of programs) {
         const run = runOnFakePico(fillPlaceholders(program), activity.id);
-        if (program === activity.solutionCode) FAKE_PICO_EXPECTATIONS[activity.id]?.(run);
+        if (program === activity.solutionCode) {
+          FAKE_PICO_EXPECTATIONS[activity.id]?.(run);
+          const variant = FAKE_PICO_VARIANTS[activity.id];
+          if (variant) {
+            const changed = variant.change(fillPlaceholders(program));
+            assert.notEqual(changed, fillPlaceholders(program), `${activity.id}: the test's change no longer applies to the program`);
+            variant.expect(runOnFakePico(changed, activity.id));
+          }
+        }
       }
     }
   }
