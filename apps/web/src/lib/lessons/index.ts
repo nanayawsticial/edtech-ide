@@ -1,4 +1,38 @@
 import type { Lesson } from './types';
+import { wifiBuzzerLesson, wifiLedLesson, wifiRelayLesson } from './content/aider';
+import {
+  humidityMonitorLesson,
+  lightLoggerLesson,
+  motionAlertLesson,
+  rainStatusLesson,
+  soilMoistureLesson,
+  temperatureMonitorLesson,
+  waterLevelLesson,
+  wifiDoorbellLesson,
+} from './content/aiderSensors';
+import {
+  buttonLoggerLesson,
+  environmentLoggerLesson,
+  irrigationLesson,
+  ledBrightnessLesson,
+  motorControlLesson,
+  oledDashboardLesson,
+  timerSwitchLesson,
+} from './content/aiderControl';
+import {
+  alarmClockLesson,
+  colorControlLesson,
+  motionCounterLesson,
+  plantStatusLesson,
+  rainAlertLesson,
+  relaySchedulerLesson,
+  safetyAlertLesson,
+  smartLightLesson,
+  soilDrynessLesson,
+  temperatureAlertLesson,
+  touchSwitchLesson,
+  waterPumpLesson,
+} from './content/aiderAutomation';
 import { buzzerLesson } from './content/buzzer';
 import { ledLesson } from './content/led';
 import { pushButtonLesson } from './content/pushButton';
@@ -22,6 +56,36 @@ export const LESSONS: Record<string, Lesson> = Object.fromEntries(
     servoLesson,
     ultrasonicLesson,
     soundSensorLesson,
+    wifiLedLesson,
+    wifiBuzzerLesson,
+    wifiRelayLesson,
+    temperatureMonitorLesson,
+    humidityMonitorLesson,
+    lightLoggerLesson,
+    motionAlertLesson,
+    waterLevelLesson,
+    soilMoistureLesson,
+    rainStatusLesson,
+    wifiDoorbellLesson,
+    oledDashboardLesson,
+    motorControlLesson,
+    buttonLoggerLesson,
+    ledBrightnessLesson,
+    timerSwitchLesson,
+    irrigationLesson,
+    environmentLoggerLesson,
+    smartLightLesson,
+    relaySchedulerLesson,
+    alarmClockLesson,
+    motionCounterLesson,
+    soilDrynessLesson,
+    colorControlLesson,
+    touchSwitchLesson,
+    waterPumpLesson,
+    rainAlertLesson,
+    safetyAlertLesson,
+    plantStatusLesson,
+    temperatureAlertLesson,
   ].map((lesson) => [lesson.slug, lesson])
 );
 

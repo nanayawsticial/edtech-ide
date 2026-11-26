@@ -18,8 +18,10 @@ export interface LessonCheckContext {
   components: Array<{ id: string; type: string }>;
   /** componentId -> pinId -> connection, as the netlist resolves it. */
   connections: Record<string, Record<string, LessonPinConnection>>;
-  /** Code made from the blocks. */
+  /** Code made from the blocks, or in a typed-code project the learner's own files (drivers left out). */
   code: string;
+  /** Names of the files in the project (typed-code projects). */
+  fileNames?: string[];
   simulating: boolean;
   /** What happened in the simulation since the current step opened. */
   observations: LessonObservations;
@@ -172,6 +174,8 @@ export function describeCheck(check: StepCheck): string {
     }
     case 'code':
       return 'Code is ready';
+    case 'file':
+      return `${check.name} is in the project`;
     case 'simulating':
       return 'Simulation is running';
     case 'blinked':
@@ -201,6 +205,8 @@ function evaluateOne(check: StepCheck, context: LessonCheckContext): boolean {
       } catch {
         return false;
       }
+    case 'file':
+      return context.fileNames?.includes(check.name) ?? false;
     case 'simulating':
       return context.simulating;
     case 'blinked':

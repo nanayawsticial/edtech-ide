@@ -287,11 +287,18 @@ export function useIDELayoutState({ environment, isBlockMode, supportsDeviceFile
   useEffect(() => {
     return eventBus.on('layout:block-terminal-request', ({ tab, open = true }) => {
       setBlockTerminalTab(tab);
-      if (open) {
-        setBottomCollapsed(false);
+      if (!open) {
+        return;
+      }
+      setBottomCollapsed(false);
+      if (!isBlockMode) {
+        // Typed-code projects keep the terminal in the right panel: show it, so what the board
+        // prints after an upload (a Pico's IP address, say) is in view.
+        setRightCollapsed(false);
+        setRightPanelView('terminal');
       }
     });
-  }, [eventBus]);
+  }, [eventBus, isBlockMode]);
 
   useEffect(() => {
     return eventBus.on('app:reset-request', () => {

@@ -6,12 +6,15 @@ import { Cpu, Wifi, WifiOff } from "lucide-react";
 interface IdeStatusBarProps {
   boardName: string;
   isConnected: boolean;
+  /** Which board is connected, e.g. "Raspberry Pi Pico 2 W". */
+  connectedBoardName?: string | null;
   leftMessage?: string;
 }
 
 export default function IdeStatusBar({
   boardName,
   isConnected,
+  connectedBoardName,
   leftMessage = "Ready.",
 }: IdeStatusBarProps) {
   return (
@@ -29,7 +32,9 @@ export default function IdeStatusBar({
           {isConnected ? (
             <>
               <Wifi size={12} className="text-emerald-400" />
-              <span className="text-emerald-300">Connected</span>
+              <span className="max-w-[22rem] truncate text-emerald-300" title={connectedBoardName ? `Connected: ${connectedBoardName}` : undefined}>
+                {connectedBoardName ? `Connected: ${connectedBoardName}` : "Connected"}
+              </span>
             </>
           ) : (
             <>
