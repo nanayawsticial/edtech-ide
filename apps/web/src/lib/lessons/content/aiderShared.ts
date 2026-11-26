@@ -51,7 +51,8 @@ export const analogPin = (name: string, pin: number, label: string) =>
   code(String.raw`${name}\s*=\s*ADC\(\s*Pin\(\s*${pin}\s*\)\s*\)`, label);
 export const handlesButton = (query: string, label: string) => code(String.raw`['"]/\?${query}['"]\s+in\s+request`, label);
 export const handlesPath = (path: string, label: string) => code(String.raw`['"]${path}['"]\s+in\s+request`, label);
-export const importsDriver = (module: string) => code(String.raw`(?:^|\n)import\s+${module}\b`, `Imports the ${module} driver`);
+export const importsDriver = (moduleName: string) =>
+  code(String.raw`(?:^|\n)import\s+${moduleName}\b`, `Imports the ${moduleName} driver`);
 /** I2C bus 0 on GP8 (SDA) and GP9 (SCL), as every AIDER manual wires it. */
 export const i2cOnGp8Gp9 = code(
   String.raw`I2C\(\s*0\s*,\s*sda\s*=\s*Pin\(\s*8\s*\)\s*,\s*scl\s*=\s*Pin\(\s*9\s*\)`,
@@ -136,12 +137,12 @@ export const openPageStep = (body: string, hint: string, title = 'Open the page 
 /** Adds a kit driver (BME280.py, sh1106.py) to the project; Upload then saves it on the Pico. */
 export const libraryStep = (id: MicroPythonLibraryId, partName: string): LessonStep => {
   const { fileName } = MICROPYTHON_LIBRARIES[id];
-  const module = fileName.replace(/\.py$/, '');
+  const moduleName = fileName.replace(/\.py$/, '');
   return {
-    id: `library-${module.toLowerCase()}`,
+    id: `library-${moduleName.toLowerCase()}`,
     kind: 'code',
     title: `Add the ${partName} driver`,
-    body: `Click Add ${fileName}. It puts the driver in your project next to main.py, and Upload saves both on the Pico. Your program loads it with "import ${module}".`,
+    body: `Click Add ${fileName}. It puts the driver in your project next to main.py, and Upload saves both on the Pico. Your program loads it with "import ${moduleName}".`,
     hint: `A driver is code written once so that every program can use a part with simple commands. You add it once per project; keep it even if you never open it.`,
     library: id,
     check: { kind: 'file', name: fileName, label: `${fileName} is in the project` },
