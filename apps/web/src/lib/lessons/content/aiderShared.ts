@@ -1,4 +1,4 @@
-import type { LessonStep, StepCheck } from '../types';
+import type { Lesson, LessonActivity, LessonStep, StepCheck } from '../types';
 import { MICROPYTHON_LIBRARIES, type MicroPythonLibraryId } from '../libraries';
 import { all } from './helpers';
 
@@ -12,8 +12,9 @@ import { all } from './helpers';
 // - The web server reads each request before answering, survives a browser dropping the
 //   connection, says its pages are UTF-8 (the emoji show), and sets SO_REUSEADDR so a new upload
 //   can start it again straight away.
-// - Requests are turned into text with str() before they are searched: '/on' in request fails on
-//   the bytes that recv() returns, so several manuals' servers stopped at the first click.
+// - Only the request's first line is searched, as text. Searching the whole request found
+//   "led=on" in the Referer header when OFF was pressed after ON, so OFF did nothing; and several
+//   manuals searched the raw bytes from recv(), which stops the server at the first click.
 // `npm test` runs every program on a fake Pico (scripts/micropython-fake-pico.py) to catch the rest.
 
 export const PICO = { type: 'PICO_2W', label: 'Raspberry Pi Pico 2 W', count: 1 };
@@ -58,6 +59,43 @@ export const i2cOnGp8Gp9 = code(
 );
 
 // --- Steps --------------------------------------------------------------------------------------
+
+export const wireStep = (id: string, title: string, body: string, hint: string): LessonStep => ({ id, kind: 'wire', title, body, hint });
+
+/** For programs without a web page: what to look at once it runs. */
+export const watchStep = (title: string, body: string, hint: string): LessonStep => ({ id: 'watch', kind: 'observe', title, body, hint });
+
+export const BME280_PART = { type: 'BME280', label: 'BME280 sensor module', count: 1 };
+export const OLED_PART = { type: 'OLED_SH1106', label: 'SH1106 OLED screen (128 × 64, I2C)', count: 1 };
+export const RELAY_PART = { type: 'RELAY', label: '5 V relay module (1 channel)', count: 1 };
+
+export const bme280Wiring = (): LessonStep =>
+  wireStep(
+    'build',
+    'Connect the BME280',
+    'Put the BME280 module on the breadboard. Connect its VCC (sometimes labelled VIN) to 3V3 (pin 36 on the Pico), GND to GND (pin 38), SDA to GP8 (pin 11) and SCL to GP9 (pin 12).',
+    'SDA carries the data and SCL the clock: together they are the I2C bus, which several sensors can share. Use 3V3, not VBUS (5 V).'
+  );
+
+export const BME280_NOT_FOUND =
+  'If the Terminal shows an OSError as the program starts, the Pico cannot reach the sensor: check the four wires, especially SDA and SCL. Some BME280 boards answer at address 0x77: then change BME280.BME280(i2c=i2c) to BME280.BME280(i2c=i2c, address=0x77).';
+
+/** The relay module's own wiring (its load is wired in a separate step). */
+export const relayModuleStep = (): LessonStep =>
+  wireStep(
+    'build-relay',
+    'Connect the relay module',
+    'Connect the relay module\'s VCC to VBUS (5 V, pin 40 on the Pico), its GND to GND (pin 38), and its IN to GP0 (pin 1).',
+    'VBUS gives 5 V from the USB cable. The relay\'s coil needs 5 V; the Pico only gives the signal on IN. Most relay modules are "active low": value(0) switches them ON and value(1) switches them OFF.'
+  );
+
+/** One AIDER project as a lesson with one activity, named as in the course catalog. */
+export const aiderLesson = (slug: string, title: string, project: number, activity: LessonActivity): Lesson => ({
+  slug,
+  title,
+  source: `STEMAIDE AIDER student manual: Project ${project}, ${title}`,
+  activities: [activity],
+});
 
 export const credentialsStep = (): LessonStep => ({
   id: 'wifi-details',
@@ -154,7 +192,9 @@ ${banner}
 while True:
     conn, addr = s.accept()
     try:
-        request = str(conn.recv(1024))  # what the browser asked for, as text
+        # Only the first line of what the browser sent, e.g. GET /?led=on HTTP/1.1: the lines after
+        # it can name other pages (the one the button was on), which would fool the checks below.
+        request = str(conn.recv(1024).split(b'\r\n')[0])
 
 ${handle}
 

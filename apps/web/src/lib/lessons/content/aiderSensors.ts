@@ -1,13 +1,17 @@
-import type { Lesson, LessonActivity, LessonStep } from '../types';
+import type { LessonActivity } from '../types';
 import {
+  BME280_NOT_FOUND,
+  BME280_PART,
   BREADBOARD,
   CLOCK_FROM_INTERNET,
   PICO,
   USB,
   WIFI,
   WIFI_JOIN,
+  aiderLesson,
   analogPin,
   autoRefreshes,
+  bme280Wiring,
   code,
   credentialsStep,
   handlesPath,
@@ -22,6 +26,7 @@ import {
   servesOnPort80,
   uploadStep,
   webServer,
+  wireStep,
 } from './aiderShared';
 
 // AIDER projects 34-41: sensors shown on a web page, and a doorbell rung from one. Adapted from the
@@ -35,21 +40,6 @@ import {
 // - 38: the HTTP status line was scrambled ('1 200 OKHTTP/1.'), so browsers rejected the page.
 // - 40: the rain module drives its own output, so the internal pull-down is gone (it fought the
 //   module's pull-up), and a repeated `global` line is removed.
-
-const wireStep = (id: string, title: string, body: string, hint: string): LessonStep => ({ id, kind: 'wire', title, body, hint });
-
-const BME280_PART = { type: 'BME280', label: 'BME280 sensor module', count: 1 };
-
-const bme280Wiring = (): LessonStep =>
-  wireStep(
-    'build',
-    'Connect the BME280',
-    'Put the BME280 module on the breadboard. Connect its VCC (sometimes labelled VIN) to 3V3 (pin 36 on the Pico), GND to GND (pin 38), SDA to GP8 (pin 11) and SCL to GP9 (pin 12).',
-    'SDA carries the data and SCL the clock: together they are the I2C bus, which several sensors can share. Use 3V3, not VBUS (5 V).'
-  );
-
-const BME280_NOT_FOUND =
-  'If the Terminal shows an OSError as the program starts, the Pico cannot reach the sensor: check the four wires, especially SDA and SCL. Some BME280 boards answer at address 0x77: then change BME280.BME280(i2c=i2c) to BME280.BME280(i2c=i2c, address=0x77).';
 
 // --- Project 34: Online temperature monitor -----------------------------------------------------
 
@@ -789,13 +779,6 @@ const doorbellActivity: LessonActivity = {
 };
 
 // --- Lessons ----------------------------------------------------------------------------------
-
-const aiderLesson = (slug: string, title: string, project: number, activity: LessonActivity): Lesson => ({
-  slug,
-  title,
-  source: `STEMAIDE AIDER student manual: Project ${project}, ${title}`,
-  activities: [activity],
-});
 
 export const temperatureMonitorLesson = aiderLesson('online-temperature-monitor', 'Online Temperature Monitor', 34, temperatureActivity);
 export const humidityMonitorLesson = aiderLesson('online-humidity-monitor', 'Online Humidity Monitor', 35, humidityActivity);

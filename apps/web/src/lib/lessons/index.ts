@@ -10,6 +10,15 @@ import {
   waterLevelLesson,
   wifiDoorbellLesson,
 } from './content/aiderSensors';
+import {
+  buttonLoggerLesson,
+  environmentLoggerLesson,
+  irrigationLesson,
+  ledBrightnessLesson,
+  motorControlLesson,
+  oledDashboardLesson,
+  timerSwitchLesson,
+} from './content/aiderControl';
 import { buzzerLesson } from './content/buzzer';
 import { ledLesson } from './content/led';
 import { pushButtonLesson } from './content/pushButton';
@@ -44,6 +53,13 @@ export const LESSONS: Record<string, Lesson> = Object.fromEntries(
     soilMoistureLesson,
     rainStatusLesson,
     wifiDoorbellLesson,
+    oledDashboardLesson,
+    motorControlLesson,
+    buttonLoggerLesson,
+    ledBrightnessLesson,
+    timerSwitchLesson,
+    irrigationLesson,
+    environmentLoggerLesson,
   ].map((lesson) => [lesson.slug, lesson])
 );
 

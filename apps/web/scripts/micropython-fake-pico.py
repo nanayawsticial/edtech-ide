@@ -36,6 +36,7 @@ state = {
     "pins": {},
     "display": [],
     "irq": [],
+    "levels": {},
 }
 
 
@@ -162,14 +163,19 @@ module(
 
 
 class FakeConnection:
-    def __init__(self, path):
+    def __init__(self, path, referer):
         self.path = path
+        self.referer = referer
         self.sent = []
         self.closed = False
         state["responses"].append(self)
 
     def recv(self, size=1024):
-        return ("GET %s HTTP/1.1\r\nHost: 192.168.1.42\r\nAccept: text/html\r\n\r\n" % self.path).encode()
+        # As a browser sends it: after a click, the Referer header names the page the click was on.
+        lines = ["GET %s HTTP/1.1" % self.path, "Host: 192.168.1.42", "Accept: text/html"]
+        if self.referer is not None:
+            lines.append("Referer: http://192.168.1.42%s" % self.referer)
+        return ("\r\n".join(lines) + "\r\n\r\n").encode()[:size]
 
     def send(self, data):
         if not isinstance(data, (str, bytes, bytearray)):
@@ -182,6 +188,7 @@ class FakeConnection:
 
     def close(self):
         self.closed = True
+        self.levels = dict(state["levels"])  # the outputs as the page was sent
 
     def settimeout(self, value):
         pass
@@ -194,6 +201,7 @@ class FakeSocket:
     def __init__(self, *args):
         self.queue = list(REQUESTS)
         self.bound = None
+        self.last_page = None
 
     def setsockopt(self, *args):
         pass
@@ -210,11 +218,14 @@ class FakeSocket:
     def accept(self):
         if not self.queue:
             raise ProgramStopped("all requests served")
-        advance(0)
+        advance(1)  # a second passes between page loads
         # Between two page loads the sensors' interrupts fire, as a person would wave or press.
         for pin, handler in list(state["irq"]):
             handler(pin)
-        return FakeConnection(self.queue.pop(0)), ("192.168.1.50", 50000)
+        path = self.queue.pop(0)
+        connection = FakeConnection(path, self.last_page)
+        self.last_page = path
+        return connection, ("192.168.1.50", 50000)
 
     def settimeout(self, value):
         pass
@@ -284,6 +295,7 @@ class Pin:
             return (self._reads // 3) % 2
         self._value = 1 if new else 0
         state["pins"].setdefault(str(self.id), []).append(self._value)
+        state["levels"][str(self.id)] = self._value
         return None
 
     __call__ = value
@@ -341,6 +353,7 @@ class PWM:
             raise ValueError("duty_u16 must be a whole number from 0 to 65535, got %r" % (value,))
         self._duty = value
         state["pins"].setdefault("pwm%s" % gpio_number(self.pin), []).append(value)
+        state["levels"]["pwm%s" % gpio_number(self.pin)] = value
 
     def duty_ns(self, value=None):
         return 0
@@ -364,19 +377,34 @@ class I2C:
 
 
 class Timer:
+    """Fires when the fake clock moves on or between requests; a ONE_SHOT timer fires once."""
+
     ONE_SHOT = 0
     PERIODIC = 1
 
     def __init__(self, *args, **kwargs):
+        self._entry = None
         if "callback" in kwargs:
             self.init(**kwargs)
 
     def init(self, mode=1, period=-1, freq=-1, callback=None, **kwargs):
-        if callback is not None:
-            state["irq"].append((self, callback))
+        self.deinit()
+        if callback is None:
+            return
+        self._mode = mode
+        self._callback = callback
+        self._entry = (self, Timer._fire)
+        state["irq"].append(self._entry)
+
+    def _fire(self):
+        if self._mode == Timer.ONE_SHOT:
+            self.deinit()
+        self._callback(self)
 
     def deinit(self):
-        pass
+        if self._entry in state["irq"]:
+            state["irq"].remove(self._entry)
+        self._entry = None
 
 
 class RTC:
@@ -520,7 +548,8 @@ except BaseException:  # noqa: BLE001 - every other error is a finding
 
 result["printed"] = "".join(state["printed"])
 result["responses"] = [
-    {"path": conn.path, "text": "".join(conn.sent), "closed": conn.closed} for conn in state["responses"]
+    {"path": conn.path, "text": "".join(conn.sent), "closed": conn.closed, "levels": getattr(conn, "levels", {})}
+    for conn in state["responses"]
 ]
 result["pins"] = state["pins"]
 result["display"] = state["display"]

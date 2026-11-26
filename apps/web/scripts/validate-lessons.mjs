@@ -266,9 +266,10 @@ assert.ok(wifiCarryCount > 0, 'No Wi-Fi lesson code to carry details into');
 const fakePico = path.join(scriptDir, 'micropython-fake-pico.py');
 /** What some programs must visibly do on the fake Pico, by activity id. */
 const FAKE_PICO_EXPECTATIONS = {
-  'aider-31-led': (run) => assert.deepEqual([...new Set(run.pins['0'])].sort(), [0, 1], 'the LED on GP0 should switch on and off'),
-  'aider-32-buzzer': (run) => assert.deepEqual([...new Set(run.pins['0'])].sort(), [0, 1], 'the buzzer on GP0 should switch on and off'),
-  'aider-33-relay': (run) => assert.deepEqual([...new Set(run.pins['0'])].sort(), [0, 1], 'the relay on GP0 should switch on and off'),
+  // Pressing ON then OFF: the browser sends the OFF request with "Referer: .../?led=on".
+  'aider-31-led': (run) => expectLevels(run, '0', { '/?led=on': 1, '/?led=off': 0 }),
+  'aider-32-buzzer': (run) => expectLevels(run, '0', { '/?buzzer=on': 1, '/?buzzer=off': 0 }),
+  'aider-33-relay': (run) => expectLevels(run, '0', { '/?relay=on': 0, '/?relay=off': 1 }), // active LOW
   'aider-34-temperature': (run) => assert.match(pages(run), /class="temp">\d+\.\d\dC</, 'the page should show a temperature such as 23.45C'),
   'aider-35-humidity': (run) => assert.ok(shown(run, 'class="status">(DRY|COMFORTABLE|HUMID)<').size >= 2, 'changing readings should change the status'),
   'aider-36-light': (run) => assert.match(pages(run), /<tr><td>3<\/td><td>\d+%<\/td><\/tr>/, 'the table should grow by one row per page load'),
@@ -279,16 +280,63 @@ const FAKE_PICO_EXPECTATIONS = {
   'aider-41-doorbell': (run) => {
     assert.deepEqual([...new Set(run.pins['0'])].sort(), [0, 1], 'the buzzer on GP0 should ding-dong');
     assert.match(pages(run), /Total rings: 1/, 'the ring should be counted');
+    assert.doesNotMatch(pages(run), /Total rings: 2/, 'only the button rings: not the icon request that follows it');
   },
+  'aider-42-dashboard': (run) => {
+    for (const line of ['IoT Dashboard', '192.168.1.42', 'T:23.45C']) {
+      assert.ok(run.display.includes(line), `the screen should show ${line}`);
+    }
+    assert.ok(run.display.some((line) => /^H:\d+\.\d\d%$/.test(line)), 'the screen should show the humidity');
+  },
+  'aider-43-motor': (run) => expectLevels(run, '0', { '/on': 0, '/off': 1 }), // active LOW
+  'aider-44-button-log': (run) => {
+    assert.match(pages(run), /Total Presses: [1-9]/, 'the interrupt should log presses');
+    assert.match(pages(run), /<tr><td>1<\/td><td>09:00:\d\d<\/td><\/tr>/, 'each press should be logged with its time');
+  },
+  'aider-45-brightness': (run) => expectLevels(run, 'pwm0', { '/?level=50': 32767, '/?level=100': 65535, '/?level=0': 0 }),
+  'aider-46-timer': (run) =>
+    expectSequence(run, '0', [
+      ['/?duration=30', 0], // relay ON (active LOW)
+      ['/', 1], // the timer ran out before the next page load
+      ['/?duration=5', 0],
+      ['/stop', 1],
+    ]),
+  'aider-48-irrigation': (run) => expectLevels(run, '0', { '/on': 0, '/off': 1 }),
+  'aider-49-env-log': (run) => assert.match(pages(run), /<tr><td>[2-9]<\/td><td>09:00:\d\d<\/td><td>\d+\.\d\dC<\/td><td>\d+\.\d\d%<\/td><\/tr>/, 'the timer should log readings with their time'),
+};
+/** Form submissions to make after the page and its links, by activity id. */
+const FAKE_PICO_FORMS = {
+  'aider-45-brightness': ['/?level=50', '/?level=100', '/?level=0'],
+  'aider-46-timer': ['/?duration=30', '/', '/?duration=5', '/stop'],
 };
 const pages = (run) => run.responses.map((response) => response.text).join('\n');
+/** These requests, in this order (others may come between), leave `pin` at these levels. */
+function expectSequence(run, pin, steps) {
+  let next = 0;
+  for (const response of run.responses) {
+    if (next < steps.length && response.path === steps[next][0]) {
+      assert.equal(response.levels[pin], steps[next][1], `after ${steps[next][0]} (step ${next + 1}), GP${pin} should be ${steps[next][1]}`);
+      next += 1;
+    }
+  }
+  assert.equal(next, steps.length, `requests missing: ${steps.slice(next).map(([requestPath]) => requestPath).join(', ')}`);
+}
+/** After each of these requests, the output `pin` must be at this level when the page is sent. */
+function expectLevels(run, pin, levelsByPath) {
+  for (const [requestPath, level] of Object.entries(levelsByPath)) {
+    const response = run.responses.find((candidate) => candidate.path === requestPath);
+    assert.ok(response, `no request for ${requestPath}`);
+    assert.equal(response.levels[pin], level, `after ${requestPath}, GP${pin.replace('pwm', '')} should be ${level}`);
+  }
+}
 /** The different values `pattern` (one capture group) takes across the pages served. */
 const shown = (run, pattern) => new Set([...pages(run).matchAll(new RegExp(pattern, 'g'))].map((match) => match[1]));
 let fakePicoRuns = 0;
 function runOnFakePico(code, where) {
   const links = [...code.matchAll(/href=["']?(\/[^"' >]*)/g)].map((match) => match[1]);
-  // The page three times (sensor readings change between loads), then every link on it.
-  const requests = ['/', '/', '/', ...new Set(links)];
+  // The page three times (sensor readings change between loads), every link on it, the forms,
+  // and the icon request a browser makes after a page (its Referer names that page).
+  const requests = ['/', '/', '/', ...new Set(links), ...(FAKE_PICO_FORMS[where] ?? []), '/favicon.ico'];
   const result = spawnSync(pythonCommand, [fakePico, JSON.stringify(requests)], { input: code, encoding: 'utf8' });
   assert.equal(result.status, 0, `${where}: the fake Pico failed to run:\n${result.stderr}`);
   const run = JSON.parse(result.stdout);
