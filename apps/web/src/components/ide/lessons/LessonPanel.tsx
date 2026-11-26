@@ -7,6 +7,7 @@ import { useBoard } from '@/contexts/BoardContext';
 
 import { getLesson } from '@/lib/lessons';
 import { carryOverWifiDetails } from '@/lib/lessons/wifiDetails';
+import { LIBRARY_FILE_NAMES, MICROPYTHON_LIBRARIES, type MicroPythonLibraryId } from '@/lib/lessons/libraries';
 import { EMPTY_OBSERVATIONS, evaluateCheck, observeVisualChange, type LessonCheckContext, type LessonObservations } from '@/lib/lessons/checks';
 import type { LessonActivity, LessonStep, LessonStepKind } from '@/lib/lessons/types';
 import type { ToolboxLearningLevel } from '@/lib/blockly/guidedToolbox';
@@ -89,17 +90,25 @@ function useLessonCheckContext(): Omit<LessonCheckContext, 'observations'> & { c
   const simulating = useSimulationStore((state) => state.simulationState.running);
   const { codingMode } = useBoard();
   const files = useEditorStore((state) => state.files);
-  // In a typed-code project the checks read what the learner typed, not code made from blocks.
+  // In a typed-code project the checks read what the learner typed, not code made from blocks,
+  // and not the kit drivers a lesson added.
   const code = useMemo(
     () =>
       codingMode === 'text'
         ? files
-            .filter((file) => file.type !== 'folder' && file.type !== 'blockly' && file.name !== 'circuit.json')
+            .filter(
+              (file) =>
+                file.type !== 'folder' &&
+                file.type !== 'blockly' &&
+                file.name !== 'circuit.json' &&
+                !LIBRARY_FILE_NAMES.has(file.name)
+            )
             .map((file) => file.content)
             .join('\n')
         : blockCode,
     [blockCode, codingMode, files]
   );
+  const fileNames = useMemo(() => files.filter((file) => file.type !== 'folder').map((file) => file.name), [files]);
 
   return useMemo(() => {
     const typed = components.map((component) => ({ id: component.id, type: normalizeComponentType(component.type) }));
@@ -108,9 +117,10 @@ function useLessonCheckContext(): Omit<LessonCheckContext, 'observations'> & { c
       componentTypes: Object.fromEntries(typed.map((component) => [component.id, component.type])),
       connections,
       code,
+      fileNames,
       simulating,
     };
-  }, [code, components, connections, simulating]);
+  }, [code, components, connections, fileNames, simulating]);
 }
 
 function StepChecklist({ step, context }: { step: LessonStep; context: LessonCheckContext }) {
@@ -231,6 +241,40 @@ function CodeToCopy({ code, currentCode }: { code: string; currentCode: string }
   );
 }
 
+/**
+ * Adds a kit driver (e.g. BME280.py) to the project with one click. Upload then saves it on the
+ * board next to main.py. The learner stays on the file they were editing.
+ */
+function LibraryToAdd({ id, fileNames }: { id: MicroPythonLibraryId; fileNames: string[] }) {
+  const library = MICROPYTHON_LIBRARIES[id];
+  const added = fileNames.includes(library.fileName);
+
+  const add = () => {
+    const editor = useEditorStore.getState();
+    const previousFileId = editor.activeFileId;
+    editor.createFile(library.fileName, 'python', null, library.content);
+    if (previousFileId) {
+      editor.setActiveFileId(previousFileId);
+    }
+  };
+
+  return (
+    <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/30 px-3 py-2">
+      <p className="text-[12px] leading-5 text-slate-300">
+        <span className="font-mono text-emerald-200">{library.fileName}</span> lets the Pico talk to {library.description}.
+      </p>
+      <button
+        type="button"
+        onClick={add}
+        disabled={added}
+        className="shrink-0 rounded-md bg-indigo-500 px-2.5 py-1 text-white transition hover:bg-indigo-400 disabled:bg-white/10 disabled:text-emerald-200"
+      >
+        <span className="text-[12px] font-semibold">{added ? 'Added' : `Add ${library.fileName}`}</span>
+      </button>
+    </div>
+  );
+}
+
 function StepView({ step, context }: { step: LessonStep; context: LessonCheckContext }) {
   const [showHint, setShowHint] = useState(false);
   const [showCpp, setShowCpp] = useState(true);
@@ -271,6 +315,8 @@ function StepView({ step, context }: { step: LessonStep; context: LessonCheckCon
           ) : null}
         </div>
       ) : null}
+
+      {step.library ? <LibraryToAdd id={step.library} fileNames={context.fileNames ?? []} /> : null}
 
       {step.python ? <CodeToCopy code={step.python} currentCode={context.code} /> : null}
 

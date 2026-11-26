@@ -9,6 +9,9 @@ import ts from 'typescript';
  */
 const require = createRequire(import.meta.url);
 
+// A folder of the same name (e.g. ./libraries) is not the module: its index.ts is.
+const isFile = (candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile();
+
 function resolveTsModule(specifier, fromDirectory, srcRoot) {
   if (specifier.startsWith('@/')) {
     return path.resolve(srcRoot, specifier.slice(2));
@@ -27,7 +30,7 @@ function resolveTsModule(specifier, fromDirectory, srcRoot) {
     path.join(basePath, 'index.mjs'),
   ];
 
-  const match = candidates.find((candidate) => fs.existsSync(candidate));
+  const match = candidates.find(isFile);
   if (!match) {
     throw new Error(`Unable to resolve module ${specifier} from ${fromDirectory}`);
   }
@@ -48,7 +51,7 @@ function resolveWithExtensions(basePath) {
     path.join(basePath, 'index.mjs'),
   ];
 
-  const match = candidates.find((candidate) => fs.existsSync(candidate));
+  const match = candidates.find(isFile);
   if (!match) {
     throw new Error(`Unable to resolve module ${basePath}`);
   }

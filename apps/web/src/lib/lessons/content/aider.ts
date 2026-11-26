@@ -1,142 +1,47 @@
-import type { Lesson, LessonActivity, LessonStep, StepCheck } from '../types';
+import type { Lesson, LessonActivity } from '../types';
 import { all } from './helpers';
+import {
+  BREADBOARD,
+  PICO,
+  USB,
+  WIFI,
+  WIFI_JOIN,
+  connects,
+  credentialsStep,
+  handlesButton,
+  joinsWifi,
+  openPageStep,
+  outputPin,
+  pasteCodeStep,
+  printsIp,
+  servesOnPort80,
+  uploadStep,
+  webServer,
+} from './aiderShared';
 
-// Adapted from the STEMAIDE AIDER student manuals, projects 31-33 (Raspberry Pi Pico 2 W,
-// MicroPython). Built on real hardware: the steps cannot see the circuit, so wiring and testing
-// steps are ticked by the learner, and code steps check the code typed into main.py.
+// Projects 31-33 of the AIDER student manuals, the first AIDER lessons. Project 31 was tested end
+// to end on a real Pico 2 W. Shared steps, checks and program pieces are in aiderShared.ts.
 //
 // Correction to manual 33: its wiring table puts both sides of the LED on 5 V (anode through the
 // resistor, cathode through the relay to COM, which also goes to 5 V), so the LED can never light.
 // Here the relay switches 5 V to the LED, and the LED's short leg goes to GND.
 
-const PICO = { type: 'PICO_2W', label: 'Raspberry Pi Pico 2 W', count: 1 };
-const USB = { type: 'USB_CABLE', label: 'USB data cable', count: 1 };
-const BREADBOARD = { type: 'BREADBOARD', label: 'Breadboard', count: 1 };
-const WIFI = { type: 'WIFI', label: '2.4 GHz Wi-Fi network', count: 1 };
-
-// --- Code checks (spacing-tolerant regular expressions on main.py) -----------------------------
-
-const joinsWifi: StepCheck = { kind: 'code', pattern: String.raw`network\.WLAN\(\s*network\.STA_IF\s*\)`, label: 'Joins a Wi-Fi network' };
-const connects: StepCheck = { kind: 'code', pattern: String.raw`\.connect\(\s*SSID\s*,\s*PASSWORD\s*\)`, label: 'Connects with your name and password' };
-const printsIp: StepCheck = { kind: 'code', pattern: String.raw`ifconfig\(\)\s*\[\s*0\s*\]`, label: 'Prints the IP address' };
-const servesOnPort80: StepCheck = {
-  kind: 'code',
-  pattern: String.raw`\.bind\(\s*\(\s*['"]0\.0\.0\.0['"]\s*,\s*80\s*\)\s*\)`,
-  label: 'Runs a web server on port 80',
-};
-const ssidFilledIn: StepCheck = {
-  kind: 'code',
-  pattern: String.raw`SSID\s*=\s*["'](?!YOUR_WIFI_NAME["'])[^"'\n]+["']`,
-  label: 'Your Wi-Fi name is filled in',
-};
-const passwordFilledIn: StepCheck = {
-  kind: 'code',
-  pattern: String.raw`PASSWORD\s*=\s*["'](?!YOUR_PASSWORD["'])[^"'\n]*["']`,
-  label: 'Your Wi-Fi password is filled in',
-};
-
-const outputPin = (name: string, pin: number, label: string): StepCheck => ({
-  kind: 'code',
-  pattern: String.raw`${name}\s*=\s*Pin\(\s*${pin}\s*,\s*Pin\.OUT\s*\)`,
-  label,
-});
-const handlesButton = (query: string, label: string): StepCheck => ({
-  kind: 'code',
-  pattern: String.raw`['"]/\?${query}['"]\s+in\s+request`,
-  label,
-});
-
-// --- Shared steps -------------------------------------------------------------------------------
-
-const credentialsStep = (): LessonStep => ({
-  id: 'wifi-details',
-  kind: 'code',
-  title: 'Add your Wi-Fi name and password',
-  body: 'Near the top of the code, replace YOUR_WIFI_NAME with the name of the Wi-Fi network and YOUR_PASSWORD with its password. Keep the quotation marks.',
-  hint: 'Names and passwords are case-sensitive. Many routers show two networks with similar names, such as MyWiFi and MyWiFi_2.4GHz: use the 2.4 GHz one. Your password is saved inside this project, so take it out before you export or share the project.',
-  check: all(ssidFilledIn, passwordFilledIn),
-});
-
-const uploadStep = (): LessonStep => ({
-  id: 'upload',
-  kind: 'run',
-  title: 'Upload and find the IP address',
-  body: 'Plug the Pico into the computer with the USB cable and click Upload. If a list of ports opens, pick the Pico (it is often called "USB Serial Device"). The Terminal on the right shows what the Pico prints: after "Connected!" comes its IP address, for example 192.168.1.42. Write it down.',
-  hint: 'If the Pico cannot find your network, it lists the networks it can see: copy the name exactly from that list. The Pico 2 W only joins 2.4 GHz networks. If the upload says the board did not answer, the Pico needs MicroPython first: hold its BOOTSEL button while plugging it in, then copy the MicroPython file from micropython.org onto the drive that appears.',
-});
-
-const pasteCodeStep = (code: string, checks: StepCheck[], what: string): LessonStep => ({
-  id: 'code',
-  kind: 'code',
-  title: 'Paste the code',
-  body: `Click Copy, then in main.py select everything that is there and paste. This program joins your Wi-Fi network, ${what}, and shows a web page with buttons. If main.py already has your Wi-Fi name and password, Copy keeps them.`,
-  python: code,
-  hint: 'Python uses the spaces at the start of a line to group code, so paste it as it is and do not change the indentation.',
-  check: all(...checks),
-});
-
-const openPageStep = (body: string, hint: string): LessonStep => ({
-  id: 'open-page',
-  kind: 'observe',
-  title: 'Control it from a phone',
-  body,
-  hint: `${hint} If the page will not load, check that the phone is on the same Wi-Fi network as the Pico. Many school networks stop devices from talking to each other: a phone hotspot works instead.`,
-});
-
+/** A switch-it-from-a-web-page program: Wi-Fi, one output, a page with ON and OFF buttons. */
 const wifiServerCode = (hardware: string, html: string, handler: string, banner = 'print("Web server started!")\nprint("Open your browser and enter the IP address above")') =>
   String.raw`import network
 import socket
 from machine import Pin
 import time
 
-# ==================== Wi-Fi SETUP ====================
-SSID = "YOUR_WIFI_NAME"
-PASSWORD = "YOUR_PASSWORD"
-
-wlan = network.WLAN(network.STA_IF)
-wlan.active(True)
-wlan.connect(SSID, PASSWORD)
-
-print("Connecting to Wi-Fi...")
-while wlan.isconnected() == False:
-    if wlan.status() < 0:  # the Pico gave up: wrong Wi-Fi name or password
-        print("Could not join", SSID, "- check the Wi-Fi name and password (2.4 GHz networks only)")
-        raise SystemExit
-    time.sleep(1)
-
-print("Connected!")
-print("IP Address:", wlan.ifconfig()[0])
+${WIFI_JOIN}
 
 # ==================== HARDWARE SETUP ====================
 ${hardware}
 
-# ==================== WEB SERVER ====================
+# ==================== WEB PAGE ====================
 html = """${html}"""
 
-s = socket.socket()
-s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # lets the server restart straight away
-s.bind(('0.0.0.0', 80))
-s.listen(5)
-
-${banner}
-
-while True:
-    try:
-        conn, addr = s.accept()
-        request = conn.recv(1024)
-        request = str(request)
-
-${handler}
-
-        conn.send('HTTP/1.1 200 OK\r\n')
-        conn.send('Content-Type: text/html\r\n')
-        conn.send('Connection: close\r\n\r\n')
-        conn.sendall(response)
-        conn.close()
-
-    except OSError:
-        conn.close()
-`;
+${webServer(handler, banner)}`;
 
 const controlPage = (title: string, heading: string, item: string, query: string, onLabel: string, offLabel: string, onColor: string, offColor: string) => `<!DOCTYPE html>
 <html>
@@ -252,13 +157,14 @@ const ledActivity: LessonActivity = {
     pasteCodeStep(
       LED_CODE,
       [outputPin('led', 0, 'GP0 is an output for the LED'), servesOnPort80, handlesButton('led=on', 'Handles the LED ON button'), handlesButton('led=off', 'Handles the LED OFF button')],
-      'sets GP0 as an output for the LED'
+      'joins your Wi-Fi network, sets GP0 as an output for the LED, and shows a web page with buttons'
     ),
     credentialsStep(),
     uploadStep(),
     openPageStep(
       'On a phone or computer on the same Wi-Fi network, open the web browser and type the IP address into the address bar, for example http://192.168.1.42. Press LED ON and LED OFF. The page shows whether the LED is on.',
-      'The Terminal prints "Client connected from" each time the page loads.'
+      'The Terminal prints "Client connected from" each time the page loads.',
+      'Control it from a phone'
     ),
   ],
   solutionCode: LED_CODE,
@@ -304,13 +210,14 @@ const buzzerActivity: LessonActivity = {
     pasteCodeStep(
       BUZZER_CODE,
       [outputPin('buzzer', 0, 'GP0 is an output for the buzzer'), servesOnPort80, handlesButton('buzzer=on', 'Handles the BUZZER ON button'), handlesButton('buzzer=off', 'Handles the BUZZER OFF button')],
-      'sets GP0 as an output for the buzzer'
+      'joins your Wi-Fi network, sets GP0 as an output for the buzzer, and shows a web page with buttons'
     ),
     credentialsStep(),
     uploadStep(),
     openPageStep(
       'On a phone or computer on the same Wi-Fi network, open the browser and type the Pico\'s IP address. Press BUZZER ON, then BUZZER OFF. The page says ACTIVE or SILENT.',
-      'Buzzer on all the time? Check the wire to GP0, or try another GPIO pin and change the 0 in Pin(0, Pin.OUT) to match.'
+      'Buzzer on all the time? Check the wire to GP0, or try another GPIO pin and change the 0 in Pin(0, Pin.OUT) to match.',
+      'Control it from a phone'
     ),
   ],
   solutionCode: BUZZER_CODE,
@@ -371,13 +278,14 @@ const relayActivity: LessonActivity = {
     pasteCodeStep(
       RELAY_CODE,
       [outputPin('relay', 0, 'GP0 is an output for the relay'), servesOnPort80, handlesButton('relay=on', 'Handles the RELAY ON button'), handlesButton('relay=off', 'Handles the RELAY OFF button')],
-      'controls the relay on GP0'
+      'joins your Wi-Fi network, controls the relay on GP0, and shows a web page with buttons'
     ),
     credentialsStep(),
     uploadStep(),
     openPageStep(
       'On a phone or computer on the same Wi-Fi network, open the browser and type the Pico\'s IP address. Press RELAY ON: the relay clicks and the LED lights. Press RELAY OFF: it clicks again and the LED goes out.',
-      'Most relay modules are "active low": value(0) switches them ON and value(1) switches them OFF, which is why the code looks back to front. If yours works the other way round, swap the 0 and 1.'
+      'Most relay modules are "active low": value(0) switches them ON and value(1) switches them OFF, which is why the code looks back to front. If yours works the other way round, swap the 0 and 1.',
+      'Control it from a phone'
     ),
   ],
   solutionCode: RELAY_CODE,

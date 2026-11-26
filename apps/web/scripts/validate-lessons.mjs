@@ -20,6 +20,7 @@ const loader = createTsModuleLoader(srcRoot);
 const { LESSONS } = loader.loadModule(path.join(srcRoot, 'lib', 'lessons', 'index.ts'));
 const { evaluateCheck } = loader.loadModule(path.join(srcRoot, 'lib', 'lessons', 'checks.ts'));
 const { getComponentDefinition } = loader.loadModule(path.join(srcRoot, 'lib', 'wiring', 'componentDefinitions.ts'));
+const { MICROPYTHON_LIBRARIES: LIBRARIES } = loader.loadModule(path.join(srcRoot, 'lib', 'lessons', 'libraries', 'index.ts'));
 
 const catalogSource = fs.readFileSync(path.join(srcRoot, 'lib', 'courses', 'catalog.ts'), 'utf8');
 const catalogSlugs = new Set([...catalogSource.matchAll(/"slug":\s*"([^"]+)"/g)].map((match) => match[1]));
@@ -61,7 +62,10 @@ for (const lesson of Object.values(LESSONS)) {
 
       walkChecks(step.check, (check) => {
         if (activity.onRealHardware) {
-          assert.equal(check.kind === 'all' || check.kind === 'code', true, `${where}: real-hardware steps can only check code (got ${check.kind})`);
+          assert.ok(['all', 'code', 'file'].includes(check.kind), `${where}: real-hardware steps can only check code and files (got ${check.kind})`);
+        }
+        if (check.kind === 'file') {
+          assert.equal(check.name, step.library && LIBRARIES[step.library]?.fileName, `${where}: checks for ${check.name}, which this step does not add`);
         }
         if (check.kind === 'code') {
           assert.doesNotThrow(() => new RegExp(check.pattern), `${where}: invalid code pattern ${check.pattern}`);
@@ -166,7 +170,7 @@ const pythonCommand = ['python', 'python3', 'py'].find((command) => {
 });
 function checkPythonSyntax(code, where) {
   if (!pythonCommand) return;
-  const result = spawnSync(pythonCommand, ['-c', 'import ast, sys; ast.parse(sys.stdin.read())'], { input: code, encoding: 'utf8' });
+  const result = spawnSync(pythonCommand, ['-c', 'import ast, sys; ast.parse(sys.stdin.buffer.read().decode("utf-8"))'], { input: code, encoding: 'utf8' });
   assert.equal(result.status, 0, `${where}: the MicroPython does not parse:
 ${result.stderr}`);
   pythonChecked += 1;
@@ -216,6 +220,20 @@ for (const lesson of Object.values(LESSONS)) {
   }
 }
 
+// Kit drivers: the "file" check, and the bundled copies are the real drivers.
+{
+  const hasDriver = (fileNames) => evaluateCheck({ kind: 'file', name: 'BME280.py' }, { ...baseContext, fileNames })[0].passed;
+  assert.equal(hasDriver(['main.py', 'BME280.py']), true, 'file: BME280.py added');
+  assert.equal(hasDriver(['main.py', 'bme280.py']), false, 'file: names are exact (MicroPython imports are case-sensitive)');
+  assert.equal(hasDriver(undefined), false, 'file: no file list (block projects)');
+  assert.match(LIBRARIES.BME280.content, /^class BME280:/m);
+  assert.match(LIBRARIES.SH1106.content, /^class SH1106_I2C\(SH1106\):/m);
+  assert.match(LIBRARIES.SH1106.content, /The MIT License/, 'sh1106.py keeps its licence');
+  for (const library of Object.values(LIBRARIES)) {
+    checkPythonSyntax(library.content, library.fileName);
+  }
+}
+
 // Copying lesson code keeps the Wi-Fi name and password already typed into main.py.
 const { carryOverWifiDetails } = loader.loadModule(path.join(srcRoot, 'lib', 'lessons', 'wifiDetails.ts'));
 let wifiCarryCount = 0;
@@ -241,6 +259,63 @@ for (const lesson of Object.values(LESSONS)) {
   }
 }
 assert.ok(wifiCarryCount > 0, 'No Wi-Fi lesson code to carry details into');
+
+// Every typed-code program runs on a fake Pico 2 W (scripts/micropython-fake-pico.py): it joins
+// "Wi-Fi", the page and each link on it are requested as a browser would, and sensors return
+// changing readings. Crashes, bad HTTP replies and wrong pins fail here instead of in class.
+const fakePico = path.join(scriptDir, 'micropython-fake-pico.py');
+/** What some programs must visibly do on the fake Pico, by activity id. */
+const FAKE_PICO_EXPECTATIONS = {
+  'aider-31-led': (run) => assert.deepEqual([...new Set(run.pins['0'])].sort(), [0, 1], 'the LED on GP0 should switch on and off'),
+  'aider-32-buzzer': (run) => assert.deepEqual([...new Set(run.pins['0'])].sort(), [0, 1], 'the buzzer on GP0 should switch on and off'),
+  'aider-33-relay': (run) => assert.deepEqual([...new Set(run.pins['0'])].sort(), [0, 1], 'the relay on GP0 should switch on and off'),
+  'aider-34-temperature': (run) => assert.match(pages(run), /class="temp">\d+\.\d\dC</, 'the page should show a temperature such as 23.45C'),
+  'aider-35-humidity': (run) => assert.ok(shown(run, 'class="status">(DRY|COMFORTABLE|HUMID)<').size >= 2, 'changing readings should change the status'),
+  'aider-36-light': (run) => assert.match(pages(run), /<tr><td>3<\/td><td>\d+%<\/td><\/tr>/, 'the table should grow by one row per page load'),
+  'aider-37-motion': (run) => assert.match(pages(run), /Total Detections: [1-9]/, 'the interrupt should count motion'),
+  'aider-38-water': (run) => assert.ok(shown(run, 'Status: (LOW|MEDIUM|HIGH)<').size >= 2, 'changing readings should change the status'),
+  'aider-39-soil': (run) => assert.ok(shown(run, 'class="status">(NEEDS WATER!|OK|WET)<').size >= 2, 'changing readings should change the advice'),
+  'aider-40-rain': (run) => assert.match(pages(run), /Rain Events Today: <strong>1<\/strong>/, 'a change from dry to wet should count one rain event'),
+  'aider-41-doorbell': (run) => {
+    assert.deepEqual([...new Set(run.pins['0'])].sort(), [0, 1], 'the buzzer on GP0 should ding-dong');
+    assert.match(pages(run), /Total rings: 1/, 'the ring should be counted');
+  },
+};
+const pages = (run) => run.responses.map((response) => response.text).join('\n');
+/** The different values `pattern` (one capture group) takes across the pages served. */
+const shown = (run, pattern) => new Set([...pages(run).matchAll(new RegExp(pattern, 'g'))].map((match) => match[1]));
+let fakePicoRuns = 0;
+function runOnFakePico(code, where) {
+  const links = [...code.matchAll(/href=["']?(\/[^"' >]*)/g)].map((match) => match[1]);
+  // The page three times (sensor readings change between loads), then every link on it.
+  const requests = ['/', '/', '/', ...new Set(links)];
+  const result = spawnSync(pythonCommand, [fakePico, JSON.stringify(requests)], { input: code, encoding: 'utf8' });
+  assert.equal(result.status, 0, `${where}: the fake Pico failed to run:\n${result.stderr}`);
+  const run = JSON.parse(result.stdout);
+  assert.ok(['stopped', 'finished'].includes(run.outcome), `${where}: the program stopped with an error on the fake Pico: ${run.error ?? run.outcome}\nIt printed:\n${run.printed}`);
+  if (/\.bind\(/.test(code)) {
+    assert.equal(run.responses.length, requests.length, `${where}: answered ${run.responses.length} of ${requests.length} requests (${requests.join(', ')})`);
+    for (const response of run.responses) {
+      assert.ok(response.text.startsWith('HTTP/1.1 200 OK\r\n'), `${where}: ${response.path} got a bad HTTP reply: ${JSON.stringify(response.text.slice(0, 40))}`);
+      assert.match(response.text, /<html/i, `${where}: ${response.path} got no web page`);
+      assert.ok(response.closed, `${where}: the connection for ${response.path} was never closed`);
+    }
+  }
+  fakePicoRuns += 1;
+  return run;
+}
+if (pythonCommand) {
+  for (const lesson of Object.values(LESSONS)) {
+    for (const activity of lesson.activities) {
+      if (activity.solutionCode === undefined) continue;
+      const programs = new Set([activity.solutionCode, ...activity.steps.map((step) => step.python).filter(Boolean)]);
+      for (const program of programs) {
+        const run = runOnFakePico(fillPlaceholders(program), activity.id);
+        if (program === activity.solutionCode) FAKE_PICO_EXPECTATIONS[activity.id]?.(run);
+      }
+    }
+  }
+}
 {
   const lessonCode = 'SSID = "YOUR_WIFI_NAME"\nPASSWORD = "YOUR_PASSWORD"\nwlan.connect(SSID, PASSWORD)\n';
   const only = (current) => carryOverWifiDetails(lessonCode, current);
@@ -258,5 +333,7 @@ console.log(
   `Validated ${Object.keys(LESSONS).length} lessons (${activityCount} activities, ${stepCount} steps), ` +
     `the lesson step checks, ${solutionCount} block solutions against the real code generator, and ` +
     `${typedSolutionCount} typed-code solutions, Wi-Fi details carried into ${wifiCarryCount} programs` +
-    (pythonCommand ? ` (${pythonChecked} MicroPython programs parsed).` : ' (Python not found: MicroPython syntax not checked).')
+    (pythonCommand
+      ? ` (${pythonChecked} MicroPython programs parsed, ${fakePicoRuns} run on a fake Pico).`
+      : ' (Python not found: MicroPython programs not checked).')
 );

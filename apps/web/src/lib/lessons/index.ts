@@ -1,5 +1,15 @@
 import type { Lesson } from './types';
 import { wifiBuzzerLesson, wifiLedLesson, wifiRelayLesson } from './content/aider';
+import {
+  humidityMonitorLesson,
+  lightLoggerLesson,
+  motionAlertLesson,
+  rainStatusLesson,
+  soilMoistureLesson,
+  temperatureMonitorLesson,
+  waterLevelLesson,
+  wifiDoorbellLesson,
+} from './content/aiderSensors';
 import { buzzerLesson } from './content/buzzer';
 import { ledLesson } from './content/led';
 import { pushButtonLesson } from './content/pushButton';
@@ -26,6 +36,14 @@ export const LESSONS: Record<string, Lesson> = Object.fromEntries(
     wifiLedLesson,
     wifiBuzzerLesson,
     wifiRelayLesson,
+    temperatureMonitorLesson,
+    humidityMonitorLesson,
+    lightLoggerLesson,
+    motionAlertLesson,
+    waterLevelLesson,
+    soilMoistureLesson,
+    rainStatusLesson,
+    wifiDoorbellLesson,
   ].map((lesson) => [lesson.slug, lesson])
 );
 

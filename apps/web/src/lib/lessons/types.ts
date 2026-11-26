@@ -8,6 +8,7 @@
  */
 
 import type { ToolboxLearningLevel } from '@/lib/blockly/guidedToolbox';
+import type { MicroPythonLibraryId } from './libraries';
 
 /** A board pin as the netlist names it: '6', 'A0', '5V'. 'GND' matches any ground pin. */
 export type BoardPinRef = string;
@@ -27,6 +28,8 @@ export type StepCheck = { label?: string } & (
    * blocks, or in a typed-code project the code in the editor.
    */
   | { kind: 'code'; pattern: string }
+  /** A file with this exact name is in the project (e.g. a driver such as BME280.py). */
+  | { kind: 'file'; name: string }
   /** The simulation is running. */
   | { kind: 'simulating' }
   /**
@@ -58,6 +61,8 @@ export interface LessonStep {
   cpp?: string;
   /** MicroPython for the learner to copy into main.py (typed-code lessons), with a Copy button. */
   python?: string;
+  /** A kit driver this step adds to the project with one button (typed-code lessons). */
+  library?: MicroPythonLibraryId;
   /** Extra help shown on request. */
   hint?: string;
   /** Ticks the step off automatically when true. Steps without a check are ticked by the learner. */
