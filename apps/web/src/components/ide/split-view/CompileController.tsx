@@ -6,6 +6,7 @@ import { useSplitViewEventBus } from './SplitViewEventBus';
 import { extractCompileFeedback } from '@/lib/simulator/compileFeedback';
 import { useSimulationStore } from '@/stores/simulationStore';
 import { encodeUtf8AsHex } from './helpers';
+import { micropythonBoardMatches, type UsbBoardDescription } from '@/lib/serial/boardIdentity';
 import type { useWebSerial } from '@/hooks/useWebSerial';
 
 interface CompileResponse {
@@ -69,6 +70,45 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
     [eventBus],
   );
 
+  const reportWrongBoard = useCallback(
+    (connectedName: string) => {
+      webSerial.addMessage(
+        'error',
+        `This project is for the ${currentBoard}, but the board connected is the ${connectedName}. Connect the ${currentBoard} instead, or pick the board you have in the board menu at the top.`,
+      );
+    },
+    [currentBoard, webSerial],
+  );
+
+  /**
+   * Says which board was just connected, and warns when it is not the project's board. False when
+   * it is a different kind of board altogether (an Arduino for a Pico project), so Upload stops.
+   */
+  const checkConnectedBoard = useCallback(
+    async (board: UsbBoardDescription): Promise<boolean> => {
+      if (board.family && boardConfig?.family && board.family !== boardConfig.family) {
+        reportWrongBoard(board.name);
+        return false;
+      }
+      if (!supportsDeviceFiles) {
+        return true;
+      }
+      // MicroPython names the exact board (a Pico 2 W, not just "a Pico") when it is at its prompt.
+      const banner = await webSerial.identifyMicroPythonBoard();
+      if (!banner) {
+        return true;
+      }
+      const model = banner.machine.replace(/ with .*$/, '');
+      webSerial.nameConnectedBoard(model);
+      webSerial.addMessage('system', `The board is a ${banner.machine}, running MicroPython ${banner.version}.`);
+      if (micropythonBoardMatches(banner.machine, currentBoard) === false) {
+        reportWrongBoard(model);
+      }
+      return true;
+    },
+    [boardConfig?.family, currentBoard, reportWrongBoard, supportsDeviceFiles, webSerial],
+  );
+
   const buildArduinoCompilePayload = useCallback(
     () => ({
       board: currentBoard,
@@ -130,6 +170,15 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
       throw new Error('No MicroPython files found in this project.');
     }
 
+    // This stops a running program, which saving files does anyway, and makes sure of the board.
+    const machine = (await webSerial.runMicroPythonCommand('import os\nprint(os.uname().machine)', 6000)).trim();
+    if (machine) {
+      webSerial.nameConnectedBoard(machine.replace(/ with .*$/, ''));
+      if (micropythonBoardMatches(machine, currentBoard) === false) {
+        reportWrongBoard(machine.replace(/ with .*$/, ''));
+      }
+    }
+
     if (micropythonProjectDirectories.length > 0) {
       const mkdirScript = `import os\nfor _path in ${JSON.stringify(micropythonProjectDirectories)}:\n try:\n  os.mkdir(_path)\n except OSError:\n  pass\nprint("READY")`;
       await webSerial.runMicroPythonCommand(mkdirScript, 12000);
@@ -143,11 +192,17 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
     }
 
     webSerial.addMessage('system', 'Files saved to the MicroPython device.');
-    if (sourceCode.trim()) {
-      webSerial.addMessage('system', 'Running main.py from the synced project...');
+    if (micropythonProjectFiles.some((file) => file.path === 'main.py')) {
+      // Restart the board rather than paste the code into the REPL: it then runs main.py exactly as
+      // it will when switched on away from the computer, and a soft reboot frees what the last run
+      // held (a web server's port 80, for one).
+      webSerial.addMessage('system', 'Restarting the board to run main.py. What it prints comes next.');
+      await webSerial.restartMicroPython();
+    } else if (sourceCode.trim()) {
+      webSerial.addMessage('system', 'Running the program from the synced project...');
       await webSerial.executeMicroPythonRaw(sourceCode);
     }
-  }, [micropythonProjectDirectories, micropythonProjectFiles, sourceCode, webSerial]);
+  }, [currentBoard, micropythonProjectDirectories, micropythonProjectFiles, reportWrongBoard, sourceCode, webSerial]);
 
   const handleUploadToBoard = useCallback(async () => {
     openBlockTerminalTab('build');
@@ -159,28 +214,31 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
 
     if (!webSerial.isConnected) {
       // Connect as part of Upload: the browser shows its port list (this click counts as the permission).
-      webSerial.addMessage('system', 'Choose your board in the list that opens (usually a COM port, or "USB Serial").');
+      webSerial.addMessage('system', 'Connecting to your board. If a list of ports opens, choose it there (usually a COM port or "USB Serial Device").');
       const connection = await webSerial.connect();
       if (!connection.connected) {
         // Say why here too: this is the tab the learner is looking at.
         webSerial.addMessage('error', `Upload stopped. ${connection.problem}`);
         return;
       }
-      if (supportsDeviceFiles) {
-        // The MicroPython file sync reads the connection state on the next render.
-        webSerial.addMessage('system', 'Board connected. Click Upload again to send your files.');
+      if (!(await checkConnectedBoard(connection.board))) {
+        webSerial.addMessage('error', 'Upload stopped: this is not the board the project is for.');
         return;
       }
     }
 
     if (supportsDeviceFiles) {
       setIsCompiling(true);
-      webSerial.addMessage('system', `Syncing ${micropythonProjectFiles.length} MicroPython file(s) to ${currentBoard}...`);
+      webSerial.addMessage('system', `Saving ${micropythonProjectFiles.length} file(s) on the ${currentBoard}...`);
+      // The board's replies while files are saved are not the program's output: keep them out of
+      // the Serial Monitor until the board restarts into main.py.
+      webSerial.setBoardOutputQuiet(true);
       try {
         await syncMicroPythonProjectToDevice();
       } catch (error) {
-        webSerial.addMessage('error', `MicroPython sync failed: ${(error as Error).message}`);
+        webSerial.addMessage('error', `Upload failed: ${(error as Error).message}`);
       } finally {
+        webSerial.setBoardOutputQuiet(false);
         setIsCompiling(false);
       }
       return;
@@ -227,19 +285,23 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
     reportUnsupportedBoardAction,
     supportsDeviceFiles,
     syncMicroPythonProjectToDevice,
+    checkConnectedBoard,
     webSerial,
     clearCompileFeedback,
     setCompileFeedback,
   ]);
 
-  const handleConnectDevice = useCallback(() => {
+  const handleConnectDevice = useCallback(async () => {
     openBlockTerminalTab('connection');
     if (webSerial.isConnected) {
-      void webSerial.disconnect();
-    } else {
-      void webSerial.connect();
+      await webSerial.disconnect();
+      return;
     }
-  }, [openBlockTerminalTab, webSerial]);
+    const connection = await webSerial.connect();
+    if (connection.connected) {
+      await checkConnectedBoard(connection.board);
+    }
+  }, [checkConnectedBoard, openBlockTerminalTab, webSerial]);
 
   const handleUploadAndSimulate = useCallback(async () => {
     if (!supportsSimulation || !simulationControls) {
@@ -282,7 +344,7 @@ export function useCompileFlow(webSerial: WebSerialController): CompileControlle
 
   useEffect(() => eventBus.on('compile:verify-request', () => { void handleVerify(); }), [eventBus, handleVerify]);
   useEffect(() => eventBus.on('compile:upload-request', () => { void handleUploadToBoard(); }), [eventBus, handleUploadToBoard]);
-  useEffect(() => eventBus.on('device:connect-toggle-request', () => { handleConnectDevice(); }), [eventBus, handleConnectDevice]);
+  useEffect(() => eventBus.on('device:connect-toggle-request', () => { void handleConnectDevice(); }), [eventBus, handleConnectDevice]);
   useEffect(() => eventBus.on('simulation:toggle-request', () => { void handleUploadAndSimulate(); }), [eventBus, handleUploadAndSimulate]);
 
   return useMemo(

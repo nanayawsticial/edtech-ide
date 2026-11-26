@@ -53,7 +53,7 @@ const credentialsStep = (): LessonStep => ({
   kind: 'code',
   title: 'Add your Wi-Fi name and password',
   body: 'Near the top of the code, replace YOUR_WIFI_NAME with the name of the Wi-Fi network and YOUR_PASSWORD with its password. Keep the quotation marks.',
-  hint: 'Names and passwords are case-sensitive. Your password is saved inside this project, so take it out before you export or share the project.',
+  hint: 'Names and passwords are case-sensitive. Many routers show two networks with similar names, such as MyWiFi and MyWiFi_2.4GHz: use the 2.4 GHz one. Your password is saved inside this project, so take it out before you export or share the project.',
   check: all(ssidFilledIn, passwordFilledIn),
 });
 
@@ -61,15 +61,15 @@ const uploadStep = (): LessonStep => ({
   id: 'upload',
   kind: 'run',
   title: 'Upload and find the IP address',
-  body: 'Plug the Pico into the computer with the USB cable and click Upload. Pick the Pico in the list. Then open the Serial Monitor tab at the bottom: after "Connected!" it prints the Pico\'s IP address, for example 192.168.1.42. Write it down.',
-  hint: 'Stuck on "Connecting to Wi-Fi..."? Check the name and password, and use a 2.4 GHz network: the Pico 2 W cannot join 5 GHz networks. If the upload says the board did not answer, the Pico may need MicroPython installed first (your teacher can do this once with Thonny).',
+  body: 'Plug the Pico into the computer with the USB cable and click Upload. If a list of ports opens, pick the Pico (it is often called "USB Serial Device"). The Terminal on the right shows what the Pico prints: after "Connected!" comes its IP address, for example 192.168.1.42. Write it down.',
+  hint: 'If the Pico cannot find your network, it lists the networks it can see: copy the name exactly from that list. The Pico 2 W only joins 2.4 GHz networks. If the upload says the board did not answer, the Pico needs MicroPython first: hold its BOOTSEL button while plugging it in, then copy the MicroPython file from micropython.org onto the drive that appears.',
 });
 
 const pasteCodeStep = (code: string, checks: StepCheck[], what: string): LessonStep => ({
   id: 'code',
   kind: 'code',
   title: 'Paste the code',
-  body: `Click Copy, then in main.py select everything that is there and paste. This program joins your Wi-Fi network, ${what}, and shows a web page with buttons.`,
+  body: `Click Copy, then in main.py select everything that is there and paste. This program joins your Wi-Fi network, ${what}, and shows a web page with buttons. If main.py already has your Wi-Fi name and password, Copy keeps them.`,
   python: code,
   hint: 'Python uses the spaces at the start of a line to group code, so paste it as it is and do not change the indentation.',
   check: all(...checks),
@@ -99,6 +99,9 @@ wlan.connect(SSID, PASSWORD)
 
 print("Connecting to Wi-Fi...")
 while wlan.isconnected() == False:
+    if wlan.status() < 0:  # the Pico gave up: wrong Wi-Fi name or password
+        print("Could not join", SSID, "- check the Wi-Fi name and password (2.4 GHz networks only)")
+        raise SystemExit
     time.sleep(1)
 
 print("Connected!")
@@ -111,6 +114,7 @@ ${hardware}
 html = """${html}"""
 
 s = socket.socket()
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # lets the server restart straight away
 s.bind(('0.0.0.0', 80))
 s.listen(5)
 
@@ -169,11 +173,22 @@ wlan.connect(SSID, PASSWORD)
 
 print("Connecting to Wi-Fi...")
 while wlan.isconnected() == False:
+    if wlan.status() == network.STAT_NO_AP_FOUND:
+        print("\\nCannot find a Wi-Fi network called", SSID)
+        print("The Pico can see these networks (2.4 GHz only):")
+        for net in wlan.scan():
+            if net[0]:
+                print("   ", net[0].decode())
+        break
+    if wlan.status() == network.STAT_WRONG_PASSWORD:
+        print("\\nThe password for", SSID, "is not right")
+        break
     print('.', end='')
     time.sleep(1)
 
-print("\\nConnected!")
-print("IP Address:", wlan.ifconfig()[0])
+if wlan.isconnected():
+    print("\\nConnected!")
+    print("IP Address:", wlan.ifconfig()[0])
 `;
 
 const LED_CODE = wifiServerCode(
@@ -215,7 +230,7 @@ const connectActivity: LessonActivity = {
     uploadStep(),
   ],
   solutionCode: WIFI_TEST_CODE,
-  observe: 'The Serial Monitor shows "Connected!" and an IP address such as 192.168.1.42.',
+  observe: 'The Terminal shows "Connected!" and an IP address such as 192.168.1.42.',
   wrapUp: 'The IP address is how other devices find the Pico on the network. Next you will use it to open a web page that the Pico serves.',
 };
 
@@ -243,7 +258,7 @@ const ledActivity: LessonActivity = {
     uploadStep(),
     openPageStep(
       'On a phone or computer on the same Wi-Fi network, open the web browser and type the IP address into the address bar, for example http://192.168.1.42. Press LED ON and LED OFF. The page shows whether the LED is on.',
-      'The Serial Monitor prints "Client connected from" each time the page loads.'
+      'The Terminal prints "Client connected from" each time the page loads.'
     ),
   ],
   solutionCode: LED_CODE,

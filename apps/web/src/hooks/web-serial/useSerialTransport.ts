@@ -1,12 +1,19 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
-import type { SerialChunkListener, SerialMessageSink } from './types';
+import type { SerialChunkListener, SerialMessageSink, SerialPartialLineSink } from './types';
 import { BOARD_USB_VENDOR_IDS, isBoardUsbVendor } from '@/lib/serial/boardUsbIds';
+import { describeUsbBoard, type UsbBoardDescription } from '@/lib/serial/boardIdentity';
 
-export type ConnectResult = { connected: true } | { connected: false; problem: string };
+export type ConnectResult = { connected: true; board: UsbBoardDescription } | { connected: false; problem: string };
 
 export interface SerialTransportController {
   isConnected: boolean;
+  /** What the connected board is, in words (null when nothing is connected). */
+  connectedBoard: UsbBoardDescription | null;
+  /** Replaces the board's name once the board has said exactly what it is (MicroPython does). */
+  nameConnectedBoard: (name: string) => void;
+  /** Keeps the board's replies out of the Serial Monitor while the IDE talks to it (saving files). */
+  setBoardOutputQuiet: (quiet: boolean) => void;
   baudRate: number;
   portRef: MutableRefObject<SerialPort | null>;
   readerRef: MutableRefObject<ReadableStreamDefaultReader<string> | null>;
@@ -30,14 +37,17 @@ export interface SerialTransportController {
 
 interface UseSerialTransportOptions {
   addMessage: SerialMessageSink;
+  /** Shows text the board printed without a newline yet (progress dots, a prompt). */
+  showPartialLine?: SerialPartialLineSink;
 }
 
 function normalizeBaudRate(value: number) {
   return Number.isFinite(value) && value > 0 ? Math.trunc(value) : 9600;
 }
 
-export function useSerialTransport({ addMessage }: UseSerialTransportOptions): SerialTransportController {
+export function useSerialTransport({ addMessage, showPartialLine }: UseSerialTransportOptions): SerialTransportController {
   const [isConnected, setIsConnected] = useState(false);
+  const [connectedBoard, setConnectedBoard] = useState<UsbBoardDescription | null>(null);
   const [baudRate, setBaudRateState] = useState(9600);
   const portRef = useRef<SerialPort | null>(null);
   const readerRef = useRef<ReadableStreamDefaultReader<string> | null>(null);
@@ -50,9 +60,12 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
   const chunkListenerRef = useRef<SerialChunkListener>(null);
   /** After a cancelled pick, the next list shows every port (for boards with unusual USB chips). */
   const showAllPortsNextRef = useRef(false);
+  /** While true, what the board sends goes to the chunk listener only, not the Serial Monitor. */
+  const quietRef = useRef(false);
 
   const readLoop = useCallback(async () => {
     let lineBuffer = '';
+    let partialTimer: ReturnType<typeof setTimeout> | null = null;
 
     while (portRef.current?.readable && keepReadingRef.current && readerRef.current) {
       try {
@@ -67,6 +80,16 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
 
         chunkListenerRef.current?.(value);
 
+        if (quietRef.current) {
+          // The IDE is talking to the board (saving files): its replies are not the program's output.
+          lineBuffer = '';
+          if (partialTimer) {
+            clearTimeout(partialTimer);
+            partialTimer = null;
+          }
+          continue;
+        }
+
         lineBuffer += value;
         const lines = lineBuffer.split('\n');
         lineBuffer = lines.pop() ?? '';
@@ -76,6 +99,19 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
             addMessage('app', line.replace(/\r$/, ''));
           }
         });
+
+        // Text without a newline yet (a dot a second while Wi-Fi connects, the ">>>" prompt) would
+        // otherwise stay hidden until the line ends. Show it once the board pauses.
+        if (partialTimer) {
+          clearTimeout(partialTimer);
+          partialTimer = null;
+        }
+        if (showPartialLine && lineBuffer.trim() !== '') {
+          partialTimer = setTimeout(() => {
+            partialTimer = null;
+            showPartialLine(lineBuffer.replace(/\r$/, ''));
+          }, 150);
+        }
       } catch (error) {
         if (keepReadingRef.current) {
           addMessage('error', `Read error: ${(error as Error).message}`);
@@ -83,7 +119,10 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
         break;
       }
     }
-  }, [addMessage]);
+    if (partialTimer) {
+      clearTimeout(partialTimer);
+    }
+  }, [addMessage, showPartialLine]);
 
   const pauseDecodedReadPipeline = useCallback(async () => {
     keepReadingRef.current = false;
@@ -200,9 +239,10 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
 
       await resumeDecodedReadPipeline();
 
-      const info = port.getInfo();
-      addMessage('system', `Connected to device (VID: ${info.usbVendorId}, PID: ${info.usbProductId}) at ${nextBaudRate} baud`);
-      return { connected: true };
+      const board = describeUsbBoard(port.getInfo());
+      setConnectedBoard(board);
+      addMessage('system', `Connected: ${board.name}.`);
+      return { connected: true, board };
     } catch (error) {
       const serialError = error as Error;
       if (serialError.name === 'NotFoundError' && Date.now() - askedAt < 400) {
@@ -216,7 +256,7 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
         );
       }
       if (serialError.name === 'NetworkError' || serialError.name === 'InvalidStateError') {
-        return fail('The board is busy. Close the Arduino IDE or any other program using it, then try again.');
+        return fail('The board is busy: another program is using it. Close the Sticial Studio app, other tabs connected to the board, the Arduino IDE or Thonny, then try again.');
       }
       return fail(`Could not connect to the board: ${serialError.message}`);
     }
@@ -234,7 +274,8 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
       }
 
       setIsConnected(false);
-      addMessage('system', 'Disconnected from device.');
+      setConnectedBoard(null);
+      addMessage('system', 'Disconnected from the board.');
     } catch (error) {
       addMessage('error', `Disconnect error: ${(error as Error).message}`);
     }
@@ -299,13 +340,33 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
     addMessage('sent', text);
   }, [addMessage, writeBytes]);
 
+  const setBoardOutputQuiet = useCallback((quiet: boolean) => {
+    quietRef.current = quiet;
+    if (quiet) {
+      showPartialLine?.(''); // a waiting ">>>" prompt is about to be stale
+    }
+  }, [showPartialLine]);
+
+  const nameConnectedBoard = useCallback((name: string) => {
+    setConnectedBoard((board) => (board ? { ...board, name } : board));
+  }, []);
+
   const setChunkListener = useCallback((listener: SerialChunkListener) => {
     chunkListenerRef.current = listener;
   }, []);
 
   useEffect(() => {
-    const handleDisconnect = () => {
+    const handleDisconnect = (event: Event) => {
+      // The browser reports every board it knows being unplugged, connected or not. Only the one in
+      // use matters (a Pico restarting into its install mode, for one, is not an error here).
+      // Chrome sends the event from the port itself; the desktop app's bridge sends it from
+      // navigator.serial, and only for the open port.
+      const fromAnotherPort = event.target !== event.currentTarget && event.target !== portRef.current;
+      if (!portRef.current || fromAnotherPort) {
+        return;
+      }
       setIsConnected(false);
+      setConnectedBoard(null);
       keepReadingRef.current = false;
       portRef.current = null;
       readerRef.current = null;
@@ -313,7 +374,7 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
       textDecoderRef.current = null;
       pipeAbortControllerRef.current = null;
       pipeToPromiseRef.current = null;
-      addMessage('error', 'Device disconnected unexpectedly.');
+      addMessage('error', 'The board was disconnected. Check the USB cable, then connect again.');
     };
 
     if (typeof navigator !== 'undefined' && 'serial' in navigator) {
@@ -329,6 +390,9 @@ export function useSerialTransport({ addMessage }: UseSerialTransportOptions): S
 
   return {
     isConnected,
+    connectedBoard,
+    nameConnectedBoard,
+    setBoardOutputQuiet,
     baudRate,
     portRef,
     readerRef,

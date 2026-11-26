@@ -128,6 +128,11 @@ export default function BlockTerminalShell({
           />
           {webSerial.isConnected ? "Connected" : "Not connected"}
         </span>
+        {webSerial.isConnected && webSerial.connectedBoard ? (
+          <span className="min-w-0 truncate text-xs text-[var(--ui-color-text-soft)]" title={webSerial.connectedBoard.name}>
+            {webSerial.connectedBoard.name}
+          </span>
+        ) : null}
         <span className="h-5 w-px shrink-0 bg-[color:var(--ui-border-soft)]" aria-hidden="true" />
         <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Open the terminal on">
           {TAB_OPTIONS.map((tab) => {
@@ -256,6 +261,9 @@ export default function BlockTerminalShell({
                 <p className="mt-3 text-lg font-semibold text-[var(--ui-color-text-on-surface)]">
                   {webSerial.isConnected ? "Board connected" : "Waiting for a board"}
                 </p>
+                {webSerial.isConnected && webSerial.connectedBoard ? (
+                  <p className="mt-1 text-sm font-medium text-[var(--ui-color-text-on-surface)]">{webSerial.connectedBoard.name}</p>
+                ) : null}
                 <p className="mt-2 text-sm leading-6 ui-panel-copy-quiet">
                   {webSerial.isConnected
                     ? "Serial communication is available. You can monitor output here while you build with blocks."

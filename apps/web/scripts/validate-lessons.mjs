@@ -216,9 +216,47 @@ for (const lesson of Object.values(LESSONS)) {
   }
 }
 
+// Copying lesson code keeps the Wi-Fi name and password already typed into main.py.
+const { carryOverWifiDetails } = loader.loadModule(path.join(srcRoot, 'lib', 'lessons', 'wifiDetails.ts'));
+let wifiCarryCount = 0;
+for (const lesson of Object.values(LESSONS)) {
+  for (const activity of lesson.activities) {
+    const credentials = activity.steps.find((step) => step.id === 'wifi-details');
+    if (!credentials) continue;
+    for (const lessonCode of activity.steps.map((step) => step.python).filter(Boolean)) {
+      // Nothing typed yet: the copy is the lesson code as it is.
+      assert.deepEqual(carryOverWifiDetails(lessonCode, lessonCode), { code: lessonCode, carried: false });
+      assert.deepEqual(carryOverWifiDetails(lessonCode, ''), { code: lessonCode, carried: false });
+
+      // "$&" would be read as a replacement pattern if the password went through String.replace.
+      const typed = lessonCode.replace('YOUR_WIFI_NAME', 'School_2.4GHz').replace('YOUR_PASSWORD', () => "p$&'x");
+      const carried = carryOverWifiDetails(lessonCode, typed);
+      assert.ok(carried.carried, `${activity.id}: Wi-Fi details were not carried over`);
+      assert.equal(carried.code, typed, `${activity.id}: carrying the details changed more than the two lines`);
+      for (const result of evaluateCheck(credentials.check, { ...baseContext, code: carried.code })) {
+        assert.ok(result.passed, `${activity.id}: "${result.label}" fails after copying with the details carried over`);
+      }
+      wifiCarryCount += 1;
+    }
+  }
+}
+assert.ok(wifiCarryCount > 0, 'No Wi-Fi lesson code to carry details into');
+{
+  const lessonCode = 'SSID = "YOUR_WIFI_NAME"\nPASSWORD = "YOUR_PASSWORD"\nwlan.connect(SSID, PASSWORD)\n';
+  const only = (current) => carryOverWifiDetails(lessonCode, current);
+  // Single quotes, spaces and an open network with no password.
+  assert.equal(only("SSID='Lab'\nPASSWORD = ''\n").code, 'SSID = \'Lab\'\nPASSWORD = \'\'\nwlan.connect(SSID, PASSWORD)\n');
+  // Only the name typed so far: the password placeholder stays.
+  assert.equal(only('SSID = "Lab"\nPASSWORD = "YOUR_PASSWORD"\n').code, 'SSID = "Lab"\nPASSWORD = "YOUR_PASSWORD"\nwlan.connect(SSID, PASSWORD)\n');
+  // An empty name is not a name.
+  assert.deepEqual(only('SSID = ""\n'), { code: lessonCode, carried: false });
+  // Mentions inside other lines are not assignments.
+  assert.deepEqual(only('print(SSID = "x")\nwlan.connect(SSID, PASSWORD)\n'), { code: lessonCode, carried: false });
+}
+
 console.log(
   `Validated ${Object.keys(LESSONS).length} lessons (${activityCount} activities, ${stepCount} steps), ` +
     `the lesson step checks, ${solutionCount} block solutions against the real code generator, and ` +
-    `${typedSolutionCount} typed-code solutions` +
+    `${typedSolutionCount} typed-code solutions, Wi-Fi details carried into ${wifiCarryCount} programs` +
     (pythonCommand ? ` (${pythonChecked} MicroPython programs parsed).` : ' (Python not found: MicroPython syntax not checked).')
 );

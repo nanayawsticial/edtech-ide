@@ -6,6 +6,7 @@ import { BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Cir
 import { useBoard } from '@/contexts/BoardContext';
 
 import { getLesson } from '@/lib/lessons';
+import { carryOverWifiDetails } from '@/lib/lessons/wifiDetails';
 import { EMPTY_OBSERVATIONS, evaluateCheck, observeVisualChange, type LessonCheckContext, type LessonObservations } from '@/lib/lessons/checks';
 import type { LessonActivity, LessonStep, LessonStepKind } from '@/lib/lessons/types';
 import type { ToolboxLearningLevel } from '@/lib/blockly/guidedToolbox';
@@ -164,10 +165,14 @@ function ActivityIntro({ activity, onStart }: { activity: LessonActivity; onStar
   );
 }
 
-/** Code for the learner to put in main.py, with a Copy button (falls back to selecting it). */
-function CodeToCopy({ code }: { code: string }) {
+/**
+ * Code for the learner to put in main.py, with a Copy button (falls back to selecting it).
+ * The copy keeps the Wi-Fi name and password already in their code; the panel shows the
+ * placeholders, so the password is never on screen.
+ */
+function CodeToCopy({ code, currentCode }: { code: string; currentCode: string }) {
   const preRef = useRef<HTMLPreElement | null>(null);
-  const [status, setStatus] = useState<'idle' | 'copied' | 'selected'>('idle');
+  const [status, setStatus] = useState<'idle' | 'copied' | 'copied-wifi' | 'selected'>('idle');
 
   const selectCode = () => {
     const element = preRef.current;
@@ -185,9 +190,10 @@ function CodeToCopy({ code }: { code: string }) {
       selectCode();
       return;
     }
-    navigator.clipboard.writeText(code).then(
+    const copied = carryOverWifiDetails(code, currentCode);
+    navigator.clipboard.writeText(copied.code).then(
       () => {
-        setStatus('copied');
+        setStatus(copied.carried ? 'copied-wifi' : 'copied');
         window.setTimeout(() => setStatus('idle'), 2000);
       },
       selectCode
@@ -205,7 +211,13 @@ function CodeToCopy({ code }: { code: string }) {
         >
           <Copy size={13} />
           <span className="text-[12px] font-semibold">
-            {status === 'copied' ? 'Copied' : status === 'selected' ? 'Selected: press Ctrl+C' : 'Copy'}
+            {status === 'copied'
+              ? 'Copied'
+              : status === 'copied-wifi'
+                ? 'Copied, with your Wi-Fi details'
+                : status === 'selected'
+                  ? 'Selected: press Ctrl+C'
+                  : 'Copy'}
           </span>
         </button>
       </div>
@@ -260,7 +272,7 @@ function StepView({ step, context }: { step: LessonStep; context: LessonCheckCon
         </div>
       ) : null}
 
-      {step.python ? <CodeToCopy code={step.python} /> : null}
+      {step.python ? <CodeToCopy code={step.python} currentCode={context.code} /> : null}
 
       <StepChecklist step={step} context={context} />
 

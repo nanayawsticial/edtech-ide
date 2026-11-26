@@ -628,6 +628,7 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
         codingMode={editor.codingMode}
         environment={editor.environment}
         isConnected={webSerial.isConnected}
+        connectedBoardName={webSerial.connectedBoard?.name}
         isCompiling={compile.isCompiling}
         isSaving={autoSaveManager.isSaving}
         hasUnsavedChanges={hasUnsavedChanges}
@@ -717,6 +718,7 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
         <IdeStatusBar
           boardName={editor.currentBoard}
           isConnected={webSerial.isConnected}
+          connectedBoardName={webSerial.connectedBoard?.name}
           leftMessage={autoSaveManager.isSaving ? 'Saving...' : compile.isCompiling ? 'Compiling...' : 'Ready.'}
         />
       ) : null}

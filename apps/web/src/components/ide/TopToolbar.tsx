@@ -38,6 +38,8 @@ interface TopToolbarProps {
   codingMode: string | null;
   environment: string;
   isConnected: boolean;
+  /** Which board is connected, shown when hovering the Connect button. */
+  connectedBoardName?: string | null;
   isCompiling: boolean;
   isSaving: boolean;
   hasUnsavedChanges: boolean;
@@ -84,6 +86,7 @@ export default function TopToolbar({
   codingMode,
   environment,
   isConnected,
+  connectedBoardName,
   isCompiling,
   isSaving,
   hasUnsavedChanges,
@@ -122,6 +125,9 @@ export default function TopToolbar({
 
   const canSwitchStudios = Boolean(showStudioToggle && activeStudioView && onChangeStudioView && environment !== "physical");
   const isBlockWorkspace = codingMode === "block";
+  const connectTitle = isConnected
+    ? `Connected${connectedBoardName ? `: ${connectedBoardName}` : ""}. Click to disconnect.`
+    : "Connect a board over USB";
 
   const stageItems = canSwitchStudios
     ? [
@@ -183,6 +189,7 @@ export default function TopToolbar({
             <button
               type="button"
               onClick={onConnectDevice}
+              title={connectTitle}
               className={`flex h-9 items-center gap-2 rounded-[10px] border px-3 text-xs font-medium transition-all ${
                 isConnected
                   ? "border-emerald-400/22 bg-emerald-400/12 text-emerald-200"
@@ -289,6 +296,7 @@ export default function TopToolbar({
                 {boardName}
               </span>
               <span
+                title={connectTitle}
                 className={`${chipBaseClass} ${
                   isConnected
                     ? "border-emerald-400/18 bg-emerald-400/10 text-emerald-200"
@@ -355,6 +363,7 @@ export default function TopToolbar({
                 variant="secondary"
                 icon={isConnected ? <Link2Off size={14} /> : <Link2 size={14} />}
                 onClick={onConnectDevice}
+                title={connectTitle}
                 className="min-h-10 rounded-[14px] border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white hover:border-white/16 hover:bg-white/[0.08] hover:text-white"
               >
                 {isConnected ? "Disconnect" : "Connect"}
@@ -458,6 +467,7 @@ export default function TopToolbar({
               variant="secondary"
               icon={isConnected ? <Link2Off size={16} /> : <Link2 size={16} />}
               onClick={onConnectDevice}
+              title={connectTitle}
               className="min-h-10 rounded-[16px] px-4 py-2 text-sm"
             >
               {isConnected ? "Disconnect" : "Connect"}
