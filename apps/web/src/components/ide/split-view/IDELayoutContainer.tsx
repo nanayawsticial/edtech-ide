@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { BotMessageSquare, CircuitBoard, Code2, HardDrive, TerminalSquare } from 'lucide-react';
 import type { useWebSerial } from '@/hooks/useWebSerial';
 import { useTheme } from '@/contexts/ThemeContext';
+import { DEFAULT_THEME } from '@/lib/theme/themeModes';
 import { useStudioPreferences } from '@/contexts/StudioPreferencesContext';
 import { useProject } from '@/contexts/ProjectContext';
 import { useEditorStore } from '@/stores/editorStore';
@@ -361,7 +362,7 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
       onEditorReadabilityModeChange={setEditorReadabilityMode}
       onResetApp={() => {
         resetPreferences();
-        setTheme('light');
+        setTheme(DEFAULT_THEME);
         eventBus.emit('app:reset-request', undefined);
         closePreferences();
       }}
@@ -621,7 +622,7 @@ export default function IDELayoutContainer({ webSerial }: { webSerial: WebSerial
   }
 
   return (
-    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#0b0e14]">
+    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[color:var(--ide-shell-bg)]">
       <TopToolbar
         projectName={projectName}
         boardName={editor.currentBoard}

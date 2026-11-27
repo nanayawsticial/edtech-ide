@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, CircuitBoard, Lightbulb, Monitor, Palette, RotateCw, Trash2, Zap, X } from 'lucide-react';
+import { Activity, CircuitBoard, CopyPlus, Lightbulb, Monitor, Palette, RotateCcw, RotateCw, Spline, Trash2, Zap, X } from 'lucide-react';
 
-import type { ComponentData } from '@/contexts/CircuitContext';
+import type { ComponentData, NetData } from '@/contexts/CircuitContext';
 import { useCircuitStore } from '@/stores/circuitStore';
 import { selectCircuitLabSimulationView, useSimulationStore } from '@/stores/simulationStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -13,10 +13,12 @@ import {
   createDefaultComponentState,
   getComponentDefinition,
   getComponentMountClassifications,
+  normalizeComponentType,
   type ComponentCategory,
   type ComponentDefinition,
 } from '@/lib/wiring/componentDefinitions';
 import type { CircuitComponentCatalogEntry } from '@/lib/wiring/circuitComponentCatalogTypes';
+import { GRID_PITCH } from '@/lib/wiring/componentGeometry';
 import {
   getRenderedSize,
   type Point,
@@ -29,19 +31,32 @@ import {
 import CanvasEngine from './circuit-lab/CanvasEngine';
 import ComponentPreview from './circuit-lab/ComponentPreview';
 import { ComponentContextMenu } from './circuit-lab/ComponentContextMenu';
+import { PartProperties } from './circuit-lab/PartProperties';
 import InteractionManager from './circuit-lab/InteractionManager';
-import { buildSceneGraph } from './circuit-lab/sceneModel';
+import { buildSceneGraph, type WireWaypointOverride } from './circuit-lab/sceneModel';
 import type { MountPreviewState } from './circuit-lab/sceneTypes';
 import { useCanvasViewport } from './circuit-lab/useCanvasViewport';
 import { useInteractionManager, type WireConnectionRequest } from './circuit-lab/useInteractionManager';
 import { buildOrthogonalWaypoints, buildWireRoutePoints } from './circuit-lab/wireRouting';
+import { WIRE_COLOR_OPTIONS, chooseNewWireColor, getWireColorName, type WireEndKind } from '@/lib/wiring/wireColors';
 
 function cn(...classes: (string | boolean | undefined)[]) {
   return classes.filter(Boolean).join(' ');
 }
 
-const WIRE_COLORS = ['#ef4444', '#f8fafc', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
 const DEFAULT_VIEWPORT = { x: -72, y: -28, scale: 0.98 };
+
+/** Copied parts and the wires between them (shared by every canvas on the page). */
+let circuitClipboard: { components: ComponentData[]; nets: NetData[]; pasteCount: number } | null = null;
+
+/** Rewrites a node id that belongs to a copied part ("<old>.<pin>") to the pasted part. */
+function remapNodeId(nodeId: string | null | undefined, idMap: Map<string, string>) {
+  if (!nodeId) return nodeId;
+  const dot = nodeId.indexOf('.');
+  if (dot <= 0) return nodeId;
+  const mapped = idMap.get(nodeId.slice(0, dot));
+  return mapped ? `${mapped}${nodeId.slice(dot)}` : nodeId;
+}
 const COMPACT_CIRCUIT_BREAKPOINT = 1180;
 const COMPACT_CIRCUIT_HEIGHT = 820;
 
@@ -159,6 +174,9 @@ export default function BreadboardCanvas({
   const addNet = useCircuitStore((state) => state.addNet);
   const removeComponent = useCircuitStore((state) => state.removeComponent);
   const removeNet = useCircuitStore((state) => state.removeNet);
+  const removeItems = useCircuitStore((state) => state.removeItems);
+  const addItems = useCircuitStore((state) => state.addItems);
+  const setComponentProperties = useCircuitStore((state) => state.setComponentProperties);
   const rotateComponent = useCircuitStore((state) => state.rotateComponent);
   const selectComponent = useCircuitStore((state) => state.selectComponent);
   const updateComponentPosition = useCircuitStore((state) => state.updateComponentPosition);
@@ -178,7 +196,11 @@ export default function BreadboardCanvas({
   const [hoveredPinId, setHoveredPinId] = useState<string | null>(null);
   const [hoveredWireId, setHoveredWireId] = useState<string | null>(null);
   const [selectedWireId, setSelectedWireId] = useState<string | null>(null);
-  const [wireWaypointOverrides, setWireWaypointOverrides] = useState<Record<string, Point[]>>({});
+  const [wireWaypointOverrides, setWireWaypointOverrides] = useState<Record<string, WireWaypointOverride>>({});
+  /** Parts and wires picked by dragging a selection box on empty canvas. */
+  const [boxSelection, setBoxSelection] = useState<{ componentIds: string[]; wireIds: string[] } | null>(null);
+  /** The colour the learner last picked; new wires use it (until then they follow kit convention). */
+  const [lastPickedWireColor, setLastPickedWireColor] = useState<string | null>(null);
   const [isPaletteVisible, setIsPaletteVisible] = useState(showPalette);
   const [isCompactViewport, setIsCompactViewport] = useState(false);
   const [activeCategory, setActiveCategory] = useState<PaletteCategory>('All');
@@ -225,7 +247,7 @@ export default function BreadboardCanvas({
           }
           return keep;
         })
-      ) as Record<string, Point[]>;
+      ) as Record<string, WireWaypointOverride>;
 
       return changed ? next : current;
     });
@@ -273,6 +295,19 @@ export default function BreadboardCanvas({
     return components.filter((component) => component.id !== dragged.id && component.mountedPlacement?.mounted);
   }, [components, draggedComponentId]);
 
+  // Box-selected ids that still exist (undo or a delete elsewhere can remove them).
+  const boxSelectedComponentIds = useMemo(() => {
+    if (!boxSelection) return undefined;
+    const existing = new Set(components.map((component) => component.id));
+    return new Set(boxSelection.componentIds.filter((id) => existing.has(id)));
+  }, [boxSelection, components]);
+  const boxSelectedWireIds = useMemo(() => {
+    if (!boxSelection) return undefined;
+    const existing = new Set(nets.map((net) => net.id));
+    return new Set(boxSelection.wireIds.filter((id) => existing.has(id)));
+  }, [boxSelection, nets]);
+  const boxSelectionCount = (boxSelectedComponentIds?.size ?? 0) + (boxSelectedWireIds?.size ?? 0);
+
   const sceneOptions = useMemo(() => {
     let positionOverrides: Record<string, Point> | undefined;
     if (dragPreview?.source === 'existing' && dragPreview.componentId) {
@@ -290,6 +325,7 @@ export default function BreadboardCanvas({
     return {
       selectedComponentId,
       selectedWireId,
+      selectedComponentIds: boxSelectedComponentIds,
       hoveredComponentId,
       hoveredWireId,
       draggingComponentId: draggedComponentId,
@@ -304,6 +340,7 @@ export default function BreadboardCanvas({
     draggedComponentId,
     hoveredComponentId,
     hoveredWireId,
+    boxSelectedComponentIds,
     selectedComponentId,
     selectedWireId,
     wireWaypointOverrides,
@@ -479,8 +516,28 @@ export default function BreadboardCanvas({
     [scene.pinById, scene.pinsByNodeId]
   );
 
+  /** Power, ground or anything else, for the default colour of a new wire. */
+  const getWireEndKind = useCallback(
+    (nodeId: string, pinId?: string | null): WireEndKind => {
+      const pin = (pinId ? scene.pinById[pinId] : null) ?? scene.pinsByNodeId[nodeId]?.[0] ?? null;
+      if (pin?.type === 'ground' || /_MINUS_/.test(nodeId)) return 'ground';
+      if (pin?.type === 'power' || /_PLUS_/.test(nodeId)) return 'power';
+      return 'other';
+    },
+    [scene.pinById, scene.pinsByNodeId]
+  );
+
+  const nextWireColorFor = useCallback(
+    (fromNodeId: string, fromPinId: string | null, toNodeId?: string | null, toPinId?: string | null) => {
+      const ends = [getWireEndKind(fromNodeId, fromPinId)];
+      if (toNodeId) ends.push(getWireEndKind(toNodeId, toPinId));
+      return chooseNewWireColor(ends, lastPickedWireColor);
+    },
+    [getWireEndKind, lastPickedWireColor]
+  );
+
   const handleAddWire = useCallback(
-    ({ fromNodeId, toNodeId, fromPinId, toPinId }: WireConnectionRequest) => {
+    ({ fromNodeId, toNodeId, fromPinId, toPinId, waypoints }: WireConnectionRequest) => {
       if (fromNodeId === toNodeId) {
         return;
       }
@@ -500,8 +557,10 @@ export default function BreadboardCanvas({
         toNodeId,
         fromAnchorId: fromPinId,
         toAnchorId: toPinId,
-        color: WIRE_COLORS[circuitData.nets.length % WIRE_COLORS.length],
-        waypoints: buildOrthogonalWaypoints(fromPoint, toPoint),
+        color: nextWireColorFor(fromNodeId, fromPinId, toNodeId, toPinId),
+        // Straight through the bends the learner clicked (none: a straight wire).
+        waypoints: waypoints ?? [],
+        routing: 'free',
       });
       eventBus.emit('USER_EDITED', { source: 'circuit', timestamp: Date.now() });
       setSelectedWireId(wireId);
@@ -519,8 +578,66 @@ export default function BreadboardCanvas({
       recentWireTimeoutRef.current = window.setTimeout(() => setRecentlyCreatedWireId(null), 650);
       recentPinTimeoutRef.current = window.setTimeout(() => setRecentlyConnectedPinId(null), 900);
     },
-    [addNet, circuitData.nets.length, eventBus, resolveNodePoint, selectComponent]
+    [addNet, eventBus, nextWireColorFor, resolveNodePoint, selectComponent]
   );
+
+  const deleteBoxSelection = useCallback(() => {
+    if (!boxSelection || boxSelectionCount === 0) return false;
+    removeItems(Array.from(boxSelectedComponentIds ?? []), Array.from(boxSelectedWireIds ?? []));
+    eventBus.emit('USER_EDITED', { source: 'circuit', timestamp: Date.now() });
+    setBoxSelection(null);
+    return true;
+  }, [boxSelectedComponentIds, boxSelectedWireIds, boxSelection, boxSelectionCount, eventBus, removeItems]);
+
+  /** Copies the selected part, or the box selection, with the wires running between copied parts. */
+  const copySelection = useCallback(() => {
+    const ids = boxSelectedComponentIds?.size ? Array.from(boxSelectedComponentIds) : selectedComponentId ? [selectedComponentId] : [];
+    // Boards and the breadboard are one-per-circuit, so they are never copied.
+    const copied = components.filter(
+      (component) => ids.includes(component.id) && getComponentDefinition(component.type)?.footprint?.type !== 'board'
+    );
+    if (copied.length === 0) return false;
+    const copiedIds = new Set(copied.map((component) => component.id));
+    const ownedByCopied = (nodeId: string) => copiedIds.has(nodeId.slice(0, Math.max(0, nodeId.indexOf('.'))));
+    const copiedNets = nets.filter((net) => ownedByCopied(net.fromNodeId ?? net.from) && ownedByCopied(net.toNodeId ?? net.to));
+    circuitClipboard = { components: copied, nets: copiedNets, pasteCount: 0 };
+    return true;
+  }, [boxSelectedComponentIds, components, nets, selectedComponentId]);
+
+  /** Pastes the clipboard a little down and to the right each time, and selects what was pasted. */
+  const pasteClipboard = useCallback(() => {
+    const clipboard = circuitClipboard;
+    if (!clipboard) return;
+    clipboard.pasteCount += 1;
+    const offset = GRID_PITCH * 3 * clipboard.pasteCount;
+    const stamp = Date.now();
+    const idMap = new Map<string, string>();
+    const pastedComponents = clipboard.components.map((component, index) => {
+      const id = `${normalizeComponentType(component.type).toLowerCase()}-${stamp}-${index}`;
+      idMap.set(component.id, id);
+      return { ...component, id, x: component.x + offset, y: component.y + offset, mountedPlacement: null, state: { ...(component.state ?? {}) } };
+    });
+    const pastedNets = clipboard.nets.map((net, index) => ({
+      ...net,
+      id: `net-${stamp}-${index}`,
+      from: remapNodeId(net.from, idMap) ?? net.from,
+      to: remapNodeId(net.to, idMap) ?? net.to,
+      fromNodeId: remapNodeId(net.fromNodeId, idMap) ?? undefined,
+      toNodeId: remapNodeId(net.toNodeId, idMap) ?? undefined,
+      fromAnchorId: remapNodeId(net.fromAnchorId, idMap) ?? null,
+      toAnchorId: remapNodeId(net.toAnchorId, idMap) ?? null,
+      waypoints: net.waypoints?.map((point) => ({ x: point.x + offset, y: point.y + offset })),
+    }));
+    addItems(pastedComponents, pastedNets);
+    eventBus.emit('USER_EDITED', { source: 'circuit', timestamp: Date.now() });
+    selectComponent(null);
+    setSelectedWireId(null);
+    setBoxSelection({ componentIds: pastedComponents.map((component) => component.id), wireIds: pastedNets.map((net) => net.id) });
+  }, [addItems, eventBus, selectComponent]);
+
+  const duplicateSelection = useCallback(() => {
+    if (copySelection()) pasteClipboard();
+  }, [copySelection, pasteClipboard]);
 
   const interaction = useInteractionManager({
     containerRef: canvasContainerRef,
@@ -530,15 +647,45 @@ export default function BreadboardCanvas({
     selectedWireId,
     onSelectComponent: (id) => {
       selectComponent(id);
+      setBoxSelection(null);
       if (id) {
         setSelectedWireId(null);
       }
     },
     onSelectWire: (id) => {
       setSelectedWireId(id);
+      setBoxSelection(null);
       if (id) {
         selectComponent(null);
       }
+    },
+    onBoxSelect: (box) => {
+      // Everything wholly inside the box. The breadboard only when it is boxed in completely too,
+      // so boxing parts on the board does not take the board with them.
+      const inside = (point: Point) => point.x >= box.minX && point.x <= box.maxX && point.y >= box.minY && point.y <= box.maxY;
+      const componentIds = scene.components
+        .filter((node) => inside({ x: node.bounds.minX, y: node.bounds.minY }) && inside({ x: node.bounds.maxX, y: node.bounds.maxY }))
+        .map((node) => node.id);
+      const wireIds = scene.wires.filter((wire) => wire.points.every(inside)).map((wire) => wire.id);
+      setBoxSelection(componentIds.length + wireIds.length > 0 ? { componentIds, wireIds } : null);
+    },
+    onClearBoxSelection: () => {
+      if (!boxSelection) return false;
+      setBoxSelection(null);
+      return boxSelectionCount > 0;
+    },
+    onDeleteBoxSelection: () => deleteBoxSelection(),
+    onCopySelection: () => {
+      copySelection();
+    },
+    onPasteClipboard: pasteClipboard,
+    onDuplicateSelection: duplicateSelection,
+    onSelectAll: () => {
+      selectComponent(null);
+      setSelectedWireId(null);
+      const componentIds = scene.components.filter((node) => node.definition.id !== 'BREADBOARD').map((node) => node.id);
+      const wireIds = scene.wires.map((wire) => wire.id);
+      setBoxSelection(componentIds.length + wireIds.length > 0 ? { componentIds, wireIds } : null);
     },
     onMoveComponent: (id, pos, meta) => {
       updateDragPreview(id, pos, meta.client);
@@ -585,17 +732,35 @@ export default function BreadboardCanvas({
     onTapComponent: (id) => {
       const component = circuitData.components.find((candidate) => candidate.id === id);
       const definition = getComponentDefinition(component?.type || '');
-      if (!component || definition?.simulation?.type !== 'button' || !(simulationView.running || simulationView.ready)) {
+      if (!component) {
         return;
       }
+      const simulating = simulationView.running || simulationView.ready;
 
-      updateComponentState(id, (previousState) => ({
-        ...previousState,
-        pressed: !Boolean(previousState?.pressed),
-      }));
+      // A slide switch keeps its position, so a click slides it whether or not the simulation runs.
+      if (definition?.simulation?.type === 'slide-switch') {
+        setComponentProperties(id, { value: Number(component.state?.value ?? 0) === 1 ? 0 : 1 });
+        eventBus.emit('USER_EDITED', { source: 'circuit', timestamp: Date.now() });
+        return;
+      }
+      if (!simulating) {
+        return;
+      }
+      if (definition?.simulation?.type === 'button') {
+        updateComponentState(id, (previousState) => ({
+          ...previousState,
+          pressed: !Boolean(previousState?.pressed),
+        }));
+      } else if (definition?.simulation?.type === 'pir') {
+        // Click the PIR sensor to wave in front of it; click again to stop.
+        updateComponentState(id, (previousState) => ({
+          ...previousState,
+          motion: !Boolean(previousState?.motion),
+        }));
+      }
     },
-    onRotateComponent: (id) => {
-      rotateComponent(id);
+    onRotateComponent: (id, direction) => {
+      rotateComponent(id, direction);
       eventBus.emit('USER_EDITED', { source: 'circuit', timestamp: Date.now() });
     },
     onDeleteComponent: (id) => {
@@ -613,10 +778,13 @@ export default function BreadboardCanvas({
         return;
       }
 
+      // A free wire keeps its bends when an end moves; an older wire is re-routed at right angles.
       const nextWaypoints =
-        endpoint === 'from'
-          ? buildOrthogonalWaypoints(targetPoint, wire.toPoint)
-          : buildOrthogonalWaypoints(wire.fromPoint, targetPoint);
+        wire.routing === 'free'
+          ? wire.waypoints
+          : endpoint === 'from'
+            ? buildOrthogonalWaypoints(targetPoint, wire.toPoint)
+            : buildOrthogonalWaypoints(wire.fromPoint, targetPoint);
 
       updateNet(
         wireId,
@@ -650,7 +818,7 @@ export default function BreadboardCanvas({
 
         return {
           ...current,
-          [id]: waypoints,
+          [id]: { waypoints, routing: 'free' },
         };
       });
     },
@@ -664,7 +832,8 @@ export default function BreadboardCanvas({
         delete next[id];
         return next;
       });
-      updateNet(id, { waypoints });
+      // Any bend edit turns an older right-angle wire into a free wire (its corners become bends).
+      updateNet(id, { waypoints, routing: 'free' });
       eventBus.emit('USER_EDITED', { source: 'circuit', timestamp: Date.now() });
     },
     beginPan,
@@ -1116,20 +1285,21 @@ export default function BreadboardCanvas({
       };
     }
 
-    if (selectedWire) {
-      const midIndex = Math.max(0, Math.floor((selectedWire.points.length - 1) / 2));
-      const startPoint = selectedWire.points[midIndex];
-      const endPoint = selectedWire.points[Math.min(midIndex + 1, selectedWire.points.length - 1)] ?? startPoint;
-      const midPoint = {
-        x: (startPoint.x + endPoint.x) / 2,
-        y: (startPoint.y + endPoint.y) / 2,
-      };
+    if (selectedWire && interaction.mode.type !== 'MOVING_WIRE_HANDLE') {
+      // Sit clear of the wire: above its highest point, or below its lowest when there is no room above.
+      const xs = selectedWire.points.map((point) => point.x);
+      const ys = selectedWire.points.map((point) => point.y);
+      const centerX = ((Math.min(...xs) + Math.max(...xs)) / 2) * transform.scale + transform.x;
+      const topY = Math.min(...ys) * transform.scale + transform.y - 18;
+      const bottomY = Math.max(...ys) * transform.scale + transform.y + 18;
+      const placeBelow = topY < 72;
 
       return {
         type: 'wire' as const,
-        left: midPoint.x * transform.scale + transform.x,
-        top: midPoint.y * transform.scale + transform.y - 20,
-        label: 'Signal wire',
+        left: centerX,
+        top: placeBelow ? bottomY : topY,
+        placement: placeBelow ? ('below' as const) : ('above' as const),
+        label: `${getWireColorName(selectedWire.color)} wire`,
       };
     }
 
@@ -1138,6 +1308,7 @@ export default function BreadboardCanvas({
 
   const handleApplyWireColor = useCallback(
     (color: string) => {
+      setLastPickedWireColor(color);
       if (!selectedWireId) {
         return;
       }
@@ -1148,14 +1319,33 @@ export default function BreadboardCanvas({
     [eventBus, selectedWireId, updateNet]
   );
 
-  const handleRotateSelected = useCallback(() => {
+  /** Removes every bend: the wire runs straight from pin to pin. */
+  const handleStraightenSelectedWire = useCallback(() => {
+    if (!selectedWireId) {
+      return;
+    }
+
+    updateNet(selectedWireId, { waypoints: [], routing: 'free' });
+    eventBus.emit('USER_EDITED', { source: 'circuit', timestamp: Date.now() });
+  }, [eventBus, selectedWireId, updateNet]);
+
+  const handleRotateSelected = useCallback((direction: 1 | -1 = 1) => {
     if (!selectedComponentId) {
       return;
     }
 
-    rotateComponent(selectedComponentId);
+    rotateComponent(selectedComponentId, direction);
     eventBus.emit('USER_EDITED', { source: 'circuit', timestamp: Date.now() });
   }, [eventBus, rotateComponent, selectedComponentId]);
+
+  const handleUpdateSelectedPart = useCallback(
+    (patch: Record<string, unknown>) => {
+      if (!selectedComponentId) return;
+      setComponentProperties(selectedComponentId, patch);
+      eventBus.emit('USER_EDITED', { source: 'circuit', timestamp: Date.now() });
+    },
+    [eventBus, selectedComponentId, setComponentProperties]
+  );
 
   const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (selectedComponentId && !isPaletteVisible) {
@@ -1180,7 +1370,7 @@ export default function BreadboardCanvas({
   }, [eventBus, removeComponent, removeNet, selectComponent, selectedComponentId, selectedWireId]);
 
   return (
-    <div className="relative flex h-full w-full overflow-hidden rounded-[18px] bg-[#050913] font-sans selection:bg-cyan-400/20 sm:rounded-[24px]">
+    <div className="relative flex h-full w-full overflow-hidden rounded-[18px] bg-[color:var(--cl-bg)] font-sans selection:bg-cyan-400/20 sm:rounded-[24px]">
       {isCompactViewport && isPaletteVisible ? (
         <button
           type="button"
@@ -1191,7 +1381,7 @@ export default function BreadboardCanvas({
       ) : null}
       <aside
         className={cn(
-          'flex h-full shrink-0 overflow-hidden bg-[linear-gradient(180deg,#10161f_0%,#0a0f16_100%)] transition-[width,opacity,transform] duration-200 ease-out',
+          'flex h-full shrink-0 overflow-hidden bg-[linear-gradient(180deg,var(--cl-drawer-from)_0%,var(--cl-drawer-to)_100%)] transition-[width,opacity,transform] duration-200 ease-out',
           isCompactViewport
             ? isPaletteVisible
               ? 'absolute inset-y-3 left-3 z-[230] w-[min(340px,calc(100%-1.5rem))] rounded-[20px] border border-white/10 opacity-100 shadow-[0_28px_68px_-36px_rgba(2,6,23,0.95)]'
@@ -1202,7 +1392,7 @@ export default function BreadboardCanvas({
         )}
       >
         <div className="flex h-full min-h-0 w-full">
-          <div className="flex w-[60px] shrink-0 flex-col items-center gap-2 border-r border-white/8 bg-[#0b1016] px-2 py-3">
+          <div className="flex w-[60px] shrink-0 flex-col items-center gap-2 border-r border-white/8 bg-[color:var(--cl-raised)] px-2 py-3">
             {categoryTabs.map((category) => {
               const meta = CATEGORY_META[category];
               const isActive = activeCategory === category;
@@ -1280,16 +1470,16 @@ export default function BreadboardCanvas({
                     }}
                     title={description}
                     className={cn(
-                      'group flex min-w-0 flex-col gap-2 rounded-[14px] border bg-[linear-gradient(180deg,#161d28_0%,#0d131b_100%)] p-2 text-left transition-all duration-150 hover:-translate-y-0.5 hover:border-cyan-300/18 hover:bg-[linear-gradient(180deg,#1a2230_0%,#111824_100%)]',
+                      'group flex min-w-0 flex-col gap-2 rounded-[14px] border bg-[linear-gradient(180deg,var(--cl-card-from)_0%,var(--cl-card-to)_100%)] p-2 text-left transition-all duration-150 hover:-translate-y-0.5 hover:border-cyan-300/18 hover:bg-[linear-gradient(180deg,var(--cl-card-hover-from)_0%,var(--cl-card-hover-to)_100%)]',
                       isArmed ? 'border-cyan-300/40' : 'border-white/[0.06]'
                     )}
                   >
-                    <div className="relative flex h-[72px] w-full items-center justify-center rounded-[10px] border border-white/8 bg-[radial-gradient(circle_at_50%_35%,rgba(34,47,67,0.96),rgba(14,20,29,0.98)_74%)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <div className="relative flex h-[72px] w-full items-center justify-center rounded-[10px] border border-white/8 bg-[radial-gradient(circle_at_50%_35%,var(--cl-tile-glow),var(--cl-tile-bg)_74%)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                       <ComponentPreview definition={item.definition} className="h-full w-full" />
                       {isArmed ? (
                         <span className="absolute right-1 top-1 rounded-full border border-cyan-300/28 bg-[#0d2a33] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-cyan-100">Placing</span>
                       ) : item.alreadyPlaced ? (
-                        <span className="absolute right-1 top-1 rounded-full border border-white/12 bg-[#161d28] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-white/75">On canvas</span>
+                        <span className="absolute right-1 top-1 rounded-full border border-white/12 bg-[color:var(--cl-card-from)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-white/75">On canvas</span>
                       ) : null}
                     </div>
                     <div className="min-w-0 px-0.5 pb-0.5">
@@ -1309,7 +1499,7 @@ export default function BreadboardCanvas({
       </aside>
 
       <div
-        className="relative min-w-0 flex-1 overflow-hidden bg-[linear-gradient(180deg,#060b13_0%,#04070e_100%)]"
+        className="relative min-w-0 flex-1 overflow-hidden bg-[linear-gradient(180deg,var(--cl-bg)_0%,var(--cl-bg-deep)_100%)]"
         onPointerMoveCapture={handleCanvasPointerMoveCapture}
         onPointerDownCapture={handleCanvasPointerDownCapture}
         onContextMenu={handleContextMenu}
@@ -1323,6 +1513,7 @@ export default function BreadboardCanvas({
           scene={scene}
           recentlyCreatedWireId={recentlyCreatedWireId}
           recentlyConnectedPinId={recentlyConnectedPinId}
+          selectedWireIds={boxSelectedWireIds}
           interactionProps={{
             pins: scene.pins,
             visiblePinTargetIds,
@@ -1351,11 +1542,14 @@ export default function BreadboardCanvas({
                     targetLockState: interaction.mode.targetLockState,
                     crowdedTargets: interaction.mode.crowdedTargets,
                     preferredAxis: interaction.mode.previewAxis,
-                    points: buildWireRoutePoints(
-                      interaction.mode.fromPoint,
-                      interaction.mode.previewPoint,
-                      [],
-                      interaction.mode.previewAxis
+                    // Straight through the bends clicked so far, to the pointer (or the pin it snaps to).
+                    points: [interaction.mode.fromPoint, ...interaction.mode.bends, interaction.mode.previewPoint],
+                    bends: interaction.mode.bends,
+                    color: nextWireColorFor(
+                      interaction.mode.fromNodeId,
+                      interaction.mode.fromPinId,
+                      interaction.mode.hoveredTargetNodeId,
+                      interaction.mode.hoveredTargetPinId
                     ),
                   }
                 : interaction.mode.type === 'REWIRING_WIRE_ENDPOINT'
@@ -1369,12 +1563,19 @@ export default function BreadboardCanvas({
                       targetLockState: interaction.mode.targetLockState,
                       crowdedTargets: interaction.mode.crowdedTargets,
                       preferredAxis: interaction.mode.previewAxis,
-                      points: buildWireRoutePoints(
-                        interaction.mode.fixedPoint,
-                        interaction.mode.previewPoint,
-                        [],
-                        interaction.mode.previewAxis
-                      ),
+                      // A free wire keeps its bends while one end moves; an older wire previews at right angles.
+                      points:
+                        interaction.mode.routing === 'free'
+                          ? interaction.mode.endpoint === 'from'
+                            ? [interaction.mode.previewPoint, ...interaction.mode.waypoints, interaction.mode.fixedPoint]
+                            : [interaction.mode.fixedPoint, ...interaction.mode.waypoints, interaction.mode.previewPoint]
+                          : buildWireRoutePoints(
+                              interaction.mode.fixedPoint,
+                              interaction.mode.previewPoint,
+                              [],
+                              interaction.mode.previewAxis
+                            ),
+                      color: scene.wireById[interaction.mode.wireId]?.color,
                     }
                   : null,
           }}
@@ -1384,7 +1585,7 @@ export default function BreadboardCanvas({
           <ComponentContextMenu
             componentId={selectedComponentId}
             position={contextMenu}
-            onRotate={handleRotateSelected}
+            onRotate={() => handleRotateSelected(1)}
             onDelete={handleDeleteSelected}
             onClose={() => setContextMenu(null)}
           />
@@ -1425,7 +1626,7 @@ export default function BreadboardCanvas({
 
         {isCanvasEmpty && !isPlacementPreviewVisible ? (
           <div className="pointer-events-none absolute left-5 top-5 z-[120] max-w-[560px]">
-            <div className="pointer-events-auto inline-flex flex-wrap items-center gap-3 rounded-[18px] border border-white/8 bg-[#08101b]/72 px-4 py-3 text-white shadow-[0_18px_48px_-36px_rgba(0,0,0,0.92)] backdrop-blur-lg">
+            <div className="pointer-events-auto inline-flex flex-wrap items-center gap-3 rounded-[18px] border border-white/8 bg-[color:var(--cl-panel)]/72 px-4 py-3 text-white shadow-[0_18px_48px_-36px_rgba(0,0,0,0.92)] backdrop-blur-lg">
               <div className="pr-2">
                 <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/38">Quick Start</div>
                 <div className="mt-1 text-sm font-semibold text-white/88">Place a board and a breadboard.</div>
@@ -1471,7 +1672,7 @@ export default function BreadboardCanvas({
                       ? 'border-emerald-300/28 bg-emerald-500/14 text-emerald-100'
                       : interactionMode.tone === 'wiring'
                         ? 'border-sky-300/24 bg-sky-300/12 text-sky-100'
-                        : 'border-white/12 bg-[#08111d]/88 text-white/80'
+                        : 'border-white/12 bg-[color:var(--cl-panel)]/88 text-white/80'
               )}
             >
               {interactionMode.label} · {interactionMode.detail}
@@ -1492,7 +1693,7 @@ export default function BreadboardCanvas({
               e.stopPropagation();
               interaction.cancelWireDrawing();
             }}
-            className="pointer-events-auto absolute bottom-5 left-1/2 z-[300] -translate-x-1/2 flex items-center gap-2 rounded-full border border-rose-400/30 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700 shadow-[0_18px_48px_-24px_rgba(225,29,72,0.6)] backdrop-blur-md dark:bg-rose-950/80 dark:text-rose-200"
+            className="pointer-events-auto absolute bottom-5 left-1/2 z-[300] -translate-x-1/2 flex items-center gap-2 rounded-full border border-rose-400/30 bg-rose-950/80 px-4 py-2 text-xs font-semibold text-rose-200 shadow-[0_18px_48px_-24px_rgba(225,29,72,0.6)] backdrop-blur-md"
           >
             <X size={14} /> Cancel Wire
           </button>
@@ -1505,7 +1706,7 @@ export default function BreadboardCanvas({
                 'rounded-[18px] border px-4 py-3 shadow-[0_22px_48px_-28px_rgba(2,6,23,0.95)] backdrop-blur-xl',
                 interactionGuide.tone === 'invalid'
                   ? 'border-rose-300/28 bg-[#1a0d12]/90 text-rose-50'
-                  : 'border-white/10 bg-[#08111d]/90 text-slate-100'
+                  : 'border-white/10 bg-[color:var(--cl-panel)]/90 text-slate-100'
               )}
             >
               <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/46">{interactionGuide.status}</div>
@@ -1516,29 +1717,96 @@ export default function BreadboardCanvas({
           </div>
         ) : null}
 
+        {interaction.mode.type === 'SELECTING_BOX' && interaction.mode.moved ? (
+          <div
+            className="pointer-events-none absolute z-[310] rounded-[6px] border border-cyan-300/80 bg-cyan-300/10"
+            data-testid="circuit-selection-box"
+            style={{
+              left: Math.min(interaction.mode.startWorld.x, interaction.mode.currentWorld.x) * transform.scale + transform.x,
+              top: Math.min(interaction.mode.startWorld.y, interaction.mode.currentWorld.y) * transform.scale + transform.y,
+              width: Math.abs(interaction.mode.currentWorld.x - interaction.mode.startWorld.x) * transform.scale,
+              height: Math.abs(interaction.mode.currentWorld.y - interaction.mode.startWorld.y) * transform.scale,
+            }}
+          />
+        ) : null}
+
+        {boxSelectionCount > 0 && interaction.mode.type === 'IDLE' ? (
+          <div className="absolute left-1/2 top-4 z-[320] -translate-x-1/2" data-testid="circuit-multi-selection">
+            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-[color:var(--cl-panel)]/94 px-2 py-2 shadow-[0_22px_48px_-26px_rgba(2,6,23,0.95)] backdrop-blur-xl">
+              <div className="px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
+                {boxSelectionCount} selected
+              </div>
+              <button
+                type="button"
+                onClick={() => deleteBoxSelection()}
+                className="inline-flex h-9 items-center gap-2 rounded-full border border-rose-400/20 bg-rose-400/10 px-3 text-sm font-semibold text-rose-100 transition-all hover:border-rose-300/30 hover:bg-rose-400/14"
+              >
+                <Trash2 size={14} />
+                Delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setBoxSelection(null)}
+                aria-label="Clear selection"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-white/70 transition-all hover:border-white/18 hover:bg-white/[0.08]"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {selectionOverlay ? (
           <div
             className="absolute z-[320]"
             style={{
               left: `clamp(24px, ${selectionOverlay.left}px, calc(100% - 24px))`,
               top: `clamp(24px, ${selectionOverlay.top}px, calc(100% - 24px))`,
-              transform: 'translate(-50%, -100%)',
+              transform: selectionOverlay.type === 'wire' && selectionOverlay.placement === 'below' ? 'translate(-50%, 0)' : 'translate(-50%, -100%)',
             }}
           >
-            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-[#08111d]/94 px-2 py-2 shadow-[0_22px_48px_-26px_rgba(2,6,23,0.95)] backdrop-blur-xl">
+            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-[color:var(--cl-panel)]/94 px-2 py-2 shadow-[0_22px_48px_-26px_rgba(2,6,23,0.95)] backdrop-blur-xl">
               <div className="px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
                 {selectionOverlay.label}
               </div>
               {selectionOverlay.type === 'component' ? (
                 <>
+                  {selectedComponentNode ? (
+                    <PartProperties
+                      definitionId={selectedComponentNode.definition.id}
+                      state={selectedComponentNode.component.state ?? {}}
+                      onChange={handleUpdateSelectedPart}
+                    />
+                  ) : null}
                   <button
                     type="button"
-                    onClick={handleRotateSelected}
-                    className="inline-flex h-9 items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 text-sm font-semibold text-white/84 transition-all hover:border-white/18 hover:bg-white/[0.08]"
+                    onClick={() => handleRotateSelected(-1)}
+                    title="Turn anticlockwise (Shift+R)"
+                    aria-label="Turn anticlockwise"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-white/84 transition-all hover:border-white/18 hover:bg-white/[0.08]"
+                  >
+                    <RotateCcw size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRotateSelected(1)}
+                    title="Turn clockwise (R)"
+                    aria-label="Turn clockwise"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-white/84 transition-all hover:border-white/18 hover:bg-white/[0.08]"
                   >
                     <RotateCw size={14} />
-                    Rotate
                   </button>
+                  {selectedComponentNode?.definition.footprint?.type !== 'board' ? (
+                    <button
+                      type="button"
+                      onClick={duplicateSelection}
+                      title="Duplicate (Ctrl+D). Ctrl+C and Ctrl+V copy and paste."
+                      aria-label="Duplicate"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-white/84 transition-all hover:border-white/18 hover:bg-white/[0.08]"
+                    >
+                      <CopyPlus size={14} />
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={handleDeleteSelected}
@@ -1550,26 +1818,38 @@ export default function BreadboardCanvas({
                 </>
               ) : (
                 <>
-                  <div className="flex items-center gap-1 px-1">
-                    {WIRE_COLORS.map((color) => {
-                      const isActive = selectedWire?.color === color;
+                  <div className="grid grid-cols-6 gap-1 px-1" role="group" aria-label="Wire colour">
+                    {WIRE_COLOR_OPTIONS.map((option) => {
+                      const isActive = selectedWire?.color.toLowerCase() === option.hex;
                       return (
                         <button
-                          key={color}
+                          key={option.id}
                           type="button"
-                          onClick={() => handleApplyWireColor(color)}
-                          aria-label={`Set wire color ${color}`}
+                          onClick={() => handleApplyWireColor(option.hex)}
+                          aria-label={`Wire colour: ${option.name}`}
+                          aria-pressed={isActive}
+                          title={option.name}
                           className={cn(
-                            'h-7 w-7 rounded-full border transition-all duration-150',
+                            'h-5 w-5 rounded-full border transition-all duration-150',
                             isActive
-                              ? 'scale-110 border-white/85 shadow-[0_0_0_2px_rgba(255,255,255,0.14)]'
-                              : 'border-white/10 hover:scale-105 hover:border-white/28'
+                              ? 'scale-110 border-white shadow-[0_0_0_2px_rgba(255,255,255,0.22)]'
+                              : 'border-white/25 hover:scale-110 hover:border-white/60'
                           )}
-                          style={{ backgroundColor: color }}
+                          style={{ backgroundColor: option.hex }}
                         />
                       );
                     })}
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleStraightenSelectedWire}
+                    disabled={(selectedWire?.routing === 'free' && selectedWire.waypoints.length === 0) || false}
+                    title="Remove all bends so the wire runs straight. Tip: double-click the wire to add a bend, double-click a bend to remove it."
+                    className="inline-flex h-9 items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 text-sm font-semibold text-white/84 transition-all hover:border-white/18 hover:bg-white/[0.08] disabled:cursor-default disabled:opacity-40"
+                  >
+                    <Spline size={14} />
+                    Straighten
+                  </button>
                   <button
                     type="button"
                     onClick={handleDeleteSelected}
@@ -1593,7 +1873,7 @@ export default function BreadboardCanvas({
               : 'translate-y-2 opacity-0',
             dragPreview?.source === 'existing' && dragPreview?.overTrash
               ? 'border-red-400/60 bg-red-500/16 text-red-50 shadow-[0_0_26px_rgba(248,113,113,0.28)]'
-              : 'border-white/10 bg-[#0b111b]/88 text-slate-300 shadow-[0_18px_38px_-28px_rgba(2,6,23,0.95)]'
+              : 'border-white/10 bg-[color:var(--cl-raised)]/88 text-slate-300 shadow-[0_18px_38px_-28px_rgba(2,6,23,0.95)]'
           )}
         >
           <Trash2 className={cn('h-5 w-5', dragPreview?.source === 'existing' && dragPreview?.overTrash ? 'text-red-200' : 'text-slate-300')} />

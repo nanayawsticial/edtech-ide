@@ -270,7 +270,7 @@ export default function WiringDiagramViewer({ blocklyXml, board }: WiringDiagram
         style={{ cursor: isDragging.current ? 'grabbing' : 'grab' }}
       >
           {/* Main SVG Coordinate Space */}
-          <svg width="100%" height="100%" style={{ backgroundColor: '#0f172a' }}>
+          <svg width="100%" height="100%" className="bg-slate-900">
               <defs>
                   <pattern id="blueprint-grid" width="40" height="40" patternUnits="userSpaceOnUse">
                       <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#38bdf8" strokeWidth="1" strokeOpacity="0.08" />

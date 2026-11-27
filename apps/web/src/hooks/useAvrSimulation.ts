@@ -9,6 +9,7 @@ import type {
   SimulationSerialConfig,
   SimulationTraceEvent,
 } from '@/lib/simulator/simulationTypes';
+import type { LcdState as LcdScreenState } from '@/lib/simulator/lcdI2cDecoder';
 import { useSimulationStore } from '@/stores/simulationStore';
 
 type WorkerInMessage =
@@ -28,6 +29,9 @@ type WorkerOutMessage =
   | { type: 'serial-byte'; value: number; direction: 'tx' | 'rx'; cycle: number }
   | { type: 'serial-config'; config: SimulationSerialConfig }
   | { type: 'bus-event'; event: SimulationBusEvent }
+  | { type: 'neopixel-frame'; pin: string; colors: string[]; cycle: number }
+  | { type: 'lcd-state'; address: number; lines: [string, string]; backlight: boolean; displayOn: boolean }
+  | { type: 'pwm-duty'; pin: string; duty: number | null }
   | { type: 'error'; message: string };
 
 function normalizePinId(pin: string | number) {
@@ -68,6 +72,12 @@ export interface UseAvrSimulationReturn {
   pulseWidths: Map<string, number>;
   busEvents: SimulationBusEvent[];
   traceEvents: SimulationTraceEvent[];
+  /** Latest NeoPixel colours shown by each board pin (decoded in the worker). */
+  neopixelFrames: Record<string, string[]>;
+  /** Latest screen of each I2C character LCD, by address. */
+  lcdStates: Record<number, LcdScreenState>;
+  /** analogWrite duty cycle (0..1) per pin while it is pulsing. */
+  pwmDuty: Record<string, number>;
   serialLines: string[];
   serialConfig: SimulationSerialConfig | null;
   isRunning: boolean;
@@ -91,6 +101,9 @@ export function useAvrSimulation(): UseAvrSimulationReturn {
   const [pinSnapshots, setPinSnapshots] = useState<Map<string, SimulationPinSnapshot>>(new Map());
   const [pulseWidths, setPulseWidths] = useState<Map<string, number>>(new Map());
   const [busEvents, setBusEvents] = useState<SimulationBusEvent[]>([]);
+  const [neopixelFrames, setNeopixelFrames] = useState<Record<string, string[]>>({});
+  const [lcdStates, setLcdStates] = useState<Record<number, LcdScreenState>>({});
+  const [pwmDuty, setPwmDuty] = useState<Record<string, number>>({});
   const [traceEvents, setTraceEvents] = useState<SimulationTraceEvent[]>([]);
   const [serialLines, setSerialLines] = useState<string[]>([]);
   const [serialConfig, setSerialConfig] = useState<SimulationSerialConfig | null>(null);
@@ -196,6 +209,24 @@ export function useAvrSimulation(): UseAvrSimulationReturn {
         case 'bus-event':
           setBusEvents((previous) => [...previous.slice(-199), message.event]);
           break;
+        case 'neopixel-frame':
+          setNeopixelFrames((previous) => ({ ...previous, [normalizePinId(message.pin)]: message.colors }));
+          break;
+        case 'pwm-duty':
+          setPwmDuty((previous) => {
+            const pin = normalizePinId(message.pin);
+            const next = { ...previous };
+            if (message.duty === null) delete next[pin];
+            else next[pin] = message.duty;
+            return next;
+          });
+          break;
+        case 'lcd-state':
+          setLcdStates((previous) => ({
+            ...previous,
+            [message.address]: { lines: message.lines, backlight: message.backlight, displayOn: message.displayOn },
+          }));
+          break;
         case 'serial-byte':
           break;
         case 'error':
@@ -228,6 +259,9 @@ export function useAvrSimulation(): UseAvrSimulationReturn {
     setPinSnapshots(new Map());
     setPulseWidths(new Map());
     setBusEvents([]);
+    setNeopixelFrames({});
+    setLcdStates({});
+    setPwmDuty({});
     setTraceEvents([]);
     setSerialLines([]);
     useSimulationStore.getState().clearSimulatedSerialLines();
@@ -322,6 +356,9 @@ export function useAvrSimulation(): UseAvrSimulationReturn {
     pulseWidths,
     busEvents,
     traceEvents,
+    neopixelFrames,
+    lcdStates,
+    pwmDuty,
     serialLines,
     serialConfig,
     isRunning,

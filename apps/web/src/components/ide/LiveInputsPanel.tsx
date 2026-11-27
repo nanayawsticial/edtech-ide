@@ -43,7 +43,7 @@ export default function LiveInputsPanel() {
 
   const inputs = components
     .map((component) => ({ component, definition: getComponentDefinition(component.type) }))
-    .filter(({ definition }) => definition && (SLIDERS[definition.id] || definition.id === 'BUTTON'));
+    .filter(({ definition }) => definition && (SLIDERS[definition.id] || definition.id === 'BUTTON' || definition.id === 'PIR'));
   const visible = running && inputs.length > 0;
 
   // Sit just above the terminal dock, so the Serial Monitor output stays readable.
@@ -75,7 +75,7 @@ export default function LiveInputsPanel() {
     <aside
       ref={panelRef}
       style={{ bottom }}
-      className="ui-always-dark pointer-events-auto absolute left-4 z-[55] w-[280px] max-w-[calc(100%-2rem)] rounded-2xl border border-white/10 bg-[#0d1322]/95 p-3 text-slate-100 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)] backdrop-blur"
+      className="ui-always-dark pointer-events-auto absolute left-4 z-[55] w-[280px] max-w-[calc(100%-2rem)] rounded-2xl border border-white/10 bg-[color:var(--ui-popover-bg)]/95 p-3 text-slate-100 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)] backdrop-blur"
       aria-label="Live inputs"
       data-testid="live-inputs-panel"
     >
@@ -111,6 +111,17 @@ export default function LiveInputsPanel() {
                     aria-pressed={Boolean(state.pressed)}
                   >
                     <span className="text-[13px] font-semibold">{state.pressed ? 'Pressed: click to let go' : 'Click to press'}</span>
+                  </button>
+                ) : null}
+
+                {definition.id === 'PIR' ? (
+                  <button
+                    type="button"
+                    onClick={() => updateComponentState(component.id, { motion: !state.motion })}
+                    className={`mt-2 w-full rounded-lg px-3 py-1.5 transition ${state.motion ? 'bg-amber-500 text-white' : 'bg-white/10 text-slate-200 hover:bg-white/15'}`}
+                    aria-pressed={Boolean(state.motion)}
+                  >
+                    <span className="text-[13px] font-semibold">{state.motion ? 'Moving: click to stop' : 'Click to wave in front of it'}</span>
                   </button>
                 ) : null}
 

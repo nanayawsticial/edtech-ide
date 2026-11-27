@@ -299,3 +299,142 @@ export function distanceToPolyline(point: Point, route: Point[]) {
 
   return closest;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Free routing: straight segments through the learner's own bend points (Tinkercad style).
+// Older wires stay 'orthogonal' until their bends are edited; see getWireRouting.
+// ---------------------------------------------------------------------------------------------
+
+export type WireRouting = 'free' | 'orthogonal';
+
+export function getWireRouting(net: { routing?: WireRouting | null }): WireRouting {
+  return net.routing === 'free' ? 'free' : 'orthogonal';
+}
+
+/** Bends snap to a half-pitch grid: fine enough to place freely, tidy enough to line up. */
+const BEND_SNAP = GRID_PITCH / 2;
+
+export function snapBendPoint(point: Point): Point {
+  return {
+    x: Math.round(point.x / BEND_SNAP) * BEND_SNAP,
+    y: Math.round(point.y / BEND_SNAP) * BEND_SNAP,
+  };
+}
+
+/** Holds a point level with, or straight above or below, `anchor` (whichever is nearer). */
+export function constrainToAxis(anchor: Point, point: Point): Point {
+  return Math.abs(point.x - anchor.x) >= Math.abs(point.y - anchor.y)
+    ? { x: point.x, y: anchor.y }
+    : { x: anchor.x, y: point.y };
+}
+
+/** Where a bend goes for a pointer position: snapped, or held level with `anchor` while Shift is down. */
+export function placeBendPoint(point: Point, anchor: Point | null, constrain: boolean): Point {
+  const snapped = snapBendPoint(point);
+  return constrain && anchor ? constrainToAxis(anchor, snapped) : snapped;
+}
+
+/** The corners an orthogonal wire is drawn through, as free-route bends (keeps its shape). */
+export function materializeWaypoints(start: Point, end: Point, waypoints: Point[], routing: WireRouting): Point[] {
+  if (routing === 'free') {
+    return waypoints.map((point) => ({ ...point }));
+  }
+  return buildWireRoutePoints(start, end, waypoints).slice(1, -1);
+}
+
+export function buildRoutePoints(start: Point, end: Point, waypoints: Point[], routing: WireRouting): Point[] {
+  return routing === 'free' ? [start, ...waypoints, end] : buildWireRoutePoints(start, end, waypoints);
+}
+
+/**
+ * Drops bends that do nothing: repeats of a neighbour and bends sitting on the straight line
+ * between their neighbours. Used when an edit is committed.
+ */
+export function tidyFreeWaypoints(start: Point, end: Point, waypoints: Point[]): Point[] {
+  let route = [start, ...waypoints, end];
+  let changed = true;
+  while (changed && route.length > 2) {
+    changed = false;
+    for (let index = 1; index < route.length - 1; index += 1) {
+      const previous = route[index - 1];
+      const current = route[index];
+      const next = route[index + 1];
+      const repeated = pointsEqual(previous, current) || pointsEqual(current, next);
+      const cross = (current.x - previous.x) * (next.y - previous.y) - (current.y - previous.y) * (next.x - previous.x);
+      const span = Math.hypot(next.x - previous.x, next.y - previous.y) || 1;
+      const between =
+        (current.x - previous.x) * (next.x - previous.x) + (current.y - previous.y) * (next.y - previous.y) >= 0 &&
+        (current.x - next.x) * (previous.x - next.x) + (current.y - next.y) * (previous.y - next.y) >= 0;
+      if (repeated || (Math.abs(cross) / span < 0.5 && between)) {
+        route = [...route.slice(0, index), ...route.slice(index + 1)];
+        changed = true;
+        break;
+      }
+    }
+  }
+  return route.slice(1, -1);
+}
+
+/** Index of the route segment nearest `point` (segment i joins route[i] and route[i + 1]). */
+export function nearestSegmentIndex(route: Point[], point: Point) {
+  let best = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < route.length - 1; index += 1) {
+    const distance = distanceToSegment(point, route[index], route[index + 1]);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = index;
+    }
+  }
+  return best;
+}
+
+/** Adds a bend on segment `segmentIndex`; returns the new bends and the new bend's index in them. */
+export function insertBend(waypoints: Point[], segmentIndex: number, point: Point) {
+  const index = Math.max(0, Math.min(waypoints.length, segmentIndex));
+  return {
+    waypoints: [...waypoints.slice(0, index), point, ...waypoints.slice(index)],
+    waypointIndex: index,
+  };
+}
+
+export function removeBend(waypoints: Point[], waypointIndex: number) {
+  return waypoints.filter((_, index) => index !== waypointIndex);
+}
+
+/** Moves bend `waypointIndex` to `point`; with `constrain`, keeps the segment into it level or upright. */
+export function moveBend(start: Point, waypoints: Point[], waypointIndex: number, point: Point, constrain: boolean) {
+  const previous = waypointIndex === 0 ? start : waypoints[waypointIndex - 1];
+  const placed = placeBendPoint(point, previous ?? null, constrain);
+  return waypoints.map((existing, index) => (index === waypointIndex ? placed : existing));
+}
+
+/** Handles for a free wire: both ends, every bend, and a "drag to bend" grip mid-segment. */
+export function getFreeWireHandles(wireId: string, start: Point, end: Point, waypoints: Point[]): WireHandleNode[] {
+  const route = [start, ...waypoints, end];
+  const handles: WireHandleNode[] = [
+    { id: `${wireId}-endpoint-from`, wireId, position: start, axis: 'both', kind: 'endpoint', waypointIndex: -1, endpoint: 'from', routeIndex: 0 },
+  ];
+
+  waypoints.forEach((point, index) => {
+    handles.push({ id: `${wireId}-bend-${index}`, wireId, position: point, axis: 'both', kind: 'elbow', waypointIndex: index, routeIndex: index + 1 });
+  });
+
+  for (let index = 0; index < route.length - 1; index += 1) {
+    if (getSegmentLength(route[index], route[index + 1]) < GRID_PITCH * 2) {
+      continue;
+    }
+    handles.push({
+      id: `${wireId}-segment-${index}`,
+      wireId,
+      position: { x: (route[index].x + route[index + 1].x) / 2, y: (route[index].y + route[index + 1].y) / 2 },
+      axis: 'both',
+      kind: 'segment',
+      waypointIndex: -1,
+      segmentIndex: index,
+    });
+  }
+
+  handles.push({ id: `${wireId}-endpoint-to`, wireId, position: end, axis: 'both', kind: 'endpoint', waypointIndex: -1, endpoint: 'to', routeIndex: route.length - 1 });
+  return handles;
+}

@@ -178,7 +178,7 @@ function FileNode({
       tabIndex={0}
       className={`group flex w-full cursor-pointer items-center rounded-[14px] px-2 py-2 text-left transition-all ${
         isActive
-          ? 'bg-[var(--ui-color-primary)] text-white shadow-[var(--ui-shadow-button)]'
+          ? 'bg-[var(--ui-color-primary-fill)] text-white shadow-[var(--ui-shadow-button)]'
           : 'text-[var(--ui-color-text-muted)] hover:bg-[color:var(--ui-surface-elevated)] hover:text-[var(--ui-color-text)]'
       }`}
       style={{ paddingLeft }}

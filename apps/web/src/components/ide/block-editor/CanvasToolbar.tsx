@@ -32,7 +32,7 @@ export function CanvasToolbar({
   onToggleCodePanel,
 }: CanvasToolbarProps) {
   return (
-    <div className="flex min-h-[68px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-[#2f1169]/84 px-4 py-3 backdrop-blur">
+    <div className="flex min-h-[68px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-[color:var(--blockly-toolbar-bg)]/84 px-4 py-3 backdrop-blur">
 
       <div className="min-w-0 flex-1">
         {/* The canvas toolbar is dark purple in every theme, so these use fixed light colours. */}
@@ -53,7 +53,7 @@ export function CanvasToolbar({
             {isSidebarOpen ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
           </button>
         ) : null}
-        {/* bg-white/[0.05] matches the toolbar buttons beside it; bg-white/[0.06] is repainted opaque white by the light-theme overrides. */}
+        {/* bg-white/[0.05] matches the toolbar buttons beside it; bg-white/[0.06] is repainted opaque brown by the magma overrides. */}
         <span className="hidden rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-50/78 sm:inline-flex">
           {blockCount} blocks
         </span>

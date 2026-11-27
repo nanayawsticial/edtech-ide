@@ -1,8 +1,9 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react';
+import { DEFAULT_THEME, THEME_STORAGE_KEY, normalizeTheme, type ThemeMode } from '@/lib/theme/themeModes';
 
-export type ThemeMode = 'light' | 'dark' | 'magma';
+export type { ThemeMode } from '@/lib/theme/themeModes';
 
 interface ThemeContextValue {
   theme: ThemeMode;
@@ -11,46 +12,55 @@ interface ThemeContextValue {
   toggleTheme: () => void;
 }
 
-const STORAGE_KEY = 'edtech-theme-mode';
-
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
-function resolveInitialTheme(): ThemeMode {
-  if (typeof window === 'undefined') {
-    return 'light';
-  }
+// The theme lives on <html data-theme>. The inline script in app/layout.tsx sets it
+// from localStorage before the first paint, so this store only reads and writes it.
+const listeners = new Set<() => void>();
 
-  const savedTheme = window.localStorage.getItem(STORAGE_KEY);
-  if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'magma') {
-    return savedTheme;
-  }
-
-  return 'light';
+function readTheme(): ThemeMode {
+  return normalizeTheme(document.documentElement.getAttribute('data-theme'));
 }
 
-function applyTheme(theme: ThemeMode) {
-  if (typeof document === 'undefined') return;
+function writeTheme(theme: ThemeMode) {
   document.documentElement.setAttribute('data-theme', theme);
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    // Storage can be blocked (private mode, sandboxed frames). The attribute still applies.
+  }
+  listeners.forEach((listener) => listener());
 }
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+
+  // Keep other open tabs in step when the theme changes in one of them.
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== THEME_STORAGE_KEY) return;
+    const next = normalizeTheme(event.newValue);
+    if (next !== readTheme()) writeTheme(next);
+  };
+  window.addEventListener('storage', onStorage);
+
+  return () => {
+    listeners.delete(listener);
+    window.removeEventListener('storage', onStorage);
+  };
+}
+
+const getServerTheme = () => DEFAULT_THEME;
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>(resolveInitialTheme);
-
-  useEffect(() => {
-    applyTheme(theme);
-
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEY, theme);
-    }
-  }, [theme]);
+  const theme = useSyncExternalStore(subscribe, readTheme, getServerTheme);
 
   const setTheme = useCallback((nextTheme: ThemeMode) => {
-    setThemeState(nextTheme);
+    writeTheme(normalizeTheme(nextTheme));
   }, []);
 
   const toggleTheme = useCallback(() => {
-    setTheme(theme === 'light' ? 'dark' : theme === 'dark' ? 'magma' : 'light');
-  }, [setTheme, theme]);
+    writeTheme(readTheme() === 'dark' ? 'magma' : 'dark');
+  }, []);
 
   const value = useMemo<ThemeContextValue>(() => ({
     theme,

@@ -201,7 +201,7 @@ export default function WorkspaceDraftKeeper() {
       role="status"
       data-testid="workspace-recovery-notice"
       // Below the top bars, so the Save button it points to stays visible.
-      className="ui-always-dark pointer-events-auto absolute left-1/2 top-[200px] z-[70] flex w-[min(560px,calc(100%-2rem))] -translate-x-1/2 items-start gap-3 rounded-2xl border border-emerald-400/25 bg-[#0d1322]/95 p-4 text-slate-100 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)] backdrop-blur"
+      className="ui-always-dark pointer-events-auto absolute left-1/2 top-[200px] z-[70] flex w-[min(560px,calc(100%-2rem))] -translate-x-1/2 items-start gap-3 rounded-2xl border border-emerald-400/25 bg-[color:var(--ui-popover-bg)]/95 p-4 text-slate-100 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)] backdrop-blur"
     >
       <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-200">
         <History size={16} />

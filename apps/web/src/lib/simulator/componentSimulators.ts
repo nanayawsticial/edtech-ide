@@ -5,8 +5,9 @@ import type { ComponentPinMapping } from '@/lib/wiring/NetlistEngine';
 
 import type { BoardAdapter } from './boardAdapters';
 import type { LogicalNetState, PinElectricalState, SimulationBusEvent } from './simulationTypes';
+import type { ElectricalResult } from './circuitElectrical';
 
-const SUPPLY_PINS = new Set(['5V', '3.3V', '3V3', 'VIN', 'IOREF']);
+const SUPPLY_PINS = new Set(['5V', '3.3V', '3V3', 'VIN', 'IOREF', 'VBUS', 'VSYS']);
 
 export interface UltrasonicRuntimeState {
   echoTicksRemaining: number;
@@ -42,6 +43,8 @@ export interface NetMergeContext {
   component: ComponentData;
   definition: ComponentDefinition;
   pinMapping: ComponentPinMapping | undefined;
+  /** Digital output levels from the simulated board, for parts a pin switches (relays). */
+  avrDigitalPins?: Record<string, boolean>;
   unionFind: { union: (left: string | null | undefined, right: string | null | undefined) => void };
 }
 
@@ -60,6 +63,12 @@ export interface ComponentSimulationContext {
   runtimeState: ComponentRuntimeState;
   componentStatePatches: Record<string, Record<string, unknown>>;
   busEvents: SimulationBusEvent[];
+  /** NeoPixel colours decoded per board pin. */
+  neopixelFrames?: Record<string, string[]>;
+  /** Character LCD screens decoded per I2C address. */
+  lcdStates?: Record<number, { lines: [string, string]; backlight: boolean; displayOn: boolean }>;
+  /** Currents and LED brightness from the electrical solve (null if it could not run). */
+  electrical?: ElectricalResult | null;
   tick: number;
 }
 
@@ -210,12 +219,23 @@ const buttonSimulator: ComponentSimulator = {
   emitVisualState: ({ component }) => ({ pressed: Boolean(component.state?.pressed) }),
 };
 
+/** Brightness 0..1 of one LED channel from the electrical solve, or null without one. */
+function solvedBrightness(electrical: ElectricalResult | null | undefined, componentId: string, channel: string) {
+  if (!electrical) return null;
+  return electrical.brightness[componentId]?.[channel] ?? 0;
+}
+
 const ledSimulator: ComponentSimulator = {
   matches: (definition) => definition.simulation?.type === 'led',
-  emitVisualState: ({ pinMapping, baseNetState }) => {
+  emitVisualState: ({ component, pinMapping, baseNetState, electrical }) => {
+    const brightness = solvedBrightness(electrical, component.id, 'LED');
+    if (brightness !== null) {
+      return { outputHigh: brightness > 0, brightness };
+    }
     const anodeState = getConnectionState(pinMapping, 'A', baseNetState);
     const cathodeState = getConnectionState(pinMapping, 'C', baseNetState);
-    return { outputHigh: anodeState === 'HIGH' && cathodeState === 'LOW' };
+    const on = anodeState === 'HIGH' && cathodeState === 'LOW';
+    return { outputHigh: on, brightness: on ? 1 : 0 };
   },
 };
 
@@ -226,7 +246,10 @@ const resistorSimulator: ComponentSimulator = {
 
 const potentiometerSimulator: ComponentSimulator = {
   matches: (definition) => definition.simulation?.type === 'pot',
+  // Only for an OUT pin wired straight to the board with no divider: when VCC and GND are wired,
+  // the electrical solve reads the real divider voltage instead.
   samplePins: ({ component, pinMapping, boardPinStates }) => {
+    if (getPinNetId(pinMapping, 'VCC') && getPinNetId(pinMapping, 'GND')) return [];
     const signalPin = resolveMappedBoardPin(component.type, pinMapping, 'SIG');
     if (!signalPin || !isPinMappingPowered(pinMapping, boardPinStates)) {
       return [];
@@ -344,17 +367,29 @@ function isLit(pinMapping: ComponentPinMapping | undefined, pinId: string, retur
 /** Active buzzer: beeps while + is HIGH and − is LOW (a tone() on the pin also counts while it is high). */
 const buzzerSimulator: ComponentSimulator = {
   matches: (definition) => definition.simulation?.type === 'buzzer',
-  emitVisualState: ({ pinMapping, baseNetState }) => ({ sounding: isLit(pinMapping, 'POS', 'NEG', baseNetState) }),
+  emitVisualState: ({ component, pinMapping, baseNetState, electrical }) => {
+    if (electrical) return { sounding: (electrical.currents[`${component.id}:coil`] ?? 0) > 0.008 };
+    return { sounding: isLit(pinMapping, 'POS', 'NEG', baseNetState) };
+  },
 };
 
 /** Traffic light module: each lamp is on while its pin is HIGH (the module's GND to ground). */
 const trafficLightSimulator: ComponentSimulator = {
   matches: (definition) => definition.simulation?.type === 'traffic-light',
-  emitVisualState: ({ pinMapping, baseNetState }) => ({
-    red: isLit(pinMapping, 'R', 'GND', baseNetState),
-    yellow: isLit(pinMapping, 'Y', 'GND', baseNetState),
-    green: isLit(pinMapping, 'G', 'GND', baseNetState),
-  }),
+  emitVisualState: ({ component, pinMapping, baseNetState, electrical }) => {
+    if (electrical) {
+      return {
+        red: (solvedBrightness(electrical, component.id, 'R') ?? 0) > 0,
+        yellow: (solvedBrightness(electrical, component.id, 'Y') ?? 0) > 0,
+        green: (solvedBrightness(electrical, component.id, 'G') ?? 0) > 0,
+      };
+    }
+    return {
+      red: isLit(pinMapping, 'R', 'GND', baseNetState),
+      yellow: isLit(pinMapping, 'Y', 'GND', baseNetState),
+      green: isLit(pinMapping, 'G', 'GND', baseNetState),
+    };
+  },
 };
 
 const RGB_COLOR_NAMES: Record<string, string> = {
@@ -374,7 +409,16 @@ const RGB_COLOR_NAMES: Record<string, string> = {
  */
 const rgbLedSimulator: ComponentSimulator = {
   matches: (definition) => definition.simulation?.type === 'rgb-led',
-  emitVisualState: ({ pinMapping, baseNetState }) => {
+  emitVisualState: ({ component, pinMapping, baseNetState, electrical }) => {
+    if (electrical) {
+      const [red, green, blue] = ['R', 'G', 'B'].map((channel) => solvedBrightness(electrical, component.id, channel) ?? 0);
+      return {
+        red,
+        green,
+        blue,
+        color: RGB_COLOR_NAMES[`${Number(red > 0)}${Number(green > 0)}${Number(blue > 0)}`],
+      };
+    }
     const common = getConnectionState(pinMapping, 'COM', baseNetState);
     const on = (pinId: string) => {
       const state = getConnectionState(pinMapping, pinId, baseNetState);
@@ -443,7 +487,125 @@ const soundSensorSimulator: ComponentSimulator = {
   },
 };
 
+/** Slide switch: the middle pin (2) joins pin 1 when value is 0, pin 3 when value is 1. */
+const slideSwitchSimulator: ComponentSimulator = {
+  matches: (definition) => definition.simulation?.type === 'slide-switch',
+  mergeDynamicNets: ({ component, pinMapping, unionFind }) => {
+    const thrown = Number(component.state?.value ?? 0) === 1;
+    unionFind.union(getPinNetId(pinMapping, '2'), getPinNetId(pinMapping, thrown ? '3' : '1'));
+  },
+  emitVisualState: ({ component }) => ({ value: Number(component.state?.value ?? 0) === 1 ? 1 : 0 }),
+};
+
+/** PIR motion sensor: OUT is HIGH while it sees movement (set from the canvas or the live inputs). */
+const pirSimulator: ComponentSimulator = {
+  matches: (definition) => definition.simulation?.type === 'pir',
+  tick: ({ component, pinMapping, boardPinStates, boardInputStates }) => {
+    const outPin = getBoardPinId(pinMapping, 'OUT');
+    if (!outPin || !isPinMappingPowered(pinMapping, boardPinStates)) return;
+    const motion = Boolean(component.state?.motion);
+    boardPinStates[outPin] = motion;
+    boardInputStates[outPin] = motion;
+  },
+  emitVisualState: ({ component, pinMapping, boardPinStates }) => ({
+    motion: Boolean(component.state?.motion),
+    powered: isPinMappingPowered(pinMapping, boardPinStates),
+  }),
+};
+
+const SEVEN_SEGMENT_PINS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'DP'] as const;
+
+/**
+ * One-digit 7-segment display. Common cathode (common leg to GND): a segment lights while its pin
+ * is HIGH. Common anode (common leg to 5V): a segment lights while its pin is LOW.
+ */
+const sevenSegmentSimulator: ComponentSimulator = {
+  matches: (definition) => definition.simulation?.type === 'seven-segment',
+  emitVisualState: ({ component, pinMapping, baseNetState, electrical }) => {
+    if (electrical) {
+      return { values: SEVEN_SEGMENT_PINS.map((pinId) => ((solvedBrightness(electrical, component.id, pinId) ?? 0) > 0 ? 1 : 0)) };
+    }
+    const commonStates = ['COM.1', 'COM.2'].map((pinId) => getConnectionState(pinMapping, pinId, baseNetState));
+    const anode = String(component.state?.common ?? 'cathode') === 'anode';
+    const commonOn = commonStates.includes(anode ? 'HIGH' : 'LOW');
+    const values = SEVEN_SEGMENT_PINS.map((pinId) => {
+      if (!commonOn) return 0;
+      const state = getConnectionState(pinMapping, pinId, baseNetState);
+      return (anode ? state === 'LOW' : state === 'HIGH') ? 1 : 0;
+    });
+    return { values };
+  },
+};
+
+/** Relay module: while IN is driven HIGH, COM joins NO; otherwise COM joins NC. */
+function isRelayEnergized(pinMapping: ComponentPinMapping | undefined, avrDigitalPins: Record<string, boolean> | undefined) {
+  const inPin = getBoardPinId(pinMapping, 'IN');
+  return Boolean(inPin && avrDigitalPins?.[inPin]);
+}
+
+const relaySimulator: ComponentSimulator = {
+  matches: (definition) => definition.simulation?.type === 'relay',
+  mergeDynamicNets: ({ pinMapping, unionFind, avrDigitalPins }) => {
+    const energized = isRelayEnergized(pinMapping, avrDigitalPins);
+    unionFind.union(getPinNetId(pinMapping, 'COM'), getPinNetId(pinMapping, energized ? 'NO' : 'NC'));
+  },
+  emitVisualState: ({ pinMapping, baseNetState, boardPinStates }) => ({
+    energized: getConnectionState(pinMapping, 'IN', baseNetState) === 'HIGH',
+    powered: isPinMappingPowered(pinMapping, boardPinStates),
+  }),
+};
+
+/** DC motor: spins one way while + is HIGH and - LOW, the other way when they are swapped. */
+const dcMotorSimulator: ComponentSimulator = {
+  matches: (definition) => definition.simulation?.type === 'dc-motor',
+  emitVisualState: ({ component, pinMapping, baseNetState, electrical }) => {
+    if (electrical) {
+      const current = electrical.currents[`${component.id}:winding`] ?? 0;
+      return { direction: current > 0.03 ? 1 : current < -0.03 ? -1 : 0 };
+    }
+    const positive = getConnectionState(pinMapping, 'POS', baseNetState);
+    const negative = getConnectionState(pinMapping, 'NEG', baseNetState);
+    const direction = positive === 'HIGH' && negative === 'LOW' ? 1 : positive === 'LOW' && negative === 'HIGH' ? -1 : 0;
+    return { direction };
+  },
+};
+
+/** NeoPixel ring: shows the colours the sketch last sent out of the board pin wired to DIN. */
+const neopixelSimulator: ComponentSimulator = {
+  matches: (definition) => definition.simulation?.type === 'neopixel',
+  emitVisualState: ({ component, pinMapping, boardPinStates, neopixelFrames }) => {
+    const count = Number(component.state?.pixels ?? 12);
+    const dinPin = getBoardPinId(pinMapping, 'DIN');
+    const powered = isPinMappingPowered(pinMapping, boardPinStates);
+    const frame = powered && dinPin ? neopixelFrames?.[dinPin.toUpperCase()] ?? [] : [];
+    return { colors: Array.from({ length: count }, (_, index) => frame[index] ?? '#000000'), powered };
+  },
+};
+
+/** I2C character LCD: shows what the sketch wrote to its address once SDA and SCL are wired. */
+const lcdI2cSimulator: ComponentSimulator = {
+  matches: (definition) => definition.simulation?.type === 'lcd-i2c',
+  emitVisualState: ({ component, pinMapping, boardPinStates, lcdStates }) => {
+    const address = Number(component.state?.address ?? 0x27);
+    const wired = Boolean(getBoardPinId(pinMapping, 'SDA') && getBoardPinId(pinMapping, 'SCL'));
+    const powered = isPinMappingPowered(pinMapping, boardPinStates);
+    const screen = wired && powered ? lcdStates?.[address] : undefined;
+    return {
+      lines: screen && screen.displayOn ? screen.lines : ['', ''],
+      backlight: Boolean(powered && (screen?.backlight ?? true)),
+      powered,
+    };
+  },
+};
+
 const simulatorRegistry: ComponentSimulator[] = [
+  neopixelSimulator,
+  lcdI2cSimulator,
+  slideSwitchSimulator,
+  pirSimulator,
+  sevenSegmentSimulator,
+  relaySimulator,
+  dcMotorSimulator,
   buttonSimulator,
   ledSimulator,
   resistorSimulator,

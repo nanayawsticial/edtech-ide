@@ -17,7 +17,7 @@ interface CodingEnvironmentSummaryProps {
   onBackToCircuitLab?: () => void;
 }
 
-const panelClass = 'rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,#10131f_0%,#090c16_100%)] px-4 py-4 shadow-[0_18px_46px_-36px_rgba(0,0,0,1)]';
+const panelClass = 'rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,var(--ui-immersive-from)_0%,var(--ui-immersive-to)_100%)] px-4 py-4 shadow-[0_18px_46px_-36px_rgba(0,0,0,1)]';
 const chipClass = 'inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300';
 
 export default function CodingEnvironmentSummary({
@@ -89,7 +89,7 @@ export default function CodingEnvironmentSummary({
 
   return (
     <motion.section
-      className="overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,#10131f_0%,#090c16_100%)] px-5 py-5 shadow-[0_30px_80px_-56px_rgba(0,0,0,1)] sm:px-6 sm:py-6"
+      className="overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,var(--ui-immersive-from)_0%,var(--ui-immersive-to)_100%)] px-5 py-5 shadow-[0_30px_80px_-56px_rgba(0,0,0,1)] sm:px-6 sm:py-6"
       variants={fadeInUp}
       initial="hidden"
       animate="visible"
@@ -120,7 +120,7 @@ export default function CodingEnvironmentSummary({
       </div>
 
       {simulationError ? (
-        <div className="mt-4 rounded-[18px] border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+        <div className="mt-4 rounded-[18px] border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
           {simulationError}
         </div>
       ) : null}
@@ -348,7 +348,7 @@ export default function CodingEnvironmentSummary({
                         ) : null}
                       </div>
                       {definition.simulation?.type === 'display' ? (
-                        <div className='mt-3 rounded-[18px] border border-white/10 bg-[#081424] px-3 py-3 font-mono text-[11px] leading-5 text-cyan-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'>
+                        <div className='mt-3 rounded-[18px] border border-white/10 bg-[color:var(--cl-panel)] px-3 py-3 font-mono text-[11px] leading-5 text-cyan-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'>
                           {(Array.isArray(state.displayLines) ? state.displayLines : ['OLED', 'SIM OFF']).slice(0, 5).map((line, index) => (
                             <div key={`${component.id}-line-${index}`} className='truncate'>
                               {String(line || ' ')}

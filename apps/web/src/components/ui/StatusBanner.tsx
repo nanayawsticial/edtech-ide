@@ -42,11 +42,11 @@ const toneMap: Record<StatusAppearance, Record<StatusTone, { wrapper: string; ic
       body: "text-[var(--ui-color-text-muted)]",
     },
     error: {
-      wrapper: "border-rose-300 bg-rose-50",
-      iconWrap: "text-rose-500",
+      wrapper: "border-rose-400/30 bg-rose-500/10",
+      iconWrap: "text-rose-300",
       icon: <AlertCircle size={16} />,
-      title: "text-rose-700",
-      body: "text-rose-600",
+      title: "text-rose-200",
+      body: "text-rose-300",
     },
   },
   immersive: {

@@ -66,7 +66,7 @@ export function ConfirmDialog({
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] border border-amber-200 bg-amber-50 text-[var(--ui-color-warning)]">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] border border-amber-400/30 bg-amber-400/10 text-[var(--ui-color-warning)]">
                 <AlertTriangle size={18} />
               </div>
               <div className="space-y-2">

@@ -468,7 +468,7 @@ export default function LessonPanel() {
   return (
     <aside
       ref={panelRef}
-      className="ui-always-dark pointer-events-auto absolute z-[60] flex w-[360px] max-w-[calc(100%-2rem)] flex-col rounded-2xl border border-white/10 bg-[#0d1322]/95 p-4 text-slate-100 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)] backdrop-blur"
+      className="ui-always-dark pointer-events-auto absolute z-[60] flex w-[360px] max-w-[calc(100%-2rem)] flex-col rounded-2xl border border-white/10 bg-[color:var(--ui-popover-bg)]/95 p-4 text-slate-100 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)] backdrop-blur"
       // Never taller than the space above its bottom edge, so the header stays on screen.
       style={{ right: panelOffset.right, bottom: panelOffset.bottom, maxHeight: `calc(100% - ${panelOffset.bottom + 8}px)` }}
       aria-label="Lesson guide"

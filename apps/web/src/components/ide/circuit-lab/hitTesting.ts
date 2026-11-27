@@ -125,12 +125,12 @@ function hitTestComponents(scene: SceneGraph, worldPoint: Point): HitResult {
   return null;
 }
 
-function hitTestWires(scene: SceneGraph, worldPoint: Point, scale: number): HitResult {
-  const tolerance = toWorldRadius(scale, 11.5);
+function hitTestWires(scene: SceneGraph, worldPoint: Point, scale: number, reachPixels = 11.5, onlyWire: WorldWireNode | null = null): HitResult {
+  const tolerance = toWorldRadius(scale, reachPixels);
   let closest: HitResult = null;
   let closestDistance = Number.POSITIVE_INFINITY;
 
-  scene.wires.forEach((wire) => {
+  (onlyWire ? [onlyWire] : scene.wires).forEach((wire) => {
     const segmentHit = pickWireSegment(wire.interactionPoints, worldPoint, tolerance);
     if (!segmentHit || segmentHit.distance >= closestDistance) {
       return;
@@ -291,6 +291,14 @@ export function hitTestScene(
   }
 
   if (precisePinHit) {
+    // Wires usually lie across the breadboard, where a hole sits under almost every point. A
+    // pointer right on a wire's line picks the wire; a part's or board's own pin still wins.
+    if (precisePinHit.type === 'pin' && precisePinHit.pin.kind === 'breadboard') {
+      const wireRightHere = hitTestWires(scene, worldPoint, scale, 4.5);
+      if (wireRightHere) {
+        return wireRightHere;
+      }
+    }
     return precisePinHit;
   }
 
@@ -298,7 +306,16 @@ export function hitTestScene(
     ? hitTestComponents({ ...scene, components: scene.components.filter((component) => component.id === selectedComponentId) }, worldPoint)
     : null;
 
+  // Wires are drawn over the parts, so a wire wins over the part under it when the pointer is on
+  // the wire itself (most wires lie across the breadboard). The selected wire has a wider reach so
+  // it is easy to grab and bend; other wires need the pointer close, so parts beside them stay easy
+  // to pick.
+  const selectedWireBodyHit = selectedWire ? hitTestWires(scene, worldPoint, scale, 9, selectedWire) : null;
+  const wireOnTopHit = hitTestWires(scene, worldPoint, scale, 5.5);
+
   return (
+    selectedWireBodyHit ||
+    wireOnTopHit ||
     selectedComponentHit ||
     hitTestComponents(scene, worldPoint) ||
     hitTestPins(scene, worldPoint, scale, false) ||

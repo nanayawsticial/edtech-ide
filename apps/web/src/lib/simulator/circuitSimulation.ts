@@ -4,6 +4,8 @@ import { getComponentDefinition } from '@/lib/wiring/componentDefinitions';
 import { isGroundPinId, normalizeConnectedBoardPin } from '@/lib/wiring/componentConnectivity';
 
 import { getBoardAdapter } from './boardAdapters';
+import type { LcdState } from './lcdI2cDecoder';
+import { solveCircuitElectrically, type ElectricalResult } from './circuitElectrical';
 import {
   collectAnalogInputContributions,
   createComponentRuntimeState,
@@ -52,9 +54,15 @@ interface CircuitSimulationTickOptions {
   boardName?: string;
   busEvents?: SimulationBusEvent[];
   traceEvents?: SimulationTraceEvent[];
+  /** NeoPixel colours decoded per board pin. */
+  neopixelFrames?: Record<string, string[]>;
+  /** Character LCD screens decoded per I2C address. */
+  lcdStates?: Record<number, LcdState>;
+  /** PWM duty cycle (0..1) per board pin, for analogWrite brightness. */
+  pwmDuty?: Record<string, number>;
 }
 
-const SUPPLY_PINS = new Set(['5V', '3.3V', '3V3', 'VIN', 'IOREF']);
+const SUPPLY_PINS = new Set(['5V', '3.3V', '3V3', 'VIN', 'IOREF', 'VBUS', 'VSYS']);
 
 function isSupplyPinId(pinId: string | null | undefined) {
   return SUPPLY_PINS.has(normalizeConnectedBoardPin(pinId));
@@ -142,7 +150,8 @@ class NetUnionFind {
 function buildSimulationNetGroups(
   netlist: CircuitNetlist,
   components: ComponentData[],
-  resolvedConnections: Record<string, ComponentPinMapping>
+  resolvedConnections: Record<string, ComponentPinMapping>,
+  avrDigitalPins: Record<string, boolean>
 ) {
   const unionFind = new NetUnionFind(netlist.nets.map((net) => net.id));
 
@@ -158,6 +167,7 @@ function buildSimulationNetGroups(
       definition,
       pinMapping: resolvedConnections[component.id],
       unionFind,
+      avrDigitalPins,
     });
   });
 
@@ -249,8 +259,26 @@ function evaluateSimulationNetState(
     }
   });
 
+  return classifyNet({
+    ...net,
+    highSources,
+    lowSources,
+    weakHighSources,
+    weakLowSources,
+    analogSources,
+  });
+}
+
+/**
+ * The state of a net from what drives it. A strong drive (an output pin, 5V, GND) beats a weak one
+ * (a pull-up or pull-down, or a signal arriving through a resistor), as on a real board. Only two
+ * strong drives against each other are a conflict (a short). Two weak pulls against each other,
+ * like a voltage divider, leave a digital reading undecided.
+ */
+function classifyNet(net: SimulationNetState): SimulationNetState {
+  const { highSources, lowSources, weakHighSources, weakLowSources, analogSources } = net;
   let electricalState: PinElectricalState = 'highZ';
-  if ((highSources.length > 0 || weakHighSources.length > 0) && (lowSources.length > 0 || weakLowSources.length > 0)) {
+  if (highSources.length > 0 && lowSources.length > 0) {
     electricalState = 'conflict';
   } else if (highSources.length > 0) {
     electricalState = 'high';
@@ -258,6 +286,8 @@ function evaluateSimulationNetState(
     electricalState = 'low';
   } else if (analogSources.length > 0) {
     electricalState = 'analog';
+  } else if (weakHighSources.length > 0 && weakLowSources.length > 0) {
+    electricalState = 'highZ';
   } else if (weakHighSources.length > 0) {
     electricalState = 'pullup';
   } else if (weakLowSources.length > 0) {
@@ -268,12 +298,72 @@ function evaluateSimulationNetState(
     ...net,
     state: logicalStateFromElectricalState(electricalState),
     electricalState,
-    highSources,
-    lowSources,
-    weakHighSources,
-    weakLowSources,
-    analogSources,
   };
+}
+
+/** What a net passes on through a resistor: its driven level, or null when nothing decides it. */
+function levelPassedOn(net: SimulationNetState): 'HIGH' | 'LOW' | null {
+  switch (net.electricalState) {
+    case 'high':
+    case 'pullup':
+      return 'HIGH';
+    case 'low':
+    case 'pulldown':
+      return 'LOW';
+    default:
+      return null;
+  }
+}
+
+/**
+ * A resistor carries a level from one side to the other, but only weakly: the far side takes it
+ * unless something drives that side directly. That is what lets an LED with a series resistor light,
+ * and pull-up and pull-down resistors set an input pin until a button drives it. Levels pass along
+ * chains of resistors; opposite levels meeting on a net leave it undecided.
+ */
+function propagateThroughResistors(
+  nets: SimulationNetState[],
+  components: ComponentData[],
+  resolvedConnections: Record<string, ComponentPinMapping>
+): SimulationNetState[] {
+  const indexByBaseNet = new Map<string, number>();
+  nets.forEach((net, index) => net.baseNetIds.forEach((baseNetId) => indexByBaseNet.set(baseNetId, index)));
+
+  const links: Array<{ id: string; a: number; b: number }> = [];
+  components.forEach((component) => {
+    const definition = getComponentDefinition(component.type);
+    if (definition?.simulation?.model !== 'resistor') return;
+    const pinMapping = resolvedConnections[component.id];
+    const pinIds = definition.pins.map((pin) => pin.id);
+    if (pinIds.length !== 2) return;
+    const [a, b] = pinIds.map((pinId) => {
+      const netId = pinMapping?.[pinId]?.netId;
+      return netId ? indexByBaseNet.get(netId) : undefined;
+    });
+    if (a === undefined || b === undefined || a === b) return;
+    links.push({ id: component.id, a, b });
+  });
+  if (links.length === 0) return nets;
+
+  const result = nets.map((net) => ({ ...net, weakHighSources: [...net.weakHighSources], weakLowSources: [...net.weakLowSources] }));
+  for (let pass = 0, changed = true; changed && pass <= links.length + 1; pass += 1) {
+    changed = false;
+    for (const link of links) {
+      for (const [from, to] of [[link.a, link.b], [link.b, link.a]] as const) {
+        const target = result[to];
+        if (target.highSources.length > 0 || target.lowSources.length > 0) continue;
+        const level = levelPassedOn(result[from]);
+        if (!level) continue;
+        const label = `${link.id}:via-resistor`;
+        const list = level === 'HIGH' ? target.weakHighSources : target.weakLowSources;
+        if (list.includes(label)) continue;
+        list.push(label);
+        result[to] = classifyNet(target);
+        changed = true;
+      }
+    }
+  }
+  return result;
 }
 
 function buildBoardPinStates(simulationNets: SimulationNetState[], avrElectricalPins: Record<string, PinElectricalState>) {
@@ -393,10 +483,17 @@ export function simulateCircuitTick({
   boardName = 'Arduino Uno',
   busEvents = [],
   traceEvents = [],
+  neopixelFrames = {},
+  lcdStates = {},
+  pwmDuty = {},
 }: CircuitSimulationTickOptions): CircuitSimulationTickResult {
   const board = getBoardAdapter(boardName);
-  const groupedNets = buildSimulationNetGroups(netlist, components, resolvedConnections);
-  const evaluatedNets = groupedNets.map((net) => evaluateSimulationNetState(net, avrDigitalPins, avrElectricalPins));
+  const groupedNets = buildSimulationNetGroups(netlist, components, resolvedConnections, avrDigitalPins);
+  const evaluatedNets = propagateThroughResistors(
+    groupedNets.map((net) => evaluateSimulationNetState(net, avrDigitalPins, avrElectricalPins)),
+    components,
+    resolvedConnections
+  );
   const baseNetState = new Map<string, LogicalNetState>();
 
   evaluatedNets.forEach((net) => {
@@ -425,6 +522,27 @@ export function simulateCircuitTick({
 
   Object.assign(boardElectricalStates, sampledElectricalStates);
 
+  // Electrical solve: currents and voltages for LEDs, displays, motors and analog readings.
+  let electrical: ElectricalResult | null = null;
+  try {
+    electrical = solveCircuitElectrically({ nets: evaluatedNets, components, resolvedConnections, avrDigitalPins, avrElectricalPins, pwmDuty });
+  } catch (error) {
+    console.warn('Circuit Lab electrical solve failed; using logic levels only.', error);
+  }
+  if (electrical) {
+    // An analog pin on a net the solver drives (a potentiometer divider, say) reads that voltage,
+    // unless a sensor module already set it.
+    evaluatedNets.forEach((net) => {
+      const volts = electrical!.netVoltages[net.id];
+      if (volts === null || volts === undefined) return;
+      net.boardPins
+        .filter((pinId) => /^A\d$/.test(pinId) && !(pinId in boardAnalogStates))
+        .forEach((pinId) => {
+          boardAnalogStates[pinId] = Math.max(0, Math.min(1023, Math.round((volts / 5) * 1023)));
+        });
+    });
+  }
+
   const componentStatePatches: Record<string, Record<string, unknown>> = {};
 
   components.forEach((component) => {
@@ -449,6 +567,9 @@ export function simulateCircuitTick({
       runtimeState: nextRuntimeState,
       componentStatePatches,
       busEvents,
+      neopixelFrames,
+      lcdStates,
+      electrical,
       tick,
     };
 
@@ -474,7 +595,13 @@ export function simulateCircuitTick({
   ]);
 
   const pinDetails = buildPinDetails(trackedPins, boardPinStates, boardElectricalStates, evaluatedNets);
-  const warnings = buildWarnings(evaluatedNets, board.capabilities);
+  const electricalWarnings = electrical?.warnings ?? [];
+  const hasShortWarning = electricalWarnings.some((warning) => warning.startsWith('Short circuit'));
+  const warnings = [
+    // The solver explains a short in plain words; the logic-level conflict note would repeat it.
+    ...buildWarnings(evaluatedNets, board.capabilities).filter((warning) => !(hasShortWarning && warning.startsWith('Signal conflict'))),
+    ...electricalWarnings,
+  ];
 
   return {
     netStates,

@@ -61,7 +61,7 @@ export default function WelcomePage() {
                 <LogIn size={16} />
                 Sign in
               </Link>
-              <Link href="/register"><Button className="bg-[linear-gradient(135deg,#66a7ff,#7b61ff)] text-white hover:opacity-90">Get Started</Button></Link>
+              <Link href="/register"><Button className="bg-[linear-gradient(135deg,var(--brand-cta-from),var(--brand-cta-to))] text-white hover:opacity-90">Get Started</Button></Link>
             </>
           )
         }
@@ -79,7 +79,7 @@ export default function WelcomePage() {
               Virtual simulator and real hardware
             </div>
 
-            <h1 className="max-w-[14ch] bg-[linear-gradient(135deg,#68b0ff_0%,#7d6cff_38%,#b176ff_64%,#ff8ca1_100%)] bg-clip-text text-[3.2rem] font-bold leading-[1.02] tracking-[-0.06em] text-transparent sm:text-[4.4rem] lg:text-[5.5rem]">
+            <h1 className="max-w-[14ch] bg-[linear-gradient(135deg,var(--brand-hero-1)_0%,var(--brand-hero-2)_38%,var(--brand-hero-3)_64%,var(--brand-hero-4)_100%)] bg-clip-text text-[3.2rem] font-bold leading-[1.02] tracking-[-0.06em] text-transparent sm:text-[4.4rem] lg:text-[5.5rem]">
               Build circuits. Learn faster. Upload for real.
             </h1>
 
@@ -88,7 +88,7 @@ export default function WelcomePage() {
             </p>
 
             <div className="flex flex-wrap items-center justify-center gap-4">
-              <Link href="/courses"><Button className="min-w-[190px] bg-[linear-gradient(135deg,#66a7ff,#7b61ff)] text-white hover:opacity-90" icon={<BookOpen size={18} />}>Study a Course</Button></Link>
+              <Link href="/courses"><Button className="min-w-[190px] bg-[linear-gradient(135deg,var(--brand-cta-from),var(--brand-cta-to))] text-white hover:opacity-90" icon={<BookOpen size={18} />}>Study a Course</Button></Link>
             </div>
           </motion.section>
 
@@ -104,7 +104,7 @@ export default function WelcomePage() {
                   onClick={() => setProjectId(null)}
                   className="block overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.03] text-left backdrop-blur-xl transition-all duration-300 hover:-translate-y-1.5 hover:border-white/18 hover:shadow-[0_28px_72px_-40px_rgba(0,0,0,0.88)]"
                 >
-                <div className="aspect-[16/9] overflow-hidden border-b border-white/8 bg-[#0a0c18]">
+                <div className="aspect-[16/9] overflow-hidden border-b border-white/8 bg-[color:var(--ui-immersive-to)]">
                   <img src={panel.image} alt={panel.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
                 </div>
 

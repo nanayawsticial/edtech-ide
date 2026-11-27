@@ -12,7 +12,7 @@
         "lint": "eslint",
         "validate:blockly-generators": "node scripts/validate-blockly-generators.mjs",
         "validate:blockly-codegen": "node scripts/validate-blockly-codegen.mjs",
-        "test": "npm run validate:blockly-generators && npm run validate:blockly-codegen && npm run validate:circuit-metadata && npm run validate:circuit-lab && npm run validate:lessons && npm run validate:workspace-draft && npm run validate:project-file && npm run validate:stk-bridge && npm run validate:raw-repl && npm run validate:board-identity && npm run validate:wire-layout",
+        "test": "npm run validate:blockly-generators && npm run validate:blockly-codegen && npm run validate:circuit-metadata && npm run validate:circuit-lab && npm run validate:lessons && npm run validate:workspace-draft && npm run validate:project-file && npm run validate:stk-bridge && npm run validate:raw-repl && npm run validate:board-identity && npm run validate:wire-layout && npm run validate:wire-routing && npm run validate:circuit-sim && npm run validate:protocol-decoders && npm run validate:dc-solver",
         "test:smoke": "playwright test",
         "start:stable": "npm run build && next start",
         "generate:circuit-metadata": "node scripts/generate-circuit-component-metadata.mjs",
@@ -24,7 +24,11 @@
         "validate:stk-bridge": "node scripts/validate-stk-bridge.mjs",
     "validate:raw-repl": "node scripts/validate-raw-repl.mjs",
     "validate:board-identity": "node scripts/validate-board-identity.mjs",
-        "validate:wire-layout": "node scripts/validate-wire-layout.mjs"
+        "validate:wire-layout": "node scripts/validate-wire-layout.mjs",
+        "validate:wire-routing": "node scripts/validate-wire-routing.mjs",
+        "validate:circuit-sim": "node scripts/validate-circuit-sim.mjs",
+        "validate:protocol-decoders": "node scripts/validate-protocol-decoders.mjs",
+        "validate:dc-solver": "node scripts/validate-dc-solver.mjs"
     },
     "dependencies": {
         "@monaco-editor/react": "^4.7.0",

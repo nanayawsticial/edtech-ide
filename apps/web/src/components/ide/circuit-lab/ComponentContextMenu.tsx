@@ -24,7 +24,7 @@ export function ComponentContextMenu({ position, onDelete, onRotate, onClose }: 
         }}
       />
       <div
-        className="fixed z-[310] min-w-[140px] flex flex-col gap-1 rounded-xl border border-white/10 bg-[#08111d]/95 p-1.5 shadow-[0_22px_48px_-26px_rgba(2,6,23,0.95)] backdrop-blur-xl"
+        className="fixed z-[310] min-w-[140px] flex flex-col gap-1 rounded-xl border border-white/10 bg-[color:var(--cl-panel)]/95 p-1.5 shadow-[0_22px_48px_-26px_rgba(2,6,23,0.95)] backdrop-blur-xl"
         style={{ left: position.x, top: position.y }}
       >
         <button

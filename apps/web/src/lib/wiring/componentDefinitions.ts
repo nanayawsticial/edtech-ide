@@ -68,6 +68,11 @@ function applyCanonicalGeometry(definition: ComponentDefinition) {
   });
 }
 
+/** Plain placeholder picture for parts the canvas draws itself (used only where a static SVG is needed). */
+function simpleBoxSvg(width: number, height: number, fill: string, label: string) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}"><rect x="1" y="1" width="${width - 2}" height="${height - 2}" rx="4" fill="${fill}" stroke="#94a3b8" stroke-width="1"/><text x="${width / 2}" y="${height / 2 + 4}" font-size="11" text-anchor="middle" fill="#f8fafc" font-family="monospace">${label}</text></svg>`;
+}
+
 const ledSvg = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 57.6 86.4" width="57.6" height="86.4">
   <defs>
@@ -531,6 +536,188 @@ const definitions: ComponentDefinition[] = [
     description: 'Microphone module: AO gives the loudness, DO switches when it is loud.',
     mountStyle: 'breadboard',
   },
+  {
+    id: 'SLIDE_SWITCH',
+    name: 'Slide Switch',
+    category: 'Basic',
+    svg: simpleBoxSvg(32.13, 34.89, '#1f2937', 'SW'),
+    size: { width: 32.13, height: 34.89 },
+    pins: [
+      { id: '1', name: '1', type: 'passive', position: { x: 6.5, y: 34 } },
+      { id: '2', name: 'COM', type: 'passive', position: { x: 16, y: 34 } },
+      { id: '3', name: '3', type: 'passive', position: { x: 25.5, y: 34 } },
+    ],
+    defaultProperties: { value: 0 },
+    simulation: { type: 'slide-switch', model: 'spdt-switch' },
+    aliases: ['slide-switch', 'slide_switch', 'switch', 'spdt'],
+    description: 'Click it to slide: the middle pin joins pin 1 or pin 3.',
+    mountStyle: 'breadboard',
+  },
+  {
+    id: 'PIR',
+    name: 'PIR Motion Sensor',
+    category: 'Sensors',
+    svg: simpleBoxSvg(90.72, 92.41, '#065f46', 'PIR'),
+    size: { width: 90.72, height: 92.41 },
+    pins: [
+      { id: 'VCC', name: 'VCC', type: 'power', position: { x: 36.178, y: 92 } },
+      { id: 'OUT', name: 'OUT', type: 'digital', position: { x: 45.9175, y: 92 } },
+      { id: 'GND', name: 'GND', type: 'ground', position: { x: 55.6415, y: 92 } },
+    ],
+    defaultProperties: { motion: false },
+    simulation: { type: 'pir', model: 'hc-sr501' },
+    aliases: ['pir', 'motion-sensor', 'pir-sensor', 'hc-sr501'],
+    description: 'Motion sensor: OUT goes HIGH while it sees movement. Click it to wave.',
+    mountStyle: 'breadboard',
+  },
+  {
+    id: 'SEVEN_SEGMENT',
+    name: '7-Segment Display',
+    category: 'Displays',
+    svg: simpleBoxSvg(47.44, 83.16, '#111827', '8'),
+    size: { width: 47.44, height: 83.16 },
+    pins: [
+      { id: 'A', name: 'A', type: 'digital', position: { x: 33.32, y: 3.78 } },
+      { id: 'B', name: 'B', type: 'digital', position: { x: 42.92, y: 3.78 } },
+      { id: 'C', name: 'C', type: 'digital', position: { x: 33.32, y: 71.82 } },
+      { id: 'D', name: 'D', type: 'digital', position: { x: 14.12, y: 71.82 } },
+      { id: 'E', name: 'E', type: 'digital', position: { x: 4.52, y: 71.82 } },
+      { id: 'F', name: 'F', type: 'digital', position: { x: 14.12, y: 3.78 } },
+      { id: 'G', name: 'G', type: 'digital', position: { x: 4.52, y: 3.78 } },
+      { id: 'DP', name: 'DP', type: 'digital', position: { x: 42.92, y: 71.82 } },
+      { id: 'COM.1', name: 'COM', type: 'passive', position: { x: 23.72, y: 71.82 } },
+      { id: 'COM.2', name: 'COM', type: 'passive', position: { x: 23.72, y: 3.78 } },
+    ],
+    defaultProperties: { common: 'cathode' },
+    simulation: { type: 'seven-segment', model: 'single-digit' },
+    aliases: ['7-segment', '7segment', 'seven-segment', 'seven_segment'],
+    description: 'One digit of eight LEDs (A to G and the dot) sharing a common leg.',
+    mountStyle: 'breadboard',
+  },
+  {
+    id: 'RELAY',
+    name: 'Relay Module',
+    category: 'Actuators',
+    svg: simpleBoxSvg(110, 64, '#1d4ed8', 'RELAY'),
+    size: { width: 110, height: 64 },
+    pins: [
+      { id: 'IN', name: 'IN', type: 'digital', position: { x: 0, y: 22.4 } },
+      { id: 'VCC', name: 'VCC', type: 'power', position: { x: 0, y: 32 } },
+      { id: 'GND', name: 'GND', type: 'ground', position: { x: 0, y: 41.6 } },
+      { id: 'NO', name: 'NO', type: 'passive', position: { x: 110, y: 14 } },
+      { id: 'COM', name: 'COM', type: 'passive', position: { x: 110, y: 32 } },
+      { id: 'NC', name: 'NC', type: 'passive', position: { x: 110, y: 50 } },
+    ],
+    defaultProperties: { energized: false },
+    simulation: { type: 'relay', model: 'relay-module' },
+    aliases: ['relay', 'relay-module', 'relay_module'],
+    description: 'A switch worked by a pin: IN HIGH joins COM to NO, otherwise COM to NC.',
+    mountStyle: 'free',
+  },
+  {
+    id: 'DC_MOTOR',
+    name: 'DC Motor',
+    category: 'Actuators',
+    svg: simpleBoxSvg(80, 72, '#6b7280', 'M'),
+    size: { width: 80, height: 72 },
+    pins: [
+      { id: 'POS', name: '+', type: 'passive', position: { x: 30.4, y: 70 } },
+      { id: 'NEG', name: '-', type: 'passive', position: { x: 49.6, y: 70 } },
+    ],
+    defaultProperties: { direction: 0 },
+    simulation: { type: 'dc-motor', model: 'dc-motor' },
+    aliases: ['motor', 'dc-motor', 'dc_motor'],
+    description: 'Spins while one terminal is HIGH and the other LOW; swap them to reverse.',
+    mountStyle: 'free',
+  },
+  {
+    id: 'NEOPIXEL_RING',
+    name: 'NeoPixel Ring',
+    category: 'Displays',
+    svg: simpleBoxSvg(117.55, 128.89, '#14532d', 'RING'),
+    size: { width: 117.55, height: 128.89 },
+    pins: [
+      { id: 'GND', name: 'GND', type: 'ground', position: { x: 44.37, y: 128.89 } },
+      { id: 'VCC', name: 'VCC', type: 'power', position: { x: 53.98, y: 128.89 } },
+      { id: 'DIN', name: 'DIN', type: 'digital', position: { x: 63.58, y: 128.89 } },
+      { id: 'DOUT', name: 'DOUT', type: 'digital', position: { x: 73.18, y: 128.89 } },
+    ],
+    defaultProperties: { pixels: 12 },
+    simulation: { type: 'neopixel', model: 'ws2812-ring' },
+    aliases: ['neopixel', 'neopixel-ring', 'ws2812', 'led-ring'],
+    description: 'Twelve WS2812 colour LEDs in a ring, driven from one pin (Adafruit NeoPixel library).',
+    mountStyle: 'free',
+  },
+  {
+    id: 'LCD1602',
+    name: 'LCD 16x2 (I2C)',
+    category: 'Displays',
+    svg: simpleBoxSvg(302.4, 136.08, '#14532d', 'LCD 16x2'),
+    size: { width: 302.4, height: 136.08 },
+    pins: [
+      { id: 'GND', name: 'GND', type: 'ground', position: { x: 4, y: 32 } },
+      { id: 'VCC', name: 'VCC', type: 'power', position: { x: 4, y: 41.5 } },
+      { id: 'SDA', name: 'SDA', type: 'analog', position: { x: 4, y: 51 } },
+      { id: 'SCL', name: 'SCL', type: 'analog', position: { x: 4, y: 60.5 } },
+    ],
+    defaultProperties: { address: 0x27 },
+    simulation: { type: 'lcd-i2c', model: 'lcd1602-pcf8574' },
+    aliases: ['lcd', 'lcd1602', 'lcd-i2c', 'lcd16x2'],
+    description: 'Two rows of 16 characters over I2C (LiquidCrystal_I2C library, address 0x27 or 0x3F).',
+    mountStyle: 'free',
+  },
+  {
+    id: 'RASPBERRY_PI_PICO_2W',
+    name: 'Raspberry Pi Pico 2 W',
+    category: 'Boards',
+    svg: simpleBoxSvg(79.4, 192.8, '#0f7a3d', 'Pico 2 W'),
+    size: { width: 79.4, height: 192.8 },
+    pins: [
+      { id: 'GP0', name: 'GP0', type: 'digital', position: { x: 6.09, y: 5.2 } },
+      { id: 'GP1', name: 'GP1', type: 'digital', position: { x: 6.09, y: 14.8 } },
+      { id: 'GND.1', name: 'GND', type: 'ground', position: { x: 6.09, y: 24.4 } },
+      { id: 'GP2', name: 'GP2', type: 'digital', position: { x: 6.09, y: 34.0 } },
+      { id: 'GP3', name: 'GP3', type: 'digital', position: { x: 6.09, y: 43.6 } },
+      { id: 'GP4', name: 'GP4', type: 'digital', position: { x: 6.09, y: 53.2 } },
+      { id: 'GP5', name: 'GP5', type: 'digital', position: { x: 6.09, y: 62.8 } },
+      { id: 'GND.2', name: 'GND', type: 'ground', position: { x: 6.09, y: 72.4 } },
+      { id: 'GP6', name: 'GP6', type: 'digital', position: { x: 6.09, y: 82.0 } },
+      { id: 'GP7', name: 'GP7', type: 'digital', position: { x: 6.09, y: 91.6 } },
+      { id: 'GP8', name: 'GP8', type: 'digital', position: { x: 6.09, y: 101.2 } },
+      { id: 'GP9', name: 'GP9', type: 'digital', position: { x: 6.09, y: 110.8 } },
+      { id: 'GND.3', name: 'GND', type: 'ground', position: { x: 6.09, y: 120.4 } },
+      { id: 'GP10', name: 'GP10', type: 'digital', position: { x: 6.09, y: 130.0 } },
+      { id: 'GP11', name: 'GP11', type: 'digital', position: { x: 6.09, y: 139.6 } },
+      { id: 'GP12', name: 'GP12', type: 'digital', position: { x: 6.09, y: 149.2 } },
+      { id: 'GP13', name: 'GP13', type: 'digital', position: { x: 6.09, y: 158.8 } },
+      { id: 'GND.4', name: 'GND', type: 'ground', position: { x: 6.09, y: 168.4 } },
+      { id: 'GP14', name: 'GP14', type: 'digital', position: { x: 6.09, y: 178.0 } },
+      { id: 'GP15', name: 'GP15', type: 'digital', position: { x: 6.09, y: 187.6 } },
+      { id: 'VBUS', name: 'VBUS', type: 'power', position: { x: 73.3, y: 5.2 } },
+      { id: 'VSYS', name: 'VSYS', type: 'power', position: { x: 73.3, y: 14.8 } },
+      { id: 'GND.5', name: 'GND', type: 'ground', position: { x: 73.3, y: 24.4 } },
+      { id: '3V3_EN', name: '3V3_EN', type: 'passive', position: { x: 73.3, y: 34.0 } },
+      { id: '3V3', name: '3V3', type: 'power', position: { x: 73.3, y: 43.6 } },
+      { id: 'ADC_VREF', name: 'ADC_VREF', type: 'passive', position: { x: 73.3, y: 53.2 } },
+      { id: 'GP28', name: 'GP28', type: 'analog', position: { x: 73.3, y: 62.8 } },
+      { id: 'GND.6', name: 'AGND', type: 'ground', position: { x: 73.3, y: 72.4 } },
+      { id: 'GP27', name: 'GP27', type: 'analog', position: { x: 73.3, y: 82.0 } },
+      { id: 'GP26', name: 'GP26', type: 'analog', position: { x: 73.3, y: 91.6 } },
+      { id: 'RUN', name: 'RUN', type: 'passive', position: { x: 73.3, y: 101.2 } },
+      { id: 'GP22', name: 'GP22', type: 'digital', position: { x: 73.3, y: 110.8 } },
+      { id: 'GND.7', name: 'GND', type: 'ground', position: { x: 73.3, y: 120.4 } },
+      { id: 'GP21', name: 'GP21', type: 'digital', position: { x: 73.3, y: 130.0 } },
+      { id: 'GP20', name: 'GP20', type: 'digital', position: { x: 73.3, y: 139.6 } },
+      { id: 'GP19', name: 'GP19', type: 'digital', position: { x: 73.3, y: 149.2 } },
+      { id: 'GP18', name: 'GP18', type: 'digital', position: { x: 73.3, y: 158.8 } },
+      { id: 'GND.8', name: 'GND', type: 'ground', position: { x: 73.3, y: 168.4 } },
+      { id: 'GP17', name: 'GP17', type: 'digital', position: { x: 73.3, y: 178.0 } },
+      { id: 'GP16', name: 'GP16', type: 'digital', position: { x: 73.3, y: 187.6 } },
+    ],
+    aliases: ['pico', 'pico-2w', 'pico2w', 'raspberry-pi-pico-2w', 'pico_2w'],
+    description: 'Wi-Fi microcontroller for the MicroPython lessons. Circuit Lab shows its wiring; the code runs on the real board.',
+    mountStyle: 'free',
+  },
 ];
 
 definitions.forEach((definition) => applyCanonicalGeometry(definition));
@@ -578,6 +765,7 @@ function assignFootprint(id: string, footprint: ComponentFootprint) {
 
 assignFootprint('BREADBOARD', { type: 'board', pins: [] });
 assignFootprint('ARDUINO_UNO', { type: 'board', pins: [] });
+assignFootprint('RASPBERRY_PI_PICO_2W', { type: 'board', pins: [] });
 assignFootprint(
   'LED',
   createFootprint('breadboard-mountable', getDefinitionPins('LED'), {
@@ -664,6 +852,29 @@ assignFootprint(
 // with the board standing up, so they are wired with jumper wires instead (like the servo).
 assignFootprint('LDR', { type: 'freeform', pins: [] });
 assignFootprint('SOUND_SENSOR', { type: 'freeform', pins: [] });
+assignFootprint(
+  'SLIDE_SWITCH',
+  createFootprint('breadboard-mountable', getDefinitionPins('SLIDE_SWITCH'), {
+    allowedZones: STRIP_ONLY_ZONES,
+    supportedRotations: [0, 180],
+    minColumnSpan: 3,
+  })
+);
+assignFootprint(
+  'PIR',
+  createFootprint('module', getDefinitionPins('PIR'), {
+    allowedZones: STRIP_ONLY_ZONES,
+    supportedRotations: [0, 180],
+    minColumnSpan: 3,
+  })
+);
+// The 7-segment's two pin rows sit 18 mm apart in the Wokwi drawing, which does not land on
+// breadboard holes, so it is wired with jumpers like the relay module and the motor.
+assignFootprint('SEVEN_SEGMENT', { type: 'freeform', pins: [] });
+assignFootprint('RELAY', { type: 'freeform', pins: [] });
+assignFootprint('DC_MOTOR', { type: 'freeform', pins: [] });
+assignFootprint('NEOPIXEL_RING', { type: 'freeform', pins: [] });
+assignFootprint('LCD1602', { type: 'freeform', pins: [] });
 
 export function registerComponent(definition: ComponentDefinition) {
   componentRegistry.set(definition.id, definition);

@@ -44,7 +44,7 @@ export default function AuthPageShell({
           </Link>
           <Link
             href="/projects/select-mode"
-            className="inline-flex min-h-11 items-center gap-2 rounded-[18px] border border-[color:var(--ui-border-strong)] bg-[color:var(--ui-color-primary)] px-4 py-2.5 text-sm font-semibold tracking-[-0.01em] text-white transition-[border-color,background-color,transform] duration-150 hover:-translate-y-0.5 hover:opacity-90"
+            className="inline-flex min-h-11 items-center gap-2 rounded-[18px] border border-[color:var(--ui-border-strong)] bg-[color:var(--ui-color-primary-fill)] px-4 py-2.5 text-sm font-semibold tracking-[-0.01em] text-white transition-[border-color,background-color,transform] duration-150 hover:-translate-y-0.5 hover:opacity-90"
           >
             Start project
             <ArrowRight size={16} />

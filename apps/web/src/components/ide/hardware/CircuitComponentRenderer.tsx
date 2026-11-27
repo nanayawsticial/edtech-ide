@@ -91,7 +91,7 @@ function PotentiometerVisual({
         className="pointer-events-none absolute left-[39px] top-[30px] h-8 w-8 rounded-full border-2 border-white/35"
         style={{ transform: `rotate(${rotation}deg)` }}
       >
-        <div className="absolute left-1/2 top-0 h-3 w-1 -translate-x-1/2 rounded-full bg-slate-950" />
+        <div className="absolute left-1/2 top-0 h-3 w-1 -translate-x-1/2 rounded-full bg-[#020617]" />
       </div>
       <input
         type="range"

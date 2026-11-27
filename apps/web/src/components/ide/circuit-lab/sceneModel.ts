@@ -24,7 +24,7 @@ import { getComponentVisualState } from '@/lib/simulator/componentVisualState';
 
 import type { SceneGraph, WorldComponentNode, WorldPinNode, WorldWireNode } from './sceneTypes';
 import { calculateRenderedWirePoints } from './wireBundles';
-import { buildWireRoutePoints, getWireHandles } from './wireRouting';
+import { buildRoutePoints, getFreeWireHandles, getWireHandles, getWireRouting, type WireRouting } from './wireRouting';
 
 const UNO_DEFINITION = getComponentDefinition('ARDUINO_UNO');
 const BREADBOARD_DEFINITION = getComponentDefinition('BREADBOARD');
@@ -33,7 +33,7 @@ const LEGACY_UNO_ANCHOR_IDS: Record<string, string> = {
   UNO_RX: 'UNO_0',
   'UNO_RESET.1': 'UNO_RESET',
 };
-const SUPPLY_PINS = new Set(['5V', '3.3V', '3V3', 'VIN', 'IOREF']);
+const SUPPLY_PINS = new Set(['5V', '3.3V', '3V3', 'VIN', 'IOREF', 'VBUS', 'VSYS']);
 
 type SceneSimulationState = Pick<
   CircuitSimulationState,
@@ -197,7 +197,15 @@ export interface BuildSceneOptions {
   hoveredWireId?: string | null;
   draggingComponentId?: string | null;
   positionOverrides?: Record<string, Point>;
-  wireWaypointOverrides?: Record<string, Point[]>;
+  /** Parts picked with a selection box (drawn as selected). */
+  selectedComponentIds?: ReadonlySet<string>;
+  /** Bends shown while a wire is being edited, before the edit is committed. */
+  wireWaypointOverrides?: Record<string, WireWaypointOverride>;
+}
+
+export interface WireWaypointOverride {
+  waypoints: Point[];
+  routing?: WireRouting;
 }
 
 export function buildSceneGraph(
@@ -287,7 +295,9 @@ export function buildSceneGraph(
     const componentPins: WorldPinNode[] = [];
     const visualState = getComponentVisualState(effectiveComponent, simulationState);
 
-    if (normalizedType === 'ARDUINO_UNO') {
+    // Boards (the Uno, the Pico 2 W) name their pins by board ("UNO_13", "PICO_2W_GP15") rather than by part.
+    const isBoard = definition.footprint?.type === 'board' && normalizedType !== 'BREADBOARD';
+    if (isBoard) {
       definition.pins.forEach((pinDefinition) => {
         const position = getComponentPinPosition(effectiveComponent, definition, pinDefinition.id);
         if (!position) {
@@ -303,8 +313,8 @@ export function buildSceneGraph(
           kind: 'board',
           isMounted: false,
           type: inferPinType(pinDefinition.type),
-          label: `Arduino Uno - ${formatBoardPinLabel(pinDefinition.id)}`,
-          shortLabel: formatBoardPinLabel(pinDefinition.id),
+          label: `${definition.name} - ${normalizedType === 'ARDUINO_UNO' ? formatBoardPinLabel(pinDefinition.id) : pinDefinition.name}`,
+          shortLabel: normalizedType === 'ARDUINO_UNO' ? formatBoardPinLabel(pinDefinition.id) : pinDefinition.name,
           position,
           signalState: getBoardPinSignalState(pinDefinition.id, nodeId, nodeSignalStates, simulationState),
         };
@@ -337,7 +347,7 @@ export function buildSceneGraph(
       });
     }
 
-    const isPowered = normalizedType === 'ARDUINO_UNO'
+    const isPowered = isBoard
       ? Boolean(simulationState.ready || simulationState.running)
       : Boolean(visualState.outputHigh) || isComponentPowered(component.type, resolvedConnections[component.id], simulationState);
 
@@ -353,7 +363,7 @@ export function buildSceneGraph(
       pins: componentPins,
       isPowered,
       isHovered: options.hoveredComponentId === component.id,
-      isSelected: options.selectedComponentId === component.id,
+      isSelected: options.selectedComponentId === component.id || Boolean(options.selectedComponentIds?.has(component.id)),
       isDragging: options.draggingComponentId === component.id,
     });
   });
@@ -376,9 +386,13 @@ export function buildSceneGraph(
         return null;
       }
 
-      const waypoints = wireWaypointOverrides[net.id] ?? net.waypoints ?? [];
-      const points = buildWireRoutePoints(fromPin.position, toPin.position, waypoints);
-      const signalState = simulationState.netStates[net.id] ?? null;
+      const override = wireWaypointOverrides[net.id];
+      const waypoints = override?.waypoints ?? net.waypoints ?? [];
+      const routing = override?.routing ?? getWireRouting(net);
+      const points = buildRoutePoints(fromPin.position, toPin.position, waypoints, routing);
+      // simulationState.netStates is keyed by resolved net ids (net-1, net-2...), not wire ids,
+      // so read the state of the net this wire's end belongs to.
+      const signalState = nodeSignalStates.get(fromNodeId) ?? nodeSignalStates.get(toNodeId) ?? null;
       const wire: WorldWireNode = {
         id: net.id,
         net,
@@ -393,7 +407,11 @@ export function buildSceneGraph(
         renderedPoints: points,
         interactionPoints: points,
         waypoints,
-        bendHandles: getWireHandles(net.id, fromPin.position, toPin.position, waypoints),
+        routing,
+        bendHandles:
+          routing === 'free'
+            ? getFreeWireHandles(net.id, fromPin.position, toPin.position, waypoints)
+            : getWireHandles(net.id, fromPin.position, toPin.position, waypoints),
         isActive: signalState === 'HIGH',
         isHovered: options.hoveredWireId === net.id,
         isSelected: options.selectedWireId === net.id,
@@ -404,8 +422,10 @@ export function buildSceneGraph(
     })
     .filter((wire): wire is WorldWireNode => Boolean(wire));
 
+  // Spreading wires that share a line assumes right angles, so only older (orthogonal) wires take
+  // part. Free wires are drawn exactly where the learner put their bends.
   const renderedWirePoints = calculateRenderedWirePoints(
-    wires.map((wire) => ({ id: wire.id, points: wire.points }))
+    wires.filter((wire) => wire.routing !== 'free').map((wire) => ({ id: wire.id, points: wire.points }))
   );
   const finalizedWires = wires.map((wire) => {
     const renderedPoints = renderedWirePoints.get(wire.id) ?? wire.points;

@@ -29,6 +29,11 @@ export interface NetData {
   toAnchorId?: string | null;
   color: string;
   waypoints?: { x: number; y: number }[];
+  /**
+   * 'free': straight segments through the learner's bend points (new wires).
+   * Missing or 'orthogonal': older wires, redrawn at right angles through their waypoints.
+   */
+  routing?: 'free' | 'orthogonal';
 }
 
 export interface CircuitData {

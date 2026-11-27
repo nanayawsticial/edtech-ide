@@ -6,6 +6,7 @@ import { BreadboardSVG } from '@/lib/wiring/BreadboardSVG';
 import type { ComponentDefinition } from '@/lib/wiring/componentDefinitions';
 
 import TrafficLightVisual from './TrafficLightVisual';
+import { DcMotorVisual, Lcd1602, NeoPixelRing, PicoBoardVisual, RelayModuleVisual, SevenSegmentDigit } from './ModuleVisuals';
 
 interface ComponentPreviewProps {
   definition: ComponentDefinition;
@@ -33,6 +34,14 @@ const WOKWI_PREVIEW_COMPONENTS = new Set([
   'TRAFFIC_LIGHT',
   'LDR',
   'SOUND_SENSOR',
+  'SLIDE_SWITCH',
+  'PIR',
+  'SEVEN_SEGMENT',
+  'RELAY',
+  'DC_MOTOR',
+  'NEOPIXEL_RING',
+  'LCD1602',
+  'RASPBERRY_PI_PICO_2W',
 ]);
 
 function PreviewFrame({
@@ -136,6 +145,26 @@ function WokwiPreview({ definition }: { definition: ComponentDefinition }) {
         const SoundSensor = 'wokwi-small-sound-sensor' as React.ElementType;
         return <SoundSensor style={PREVIEW_STYLE} />;
       }
+      case 'SLIDE_SWITCH': {
+        const SlideSwitch = 'wokwi-slide-switch' as React.ElementType;
+        return <SlideSwitch style={PREVIEW_STYLE} />;
+      }
+      case 'PIR': {
+        const Pir = 'wokwi-pir-motion-sensor' as React.ElementType;
+        return <Pir style={PREVIEW_STYLE} />;
+      }
+      case 'SEVEN_SEGMENT':
+        return <SevenSegmentDigit values={[1, 1, 0, 1, 1, 0, 1, 0]} />;
+      case 'RASPBERRY_PI_PICO_2W':
+        return <PicoBoardVisual />;
+      case 'NEOPIXEL_RING':
+        return <NeoPixelRing pixels={12} colors={['#ff0000', '#ff8000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#8000ff', '#ff00ff', '#000000', '#000000', '#000000', '#000000']} />;
+      case 'LCD1602':
+        return <Lcd1602 lines={['Hello, world!', 'Sticial Studio']} backlight />;
+      case 'RELAY':
+        return <RelayModuleVisual energized powered />;
+      case 'DC_MOTOR':
+        return <DcMotorVisual />;
       default:
         return null;
     }

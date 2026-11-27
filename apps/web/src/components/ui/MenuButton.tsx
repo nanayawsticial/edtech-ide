@@ -160,7 +160,7 @@ export function MenuButton({ label, icon, items, className, menuClassName, align
           aria-label={label}
           style={{ position: "fixed", top: position.top, left: position.left, right: position.right }}
           className={cn(
-            "z-[1000] min-w-[200px] rounded-[14px] border border-white/10 bg-[#17141f] p-1.5 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.85)]",
+            "z-[1000] min-w-[200px] rounded-[14px] border border-white/10 bg-[color:var(--ui-menu-bg)] p-1.5 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.85)]",
             menuClassName
           )}
         >

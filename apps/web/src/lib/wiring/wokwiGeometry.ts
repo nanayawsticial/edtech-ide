@@ -182,7 +182,95 @@ export const TRAFFIC_LIGHT_GEOMETRY: WokwiComponentGeometry = {
   ],
 };
 
+/** wokwi-slide-switch: pin 2 is the common; the handle joins it to pin 1 (value 0) or pin 3 (value 1). */
+export const SLIDE_SWITCH_GEOMETRY: WokwiComponentGeometry = {
+  size: { width: 32.13, height: 34.89 },
+  pins: [
+    { id: '1', name: '1', position: { x: 6.5, y: 34 } },
+    { id: '2', name: 'COM', position: { x: 16, y: 34 } },
+    { id: '3', name: '3', position: { x: 25.5, y: 34 } },
+  ],
+};
+
+/** wokwi-pir-motion-sensor (HC-SR501). */
+export const PIR_GEOMETRY: WokwiComponentGeometry = {
+  size: { width: 90.72, height: 92.41 },
+  pins: [
+    { id: 'VCC', name: 'VCC', position: { x: 36.178, y: 92 } },
+    { id: 'OUT', name: 'OUT', position: { x: 45.9175, y: 92 } },
+    { id: 'GND', name: 'GND', position: { x: 55.6415, y: 92 } },
+  ],
+};
+
+/** wokwi-7segment, one digit (5611BH pinout): pins on the top and bottom edges. */
+export const SEVEN_SEGMENT_GEOMETRY: WokwiComponentGeometry = {
+  size: { width: 47.44, height: 83.16 },
+  pins: [
+    { id: 'G', name: 'G', position: { x: 4.52, y: 3.78 } },
+    { id: 'F', name: 'F', position: { x: 14.12, y: 3.78 } },
+    { id: 'COM.2', name: 'COM', position: { x: 23.72, y: 3.78 } },
+    { id: 'A', name: 'A', position: { x: 33.32, y: 3.78 } },
+    { id: 'B', name: 'B', position: { x: 42.92, y: 3.78 } },
+    { id: 'E', name: 'E', position: { x: 4.52, y: 71.82 } },
+    { id: 'D', name: 'D', position: { x: 14.12, y: 71.82 } },
+    { id: 'COM.1', name: 'COM', position: { x: 23.72, y: 71.82 } },
+    { id: 'C', name: 'C', position: { x: 33.32, y: 71.82 } },
+    { id: 'DP', name: 'DP', position: { x: 42.92, y: 71.82 } },
+  ],
+};
+
+/** One-channel relay module (drawn by the app): input header left, screw terminal right. */
+export const RELAY_GEOMETRY: WokwiComponentGeometry = {
+  size: { width: 110, height: 64 },
+  pins: [
+    { id: 'IN', name: 'IN', position: { x: 0, y: 22.4 } },
+    { id: 'VCC', name: 'VCC', position: { x: 0, y: 32 } },
+    { id: 'GND', name: 'GND', position: { x: 0, y: 41.6 } },
+    { id: 'NO', name: 'NO', position: { x: 110, y: 14 } },
+    { id: 'COM', name: 'COM', position: { x: 110, y: 32 } },
+    { id: 'NC', name: 'NC', position: { x: 110, y: 50 } },
+  ],
+};
+
+/** Small DC motor (drawn by the app): two terminals at the bottom. */
+export const DC_MOTOR_GEOMETRY: WokwiComponentGeometry = {
+  size: { width: 80, height: 72 },
+  pins: [
+    { id: 'POS', name: '+', position: { x: 30.4, y: 70 } },
+    { id: 'NEG', name: '−', position: { x: 49.6, y: 70 } },
+  ],
+};
+
+/** wokwi-led-ring with 12 NeoPixels: pins along the bottom edge. */
+export const NEOPIXEL_RING_GEOMETRY: WokwiComponentGeometry = {
+  size: { width: 117.55, height: 128.89 },
+  pins: [
+    { id: 'GND', name: 'GND', position: { x: 44.37, y: 128.89 } },
+    { id: 'VCC', name: 'VCC', position: { x: 53.98, y: 128.89 } },
+    { id: 'DIN', name: 'DIN', position: { x: 63.58, y: 128.89 } },
+    { id: 'DOUT', name: 'DOUT', position: { x: 73.18, y: 128.89 } },
+  ],
+};
+
+/** wokwi-lcd1602 with the I2C backpack (pins="i2c"). */
+export const LCD1602_GEOMETRY: WokwiComponentGeometry = {
+  size: { width: 302.4, height: 136.08 },
+  pins: [
+    { id: 'GND', name: 'GND', position: { x: 4, y: 32 } },
+    { id: 'VCC', name: 'VCC', position: { x: 4, y: 41.5 } },
+    { id: 'SDA', name: 'SDA', position: { x: 4, y: 51 } },
+    { id: 'SCL', name: 'SCL', position: { x: 4, y: 60.5 } },
+  ],
+};
+
 export const WOKWI_COMPONENT_GEOMETRY = {
+  NEOPIXEL_RING: NEOPIXEL_RING_GEOMETRY,
+  LCD1602: LCD1602_GEOMETRY,
+  SLIDE_SWITCH: SLIDE_SWITCH_GEOMETRY,
+  PIR: PIR_GEOMETRY,
+  SEVEN_SEGMENT: SEVEN_SEGMENT_GEOMETRY,
+  RELAY: RELAY_GEOMETRY,
+  DC_MOTOR: DC_MOTOR_GEOMETRY,
   ARDUINO_UNO: ARDUINO_UNO_GEOMETRY,
   BUZZER: BUZZER_GEOMETRY,
   RGB_LED: RGB_LED_GEOMETRY,

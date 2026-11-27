@@ -74,7 +74,7 @@ const chipBaseClass =
   "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em]";
 
 const utilityButtonClass =
-  "inline-flex h-10 w-10 items-center justify-center rounded-[14px] border border-[color:var(--ui-border-soft)] bg-white/82 text-[var(--ui-color-text-soft)] transition-all hover:-translate-y-0.5 hover:border-[color:var(--ui-border-strong)] hover:text-[var(--ui-color-primary)]";
+  "inline-flex h-10 w-10 items-center justify-center rounded-[14px] border border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-elevated)] text-[var(--ui-color-text-soft)] transition-all hover:-translate-y-0.5 hover:border-[color:var(--ui-border-strong)] hover:text-[var(--ui-color-primary)]";
 
 function formatBoardStatus(boardName: string) {
   return boardName.toUpperCase();
@@ -120,7 +120,7 @@ export default function TopToolbar({
     saveStatusTone === "success"
       ? "border-[color:var(--ui-color-success)]/20 bg-[color:var(--ui-color-success)]/10 text-[color:var(--ui-color-success)]"
       : saveStatusTone === "error"
-        ? "border-rose-300 bg-rose-50 text-rose-600"
+        ? "border-rose-400/30 bg-rose-500/10 text-rose-300"
         : "border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-elevated)] text-[var(--ui-color-text-muted)]";
 
   const canSwitchStudios = Boolean(showStudioToggle && activeStudioView && onChangeStudioView && environment !== "physical");
@@ -181,7 +181,7 @@ export default function TopToolbar({
               onClick={onUpload}
               disabled={isCompiling}
               title="Upload sketch (Ctrl+U)"
-              className="flex h-9 items-center gap-2 rounded-[10px] border border-[color:var(--ui-color-primary)]/26 bg-[color:var(--ui-color-primary)] px-4 text-[12px] font-semibold tracking-[0.02em] text-white shadow-[0_16px_28px_-18px_rgba(139,92,246,0.72)] transition-all hover:-translate-y-0.5 hover:bg-[color:var(--ui-color-primary)]/90 disabled:opacity-60 disabled:hover:translate-y-0"
+              className="flex h-9 items-center gap-2 rounded-[10px] border border-[color:var(--ui-color-primary)]/26 bg-[color:var(--ui-color-primary-fill)] px-4 text-[12px] font-semibold tracking-[0.02em] text-white shadow-[0_16px_28px_-18px_rgba(139,92,246,0.72)] transition-all hover:-translate-y-0.5 hover:bg-[color:var(--ui-color-primary)]/90 disabled:opacity-60 disabled:hover:translate-y-0"
             >
               <Rocket size={14} strokeWidth={2.5} />
               {isCompiling ? "Uploading..." : "Upload"}
@@ -271,7 +271,7 @@ export default function TopToolbar({
   if (isBlockWorkspace) {
     return (
       <motion.header
-        className="overflow-hidden rounded-[20px] border border-white/8 bg-[linear-gradient(180deg,#10131f_0%,#0a0d18_100%)] shadow-[0_30px_90px_-52px_rgba(0,0,0,1)] sm:rounded-[24px]"
+        className="overflow-hidden rounded-[20px] border border-white/8 bg-[linear-gradient(180deg,var(--ui-immersive-from)_0%,var(--ui-immersive-to)_100%)] shadow-[0_30px_90px_-52px_rgba(0,0,0,1)] sm:rounded-[24px]"
         variants={fadeInUp}
         initial="hidden"
         animate="visible"
@@ -355,7 +355,7 @@ export default function TopToolbar({
                 icon={<Rocket size={14} />}
                 onClick={onUpload}
                 disabled={isCompiling}
-                className="min-h-10 rounded-[14px] border border-indigo-400/30 bg-[linear-gradient(135deg,#656cf8,#4f56e8)] px-3 py-2 text-sm text-white hover:opacity-90"
+                className="min-h-10 rounded-[14px] border border-indigo-400/30 bg-[linear-gradient(135deg,var(--ide-accent-from),var(--ide-accent-to))] px-3 py-2 text-sm text-white hover:opacity-90"
               >
                 {isCompiling ? "Working..." : "Upload to Board"}
               </Button>
@@ -392,27 +392,27 @@ export default function TopToolbar({
         <div className="min-w-0 space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             {onChangeCodingMode ? (
-              <span className={`${chipBaseClass} border-[color:var(--ui-border-soft)] bg-white/80 text-[var(--ui-color-text-soft)]`}>
+              <span className={`${chipBaseClass} border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-elevated)] text-[var(--ui-color-text-soft)]`}>
                 <Sparkles size={13} className={isBlockWorkspace ? "text-[var(--ui-color-primary)]" : "text-[var(--ui-color-accent)]"} />
                 {isBlockWorkspace ? "Blocks" : "Code"}
               </span>
             ) : (
-              <span className={`${chipBaseClass} border-[color:var(--ui-border-soft)] bg-white/80 text-[var(--ui-color-text-soft)]`}>
+              <span className={`${chipBaseClass} border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-elevated)] text-[var(--ui-color-text-soft)]`}>
                 <Sparkles size={13} className="text-[var(--ui-color-accent)]" />
                 {isBlockWorkspace ? "Blocks" : "Code"}
               </span>
             )}
-            <span className={`${chipBaseClass} border-[color:var(--ui-border-soft)] bg-white/80 text-[var(--ui-color-text-soft)]`}>
+            <span className={`${chipBaseClass} border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-elevated)] text-[var(--ui-color-text-soft)]`}>
               {boardName}
             </span>
-            <span className={`${chipBaseClass} border-[color:var(--ui-border-soft)] bg-white/80 text-[var(--ui-color-text-soft)]`}>
+            <span className={`${chipBaseClass} border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-elevated)] text-[var(--ui-color-text-soft)]`}>
               {environment}
             </span>
             <span
               className={`${chipBaseClass} ${
                 isConnected
                   ? "border-[color:var(--ui-color-success)]/20 bg-[color:var(--ui-color-success)]/10 text-[color:var(--ui-color-success)]"
-                  : "border-[color:var(--ui-border-soft)] bg-white/82 text-[var(--ui-color-text-soft)]"
+                  : "border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-elevated)] text-[var(--ui-color-text-soft)]"
               }`}
             >
               {isConnected ? <Link2 size={13} /> : <Link2Off size={13} />}
@@ -426,7 +426,7 @@ export default function TopToolbar({
               {projectName || "Untitled Project"}
             </h1>
             {hasUnsavedChanges ? (
-              <span className="inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--ui-color-warning)]">
+              <span className="inline-flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--ui-color-warning)]">
                 <span className="h-2 w-2 rounded-full bg-amber-400" />
                 Unsaved
               </span>
@@ -435,7 +435,7 @@ export default function TopToolbar({
 
           <WorkspaceStageRail items={stageItems} />
           {serialError ? (
-            <div className="inline-flex items-center gap-2 rounded-[16px] border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-600">
+            <div className="inline-flex items-center gap-2 rounded-[16px] border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
               <AlertCircle size={14} />
               <span>{serialError}</span>
             </div>
@@ -483,11 +483,11 @@ export default function TopToolbar({
             <Button variant="secondary" icon={<Settings2 size={16} />} onClick={onOpenPreferences} className="min-h-10 rounded-[16px] px-4 py-2 text-sm">
               Preferences
             </Button>
-            <ThemeToggle className="h-10 rounded-[16px] border-[color:var(--ui-border-soft)] bg-white/82 px-3 text-[var(--ui-color-text)]" showLabel />
+            <ThemeToggle className="h-10 rounded-[16px] border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-elevated)] px-3 text-[var(--ui-color-text)]" showLabel />
           </div>
 
           {showPanelControls ? (
-            <div className="flex flex-wrap items-center gap-2 rounded-[18px] border border-[color:var(--ui-border-soft)] bg-white/70 p-1.5 shadow-[0_18px_40px_-30px_rgba(26,41,72,0.18)]">
+            <div className="flex flex-wrap items-center gap-2 rounded-[18px] border border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-quiet)] p-1.5 shadow-[0_18px_40px_-30px_rgba(26,41,72,0.18)]">
               {showLeftToggle ? (
                 <button
                   type="button"
