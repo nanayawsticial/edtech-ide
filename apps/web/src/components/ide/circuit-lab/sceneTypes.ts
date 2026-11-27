@@ -88,6 +88,8 @@ export interface WorldWireNode {
   renderedPoints: Point[];
   interactionPoints: Point[];
   waypoints: Point[];
+  /** 'free' wires go straight through their bends; 'orthogonal' (older) wires are redrawn at right angles. */
+  routing: 'free' | 'orthogonal';
   bendHandles: WireHandleNode[];
   isActive: boolean;
   isHovered: boolean;
@@ -119,6 +121,10 @@ export interface WireDraftState {
   crowdedTargets: boolean;
   preferredAxis: WireDraftAxis;
   points: Point[];
+  /** Colour the wire will get, so the preview matches the finished wire. */
+  color?: string;
+  /** Bends placed so far by clicking empty canvas. */
+  bends?: Point[];
 }
 
 export interface MountPreviewState {

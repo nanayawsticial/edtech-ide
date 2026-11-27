@@ -160,7 +160,7 @@ export default function WorkspaceSidebar({
   }
 
   return (
-    <section className='flex h-full min-h-0 flex-col overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,#10131f_0%,#090c16_100%)] p-5 shadow-[0_28px_70px_-48px_rgba(0,0,0,1)]'>
+    <section className='flex h-full min-h-0 flex-col overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,var(--ui-immersive-from)_0%,var(--ui-immersive-to)_100%)] p-5 shadow-[0_28px_70px_-48px_rgba(0,0,0,1)]'>
       <div className='space-y-4 border-b border-white/8 pb-4'>
         <div className='flex items-start justify-between gap-3'>
           <div className='min-w-0'>

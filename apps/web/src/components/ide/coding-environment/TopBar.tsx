@@ -80,7 +80,7 @@ export default function CodingEnvironmentTopBar({
   if (activeMode === 'block') {
     return (
       <motion.header
-        className='overflow-hidden rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,#15121f_0%,#111019_100%)] shadow-[0_24px_64px_-44px_rgba(0,0,0,1)] sm:rounded-[24px]'
+        className='overflow-hidden rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,var(--ide-header-from)_0%,var(--ide-header-to)_100%)] shadow-[0_24px_64px_-44px_rgba(0,0,0,1)] sm:rounded-[24px]'
         variants={fadeInUp}
         initial='hidden'
         animate='visible'
@@ -91,7 +91,7 @@ export default function CodingEnvironmentTopBar({
                 <button
                   type='button'
                   onClick={() => onChangeCodingMode('block')}
-                  className='inline-flex items-center gap-2 rounded-[12px] bg-[linear-gradient(180deg,#656cf8_0%,#4f56e8_100%)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white shadow-[0_16px_32px_-22px_rgba(101,108,248,0.8)] transition-all'
+                  className='inline-flex items-center gap-2 rounded-[12px] bg-[linear-gradient(180deg,var(--ide-accent-from)_0%,var(--ide-accent-to)_100%)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white shadow-[0_16px_32px_-22px_var(--ide-accent-glow)] transition-all'
                 >
                   <Blocks size={14} />
                   Blocks
@@ -184,7 +184,7 @@ export default function CodingEnvironmentTopBar({
               className={`min-h-11 rounded-[16px] px-4 py-2 text-sm text-white ${
                 isSimulationActive
                   ? 'border border-rose-300/24 bg-[linear-gradient(180deg,#e2567b_0%,#cc466c_100%)] hover:bg-[linear-gradient(180deg,#eb5e83_0%,#d54d73_100%)]'
-                  : 'border border-indigo-300/24 bg-[linear-gradient(180deg,#656cf8_0%,#4f56e8_100%)] hover:bg-[linear-gradient(180deg,#7278ff_0%,#5a61ef_100%)]'
+                  : 'border border-indigo-300/24 bg-[linear-gradient(180deg,var(--ide-accent-from)_0%,var(--ide-accent-to)_100%)] hover:bg-[linear-gradient(180deg,var(--ide-accent-hover-from)_0%,var(--ide-accent-hover-to)_100%)]'
               }`}
             >
               {isSimulationBusy && !isSimulationActive
@@ -201,7 +201,7 @@ export default function CodingEnvironmentTopBar({
 
   return (
     <motion.header
-      className='flex-shrink-0 overflow-hidden rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,#15121f_0%,#111019_100%)] shadow-[0_24px_64px_-44px_rgba(0,0,0,1)] sm:rounded-[24px]'
+      className='flex-shrink-0 overflow-hidden rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,var(--ide-header-from)_0%,var(--ide-header-to)_100%)] shadow-[0_24px_64px_-44px_rgba(0,0,0,1)] sm:rounded-[24px]'
       variants={fadeInUp}
       initial='hidden'
       animate='visible'
@@ -232,8 +232,7 @@ export default function CodingEnvironmentTopBar({
               onClick={onUpload}
               disabled={isCompiling}
               title='Upload to board'
-              className='flex h-9 items-center gap-2 rounded-[8px] border px-3.5 text-xs font-semibold transition-all disabled:opacity-50'
-              style={{ background: '#22224a', borderColor: '#3a3a88', color: '#a6afff' }}
+              className='flex h-9 items-center gap-2 rounded-[8px] border border-indigo-400/40 bg-indigo-500/15 px-3.5 text-xs font-semibold text-indigo-200 transition-all disabled:opacity-50'
             >
               <Rocket size={14} strokeWidth={2.2} />
               <span>{isCompiling ? 'Uploading…' : 'Upload'}</span>
@@ -242,11 +241,11 @@ export default function CodingEnvironmentTopBar({
 
           {/* Divider */}
           {(onVerify || onUpload) ? (
-            <div className='h-5 w-px' style={{ background: '#2a3550' }} />
+            <div className='h-5 w-px bg-white/10' />
           ) : null}
 
           {/* Block / Text mode switcher */}
-          <div className='inline-flex items-center gap-1 rounded-[10px] border border-white/10 bg-[#0d1320]/80 p-0.5 shadow-inner backdrop-blur-md'>
+          <div className='inline-flex items-center gap-1 rounded-[10px] border border-white/10 bg-[color:var(--ide-segment-bg)]/80 p-0.5 shadow-inner backdrop-blur-md'>
             <button
               type='button'
               onClick={() => onChangeCodingMode('block')}
@@ -329,7 +328,7 @@ export default function CodingEnvironmentTopBar({
             className={`min-h-9 rounded-[12px] border px-3 py-2 text-xs text-white transition-opacity ${
               isSimulationActive
                 ? 'border-rose-400/30 bg-[linear-gradient(135deg,#e2567b_0%,#cc466c_100%)] hover:opacity-90'
-                : 'border-indigo-400/30 bg-[linear-gradient(135deg,#656cf8,#4f56e8)] hover:opacity-90'
+                : 'border-indigo-400/30 bg-[linear-gradient(135deg,var(--ide-accent-from),var(--ide-accent-to))] hover:opacity-90'
             }`}
           >
             {isSimulationBusy && !isSimulationActive

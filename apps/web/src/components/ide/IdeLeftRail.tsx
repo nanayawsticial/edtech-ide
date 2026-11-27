@@ -53,7 +53,7 @@ export default function IdeLeftRail({
                   onClick={() => onChangeView(view.id)}
                   className={`rounded-[12px] px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] transition-all ${
                     isActive
-                      ? "bg-[var(--ui-color-primary)] text-white shadow-[var(--ui-shadow-button)]"
+                      ? "bg-[var(--ui-color-primary-fill)] text-white shadow-[var(--ui-shadow-button)]"
                       : "text-[var(--ui-color-text-muted)] hover:bg-[color:var(--ui-surface-elevated)] hover:text-[var(--ui-color-text)]"
                   }`}
                 >

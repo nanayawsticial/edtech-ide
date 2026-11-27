@@ -13,6 +13,9 @@ import {
 import { getNetFromNodeId, getNetToNodeId } from '@/lib/circuit/netData';
 import type { MountedPlacement } from '@/lib/wiring/mountingTypes';
 import { createMountedPlacement, getBreadboardMountPreview } from '@/lib/wiring/breadboardMounting';
+import { getBoardNodePrefix, parseBoardNodeId } from '@/lib/wiring/boardNodes';
+import { isBreadboardNodeId } from '@/lib/wiring/breadboardModel';
+import { normalizeComponentType } from '@/lib/wiring/componentDefinitions';
 
 interface CircuitStoreState {
   components: ComponentData[];
@@ -33,12 +36,19 @@ interface CircuitStoreActions {
     id: string,
     updater: Record<string, any> | ((previousState: Record<string, any>) => Record<string, any>)
   ) => void;
+  /** A learner's edit to a part's settings (colour, value, name): undoable. Undefined removes a key. */
+  setComponentProperties: (id: string, patch: Record<string, unknown>) => void;
   addNet: (net: NetData) => void;
   removeNet: (id: string) => void;
+  /** Removes several parts and wires as one undo step (wires on removed parts go too). */
+  removeItems: (componentIds: string[], netIds: string[]) => void;
   updateNet: (id: string, updater: Partial<NetData>) => void;
   setCircuitData: (data: CircuitData, skipHistory?: boolean) => void;
   clearCircuit: () => void;
-  rotateComponent: (id: string) => void;
+  /** Turns a part a quarter turn: clockwise by default, anticlockwise with direction -1. */
+  rotateComponent: (id: string, direction?: 1 | -1) => void;
+  /** Adds several parts and wires as one undo step (paste and duplicate). */
+  addItems: (components: ComponentData[], nets: NetData[]) => void;
   selectComponent: (id: string | null) => void;
   undo: () => void;
   redo: () => void;
@@ -100,6 +110,23 @@ function isComponentOwnedNode(nodeId: string, componentId: string) {
   return nodeId.startsWith(`${componentId}.`);
 }
 
+/**
+ * Whether a wire end sits on one of `component`'s pins. Part pins are named "<id>.<pin>", but board
+ * pins ("UNO_13") and breadboard holes ("BB_...") are named by kind, so removing the board or the
+ * breadboard must also catch those, or its wires stay behind with nothing to attach to.
+ */
+function isNodeOnComponent(nodeId: string, component: ComponentData) {
+  if (isComponentOwnedNode(nodeId, component.id)) {
+    return true;
+  }
+  const type = normalizeComponentType(component.type);
+  if (type === 'BREADBOARD') {
+    return isBreadboardNodeId(nodeId);
+  }
+  const board = parseBoardNodeId(nodeId);
+  return Boolean(board) && board?.prefix === getBoardNodePrefix(type);
+}
+
 export const useCircuitStore = create<CircuitStore>((set) => ({
   components: [],
   nets: [],
@@ -123,11 +150,11 @@ export const useCircuitStore = create<CircuitStore>((set) => ({
 
   removeComponent: (id) =>
     set((state) => {
+      const removed = state.components.find((component) => component.id === id);
       const components = state.components.filter((component) => component.id !== id);
       const nets = state.nets.filter((net) => {
-        const fromNodeId = getNetFromNodeId(net);
-        const toNodeId = getNetToNodeId(net);
-        return !isComponentOwnedNode(fromNodeId, id) && !isComponentOwnedNode(toNodeId, id);
+        if (!removed) return true;
+        return !isNodeOnComponent(getNetFromNodeId(net), removed) && !isNodeOnComponent(getNetToNodeId(net), removed);
       });
       return {
         components,
@@ -225,6 +252,35 @@ export const useCircuitStore = create<CircuitStore>((set) => ({
       return { components };
     }),
 
+  setComponentProperties: (id, patch) =>
+    set((state) => {
+      let didChange = false;
+      const components = state.components.map((component) => {
+        if (component.id !== id) {
+          return component;
+        }
+        const nextState: Record<string, any> = { ...(component.state || {}) };
+        Object.entries(patch).forEach(([key, value]) => {
+          if (value === undefined) delete nextState[key];
+          else nextState[key] = value;
+        });
+        if (!hasStateChanged(component.state || {}, nextState)) {
+          return component;
+        }
+        didChange = true;
+        return { ...component, state: nextState };
+      });
+      if (!didChange) {
+        return state;
+      }
+      return {
+        components,
+        ...deriveCircuit(components, state.nets),
+        past: [...state.past, { components: state.components, nets: state.nets }].slice(-50),
+        future: [],
+      };
+    }),
+
   addNet: (net) =>
     set((state) => {
       const nets = [...state.nets, net];
@@ -242,6 +298,31 @@ export const useCircuitStore = create<CircuitStore>((set) => ({
       return {
         nets,
         ...deriveCircuit(state.components, nets),
+        past: [...state.past, { components: state.components, nets: state.nets }].slice(-50),
+        future: [],
+      };
+    }),
+
+  removeItems: (componentIds, netIds) =>
+    set((state) => {
+      const removedComponents = new Set(componentIds);
+      const removedNets = new Set(netIds);
+      if (removedComponents.size === 0 && removedNets.size === 0) {
+        return state;
+      }
+
+      const removedParts = state.components.filter((component) => removedComponents.has(component.id));
+      const ownedByRemoved = (nodeId: string) => removedParts.some((component) => isNodeOnComponent(nodeId, component));
+      const components = state.components.filter((component) => !removedComponents.has(component.id));
+      const nets = state.nets.filter(
+        (net) => !removedNets.has(net.id) && !ownedByRemoved(getNetFromNodeId(net)) && !ownedByRemoved(getNetToNodeId(net))
+      );
+      return {
+        components,
+        nets,
+        ...deriveCircuit(components, nets),
+        selectedComponentId:
+          state.selectedComponentId && removedComponents.has(state.selectedComponentId) ? null : state.selectedComponentId,
         past: [...state.past, { components: state.components, nets: state.nets }].slice(-50),
         future: [],
       };
@@ -279,7 +360,23 @@ export const useCircuitStore = create<CircuitStore>((set) => ({
       future: [],
     })),
 
-  rotateComponent: (id) =>
+  addItems: (newComponents, newNets) =>
+    set((state) => {
+      if (newComponents.length === 0 && newNets.length === 0) {
+        return state;
+      }
+      const components = [...state.components, ...newComponents];
+      const nets = [...state.nets, ...newNets];
+      return {
+        components,
+        nets,
+        ...deriveCircuit(components, nets),
+        past: [...state.past, { components: state.components, nets: state.nets }].slice(-50),
+        future: [],
+      };
+    }),
+
+  rotateComponent: (id, direction = 1) =>
     set((state) => {
       let didChange = false;
       const components = state.components.map((component) => {
@@ -287,7 +384,7 @@ export const useCircuitStore = create<CircuitStore>((set) => ({
           return component;
         }
 
-        const nextRotation = ((component.rotation || 0) + 90) % 360;
+        const nextRotation = ((((component.rotation || 0) + 90 * direction) % 360) + 360) % 360;
         if (component.mountedPlacement?.mounted) {
           const preview = getBreadboardMountPreview(
             component,

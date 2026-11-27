@@ -41,10 +41,10 @@ export function JourneyProgress({ steps, activeIndex, className, tone = "default
                       ? "border-emerald-300/18 bg-emerald-400/12 text-emerald-200"
                       : "border-white/10 bg-white/[0.04] text-white/48"
                   : isActive
-                    ? "border-[color:var(--ui-color-primary)] bg-[color:var(--ui-color-primary)] text-white shadow-[var(--ui-shadow-button)]"
+                    ? "border-[color:var(--ui-color-primary)] bg-[color:var(--ui-color-primary-fill)] text-white shadow-[var(--ui-shadow-button)]"
                     : isComplete
                       ? "border-[color:var(--ui-color-accent)]/25 bg-[color:var(--ui-color-accent)]/10 text-[var(--ui-color-accent)]"
-                      : "border-[color:var(--ui-border-soft)] bg-white/72 text-[var(--ui-color-text-soft)]"
+                      : "border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-elevated)] text-[var(--ui-color-text-soft)]"
               )}
             >
               <span

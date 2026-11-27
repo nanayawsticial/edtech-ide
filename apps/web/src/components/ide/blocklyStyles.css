@@ -36,10 +36,6 @@
   flex-shrink: 0;
 }
 
-html[data-theme='light'] .blocks-panel-header {
-  color: #374151;
-}
-
 .blocks-panel-header-dot {
   display: inline-block;
   width: 7px;
@@ -77,20 +73,9 @@ html[data-theme='light'] .blocks-panel-header {
   min-height: 36px;
 }
 
-html[data-theme='light'] .block-row {
-  background-color: rgba(240, 244, 250, 0.7);
-  border-color: rgba(0,0,0,0.06);
-}
-
 .block-row:hover,
 .block-row--expanded {
   box-shadow: 0 2px 10px rgba(0,0,0,0.18);
-}
-
-html[data-theme='light'] .block-row:hover,
-html[data-theme='light'] .block-row--expanded {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-  background-color: rgba(230, 238, 250, 0.9) !important;
 }
 
 .block-row:active {
@@ -128,10 +113,6 @@ html[data-theme='light'] .block-row--expanded {
   transition: white-space 120ms ease;
 }
 
-html[data-theme='light'] .block-row-label {
-  color: #111827;
-}
-
 /* Expanded state – allow full label to wrap */
 .block-row--expanded .block-row-label {
   white-space: normal;
@@ -146,8 +127,4 @@ html[data-theme='light'] .block-row-label {
   letter-spacing: 0.02em;
   color: var(--muted-2, #94a3b8);
   opacity: 0.8;
-}
-
-html[data-theme='light'] .block-row-hint {
-  color: #6b7280;
 }

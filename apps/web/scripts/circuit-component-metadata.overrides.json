@@ -182,6 +182,62 @@
           }
         ]
       }
+    },
+    "SLIDE_SWITCH": {
+      "keywords": ["switch", "slide", "toggle", "on off", "spdt"],
+      "propertySchema": {
+        "fields": []
+      }
+    },
+    "PIR": {
+      "keywords": ["pir", "motion", "movement", "sensor", "hc-sr501"],
+      "propertySchema": {
+        "fields": [
+          {
+            "key": "motion",
+            "label": "Motion",
+            "type": "boolean",
+            "description": "Whether the sensor sees movement right now."
+          }
+        ]
+      }
+    },
+    "SEVEN_SEGMENT": {
+      "keywords": ["7-segment", "seven segment", "digit", "display", "number"],
+      "propertySchema": {
+        "fields": []
+      }
+    },
+    "RELAY": {
+      "keywords": ["relay", "switch", "module", "coil"],
+      "propertySchema": {
+        "fields": []
+      }
+    },
+    "DC_MOTOR": {
+      "keywords": ["motor", "dc motor", "spin", "fan"],
+      "propertySchema": {
+        "fields": []
+      }
+    },
+    "NEOPIXEL_RING": {
+      "keywords": ["neopixel", "ws2812", "rgb", "ring", "led ring", "addressable"],
+      "propertySchema": {
+        "fields": []
+      }
+    },
+    "LCD1602": {
+      "keywords": ["lcd", "16x2", "screen", "display", "i2c", "text"],
+      "propertySchema": {
+        "fields": []
+      }
+    },
+    "RASPBERRY_PI_PICO_2W": {
+      "singleton": true,
+      "keywords": ["pico", "raspberry pi", "rp2350", "micropython", "wifi", "board"],
+      "propertySchema": {
+        "fields": []
+      }
     }
   }
 }

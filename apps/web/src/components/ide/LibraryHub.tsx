@@ -278,17 +278,17 @@ export default function LibraryHub() {
         </div>
 
         {statusMessage ? (
-          <div className="mt-3 rounded-[16px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+          <div className="mt-3 rounded-[16px] border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200">
             {statusMessage}
           </div>
         ) : null}
         {error ? (
-          <div className="mt-3 rounded-[16px] border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+          <div className="mt-3 rounded-[16px] border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-200">
             {error}
           </div>
         ) : null}
         {warnings.length > 0 ? (
-          <div className="mt-3 rounded-[16px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <div className="mt-3 rounded-[16px] border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
             {warnings[0]}
           </div>
         ) : null}
@@ -348,7 +348,7 @@ export default function LibraryHub() {
                           size="sm"
                           icon={<Trash2 size={13} />}
                           onClick={() => void mutateArduinoLibrary(library, 'uninstall')}
-                          className="min-h-8 rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-rose-600 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                          className="min-h-8 rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-rose-300 hover:border-rose-400/30 hover:bg-rose-500/10 hover:text-rose-200"
                         >
                           Remove
                         </Button>

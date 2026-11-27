@@ -55,7 +55,7 @@ export function DesktopRuntime() {
     <div
       role="status"
       data-testid="desktop-update-notice"
-      className="ui-always-dark fixed bottom-4 right-4 z-[80] w-[min(360px,calc(100%-2rem))] rounded-2xl border border-indigo-400/30 bg-[#0d1322]/95 p-4 text-slate-100 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)] backdrop-blur"
+      className="ui-always-dark fixed bottom-4 right-4 z-[80] w-[min(360px,calc(100%-2rem))] rounded-2xl border border-indigo-400/30 bg-[color:var(--ui-popover-bg)]/95 p-4 text-slate-100 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)] backdrop-blur"
     >
       <div className="flex items-start gap-3">
         <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-500/25 text-indigo-200">

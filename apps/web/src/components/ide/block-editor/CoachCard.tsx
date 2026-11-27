@@ -18,8 +18,8 @@ type CoachCardProps = {
  * Coach card: one goal at a time, ticked off from the workspace. The canvas is dark purple in every
  * theme, so the card uses fixed dark colours rather than the sidebar tokens. White text and tints are
  * written as arbitrary values (text-[#fff], bg-[rgba(...)]) on purpose: globals.css repaints
- * .text-white, .text-white/70, .border-white/12 and .bg-white/[0.06] for the light and magma themes,
- * which turned this card's text dark and its tip box opaque white. Both states carry
+ * .text-white, .text-white/70, .border-white/12 and .bg-white/[0.06] for the magma theme,
+ * which would turn its tip box opaque brown. Both states carry
  * `data-coach-card` so the canvas click handler leaves them alone.
  */
 export function CoachCard({ isOpen, onOpenChange, milestones, guide, onAction }: CoachCardProps) {
@@ -38,7 +38,7 @@ export function CoachCard({ isOpen, onOpenChange, milestones, guide, onAction }:
         type="button"
         data-coach-card
         onClick={() => onOpenChange(true)}
-        className="absolute right-3 top-3 z-10 inline-flex h-9 items-center gap-2 rounded-full border border-[rgba(255,255,255,0.12)] bg-[#1c1535]/95 px-3 text-xs font-semibold text-[#fff] shadow-[0_16px_32px_-20px_rgba(0,0,0,0.9)] backdrop-blur transition-colors hover:bg-[#261c48]"
+        className="absolute right-3 top-3 z-10 inline-flex h-9 items-center gap-2 rounded-full border border-[rgba(255,255,255,0.12)] bg-[color:var(--coach-from)]/95 px-3 text-xs font-semibold text-[#fff] shadow-[0_16px_32px_-20px_rgba(0,0,0,0.9)] backdrop-blur transition-colors hover:bg-[color:var(--coach-to)]"
       >
         <Sparkles size={13} aria-hidden="true" />
         Next step · {doneCount}/{milestones.length}
@@ -50,7 +50,7 @@ export function CoachCard({ isOpen, onOpenChange, milestones, guide, onAction }:
     <aside
       data-coach-card
       aria-label="Next step"
-      className="absolute right-3 top-3 z-10 flex w-[min(280px,calc(100%-1.5rem))] flex-col gap-2 rounded-[16px] border border-[rgba(255,255,255,0.12)] bg-[#1c1535]/95 p-3 text-[#fff] shadow-[0_24px_48px_-28px_rgba(0,0,0,0.9)] backdrop-blur"
+      className="absolute right-3 top-3 z-10 flex w-[min(280px,calc(100%-1.5rem))] flex-col gap-2 rounded-[16px] border border-[rgba(255,255,255,0.12)] bg-[color:var(--coach-from)]/95 p-3 text-[#fff] shadow-[0_24px_48px_-28px_rgba(0,0,0,0.9)] backdrop-blur"
     >
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-violet-200">
@@ -107,7 +107,7 @@ export function CoachCard({ isOpen, onOpenChange, milestones, guide, onAction }:
           <button
             type="button"
             onClick={() => onAction(actionId)}
-            className="inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] bg-white px-3 text-xs font-semibold text-[#2a1a5e] transition-colors hover:bg-violet-50"
+            className="inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] bg-white px-3 text-xs font-semibold text-[color:var(--coach-ink)] transition-colors hover:bg-violet-50"
           >
             {LEARNING_GUIDE_ACTION_LABELS[actionId]}
           </button>

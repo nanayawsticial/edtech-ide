@@ -116,7 +116,7 @@ export default function ComponentManagerPanel() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#101622]">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[color:var(--ide-panel-bg)]">
       <div className="border-b border-slate-800 px-3 py-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">

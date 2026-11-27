@@ -90,22 +90,6 @@ const categoryStyles = {
 } as const;
 
 const blocklyThemePalette: Record<ThemeMode, { componentStyles: Blockly.Theme.ComponentStyle; gridColour: string }> = {
-  light: {
-    componentStyles: {
-      workspaceBackgroundColour: '#EEF2FF',
-      toolboxBackgroundColour: '#243789',
-      toolboxForegroundColour: '#F8FAFF',
-      flyoutBackgroundColour: '#F7F4FF',
-      flyoutForegroundColour: '#1F2937',
-      flyoutOpacity: 1,
-      scrollbarColour: '#6977C8',
-      insertionMarkerColour: '#3047A6',
-      insertionMarkerOpacity: 0.28,
-      scrollbarOpacity: 0.52,
-      cursorColour: '#3047A6',
-    },
-    gridColour: 'rgba(48, 71, 166, 0.24)',
-  },
   dark: {
     componentStyles: {
       workspaceBackgroundColour: '#151329',
@@ -141,19 +125,6 @@ const blocklyThemePalette: Record<ThemeMode, { componentStyles: Blockly.Theme.Co
 };
 
 const blocklyThemes: Record<ThemeMode, Blockly.Theme> = {
-  light: Blockly.Theme.defineTheme('edtech-light', {
-    name: 'edtech-light',
-    base: Blockly.Themes.Zelos,
-    blockStyles,
-    categoryStyles,
-    componentStyles: blocklyThemePalette.light.componentStyles,
-    fontStyle: {
-      family: 'Segoe UI, Inter, sans-serif',
-      weight: '600',
-      size: 12,
-    },
-    startHats: true,
-  }),
   dark: Blockly.Theme.defineTheme('edtech-dark', {
     name: 'edtech-dark',
     base: Blockly.Themes.Zelos,

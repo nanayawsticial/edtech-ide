@@ -3,14 +3,27 @@ import { useCircuitStore } from '@/stores/circuitStore';
 import type { PointerEvent as ReactPointerEvent, RefObject, WheelEvent as ReactWheelEvent } from 'react';
 
 import type { Point } from './types';
-import type { HitResult, SceneGraph, WireHandleNode } from './sceneTypes';
+import type { HitResult, SceneGraph, WorldWireNode } from './sceneTypes';
 import { hitTestScene, resolveBiasedPinTarget, type WireIntentAxis, type WireTargetLockState } from './hitTesting';
-import { moveWireHandle } from './wireRouting';
+import {
+  buildRoutePoints,
+  constrainToAxis,
+  insertBend,
+  materializeWaypoints,
+  moveBend,
+  nearestSegmentIndex,
+  placeBendPoint,
+  removeBend,
+  tidyFreeWaypoints,
+  type WireRouting,
+} from './wireRouting';
 import type { CanvasTransform } from './useCanvasViewport';
 
 export type InteractionMode =
   | { type: 'IDLE' }
   | { type: 'PANNING'; startClient: Point; origin: Point }
+  /** Dragging a selection box on empty canvas (in world coordinates). */
+  | { type: 'SELECTING_BOX'; startClient: Point; startWorld: Point; currentWorld: Point; moved: boolean }
   | { type: 'DRAGGING_COMPONENT'; componentId: string; startClient: Point; origin: Point; moved: boolean }
   | {
       type: 'DRAWING_WIRE';
@@ -23,6 +36,8 @@ export type InteractionMode =
       targetLockState: WireTargetLockState | null;
       crowdedTargets: boolean;
       previewAxis: WireIntentAxis;
+      /** Bends placed so far by clicking empty canvas. */
+      bends: Point[];
     }
   | {
       type: 'REWIRING_WIRE_ENDPOINT';
@@ -37,12 +52,16 @@ export type InteractionMode =
       targetLockState: WireTargetLockState | null;
       crowdedTargets: boolean;
       previewAxis: WireIntentAxis;
+      routing: WireRouting;
+      /** The wire's bends, kept while a free wire's end moves to another pin. */
+      waypoints: Point[];
     }
   | {
+      /** Moving one bend of a wire, or pulling a segment to create a new bend. */
       type: 'MOVING_WIRE_HANDLE';
       wireId: string;
-      handle: Pick<WireHandleNode, 'axis' | 'kind' | 'waypointIndex' | 'segmentIndex' | 'routeIndex' | 'endpoint'>;
-      initialWaypoints: Point[];
+      startClient: Point;
+      moved: boolean;
     };
 
 export interface WireConnectionRequest {
@@ -50,6 +69,22 @@ export interface WireConnectionRequest {
   toNodeId: string;
   fromPinId: string;
   toPinId: string;
+  /** Bends placed while drawing. */
+  waypoints?: Point[];
+}
+
+/** The live part of a bend edit; kept in a ref so fast pointer moves never insert a bend twice. */
+interface BendEdit {
+  wireId: string;
+  start: Point;
+  end: Point;
+  /** Bends the edit starts from (an older wire's corners, made into free bends). */
+  baseWaypoints: Point[];
+  /** Which bend moves; null until a pulled segment has created its bend. */
+  waypointIndex: number | null;
+  /** Set when the edit began on a segment: the new bend goes on this segment once the pointer moves. */
+  insertSegmentIndex: number | null;
+  preview: Point[] | null;
 }
 
 export interface WireEndpointReconnectRequest {
@@ -70,6 +105,8 @@ interface ActiveWireContext {
   sourcePinId: string;
   sourcePoint: Point;
   previousTargetPinId: string | null;
+  /** The point the loose end is drawn from (the last bend, or the source pin); Shift keeps it level. */
+  lastPoint: Point;
 }
 
 interface InteractionManagerOptions {
@@ -83,13 +120,27 @@ interface InteractionManagerOptions {
   onMoveComponent: (id: string, position: Point, meta: DragMoveMeta) => void;
   onCommitComponentMove?: (id: string, position: Point, meta: DragMoveMeta) => void;
   onTapComponent?: (id: string) => void;
-  onRotateComponent: (id: string) => void;
+  onRotateComponent: (id: string, direction?: 1 | -1) => void;
   onDeleteComponent: (id: string) => void;
   onDeleteWire: (id: string) => void;
   onAddWire: (request: WireConnectionRequest) => void;
   onRewireWireEndpoint: (request: WireEndpointReconnectRequest) => void;
+  /** Shows bends while an edit is in progress (null clears). Edits always produce free wires. */
   onPreviewWireWaypoints: (id: string, waypoints: Point[] | null) => void;
+  /** Saves a wire's bends; the wire becomes a free wire. */
   onCommitWireWaypoints: (id: string, waypoints: Point[]) => void;
+  /** Selects what lies inside a box dragged on empty canvas (world coordinates). */
+  onBoxSelect?: (box: { minX: number; minY: number; maxX: number; maxY: number }) => void;
+  /** Clears a box selection; returns true if there was one. */
+  onClearBoxSelection?: () => boolean;
+  /** Deletes a box selection; returns true if there was one to delete. */
+  onDeleteBoxSelection?: () => boolean;
+  /** Ctrl/Cmd+A: select every part and wire. */
+  onSelectAll?: () => void;
+  /** Ctrl/Cmd+C, Ctrl/Cmd+V and Ctrl/Cmd+D (duplicate). */
+  onCopySelection?: () => void;
+  onPasteClipboard?: () => void;
+  onDuplicateSelection?: () => void;
   beginPan: (x: number, y: number) => void;
   updatePan: (x: number, y: number) => void;
   endPan: () => void;
@@ -98,6 +149,13 @@ interface InteractionManagerOptions {
 
 const DRAG_THRESHOLD = 5;
 const INITIAL_WIRE_COMMIT_DRAG_THRESHOLD = 12;
+const DOUBLE_CLICK_MS = 350;
+const DOUBLE_CLICK_SLOP = 8;
+
+/** A wire's bends as free bends: free wires as they are, older wires' corners made explicit. */
+function freeWaypointsOf(wire: WorldWireNode) {
+  return materializeWaypoints(wire.fromPoint, wire.toPoint, wire.waypoints, wire.routing);
+}
 
 export function useInteractionManager({
   containerRef: externalContainerRef,
@@ -117,6 +175,13 @@ export function useInteractionManager({
   onRewireWireEndpoint,
   onPreviewWireWaypoints,
   onCommitWireWaypoints,
+  onBoxSelect,
+  onClearBoxSelection,
+  onDeleteBoxSelection,
+  onSelectAll,
+  onCopySelection,
+  onPasteClipboard,
+  onDuplicateSelection,
   beginPan,
   updatePan,
   endPan,
@@ -139,7 +204,10 @@ export function useInteractionManager({
     crowdedTargets: boolean;
     previewAxis: WireIntentAxis;
   } | null>(null);
-  const pendingHandleWaypointsRef = useRef<{ wireId: string; waypoints: Point[] } | null>(null);
+  const bendEditRef = useRef<BendEdit | null>(null);
+  const lastPointerDownRef = useRef<{ time: number; clientX: number; clientY: number } | null>(null);
+  /** Shift held: new and moved bends keep their segment level or upright. */
+  const shiftKeyRef = useRef(false);
 
   const screenToWorld = useCallback(
     (clientX: number, clientY: number) => {
@@ -168,20 +236,35 @@ export function useInteractionManager({
 
   const clearHandlePreview = useCallback(
     (wireId: string) => {
-      if (pendingHandleWaypointsRef.current?.wireId === wireId) {
-        pendingHandleWaypointsRef.current = null;
+      if (bendEditRef.current?.wireId === wireId) {
+        bendEditRef.current = null;
       }
       onPreviewWireWaypoints(wireId, null);
     },
     [onPreviewWireWaypoints]
   );
 
+  /** Saves the bend edit in progress, if the pointer actually moved a bend. */
   const commitHandlePreview = useCallback(
-    (wireId: string, fallbackWaypoints: Point[]) => {
-      const preview = pendingHandleWaypointsRef.current;
-      const waypoints = preview?.wireId === wireId ? preview.waypoints : fallbackWaypoints;
-      pendingHandleWaypointsRef.current = null;
-      onCommitWireWaypoints(wireId, waypoints);
+    (wireId: string) => {
+      const edit = bendEditRef.current;
+      bendEditRef.current = null;
+      if (!edit || edit.wireId !== wireId || !edit.preview) {
+        onPreviewWireWaypoints(wireId, null);
+        return;
+      }
+      onCommitWireWaypoints(wireId, tidyFreeWaypoints(edit.start, edit.end, edit.preview));
+    },
+    [onCommitWireWaypoints, onPreviewWireWaypoints]
+  );
+
+  /**
+   * Saves new bends for a wire straight away (double-click to add or remove a bend). A bend just
+   * added sits on the line, so adding skips the tidy-up that would remove it again.
+   */
+  const commitWireBends = useCallback(
+    (wire: WorldWireNode, waypoints: Point[], tidy: boolean) => {
+      onCommitWireWaypoints(wire.id, tidy ? tidyFreeWaypoints(wire.fromPoint, wire.toPoint, waypoints) : waypoints);
     },
     [onCommitWireWaypoints]
   );
@@ -280,15 +363,23 @@ export function useInteractionManager({
         sourcePinId: currentMode.fromPinId,
         sourcePoint: currentMode.fromPoint,
         previousTargetPinId: currentMode.hoveredTargetPinId,
+        lastPoint: currentMode.bends[currentMode.bends.length - 1] ?? currentMode.fromPoint,
       };
     }
 
     if (currentMode.type === 'REWIRING_WIRE_ENDPOINT') {
+      const neighbour =
+        currentMode.routing === 'free'
+          ? currentMode.endpoint === 'from'
+            ? currentMode.waypoints[0]
+            : currentMode.waypoints[currentMode.waypoints.length - 1]
+          : undefined;
       return {
         sourceNodeId: currentMode.fixedNodeId,
         sourcePinId: currentMode.fixedPinId,
         sourcePoint: currentMode.fixedPoint,
         previousTargetPinId: currentMode.hoveredTargetPinId,
+        lastPoint: neighbour ?? currentMode.fixedPoint,
       };
     }
 
@@ -302,8 +393,9 @@ export function useInteractionManager({
         ? { ...context, previousTargetPinId: pendingWireRef.current.targetPinId }
         : context;
       const target = resolveWireTargetFromContext(worldPoint, effectiveContext);
+      const loosePoint = shiftKeyRef.current ? constrainToAxis(context.lastPoint, worldPoint) : worldPoint;
       scheduleWirePreview(
-        target?.pin.position ?? worldPoint,
+        target?.pin.position ?? loosePoint,
         target?.pin.id ?? null,
         target?.pin.nodeId ?? null,
         target?.lockState ?? null,
@@ -352,6 +444,7 @@ export function useInteractionManager({
     }
 
     const handleWindowPointerMove = (event: PointerEvent) => {
+      shiftKeyRef.current = event.shiftKey;
       updateWirePreviewFromClient(event.clientX, event.clientY, activeWireContext);
     };
 
@@ -359,9 +452,27 @@ export function useInteractionManager({
     return () => window.removeEventListener('pointermove', handleWindowPointerMove);
   }, [activeWireContext, updateWirePreviewFromClient]);
 
+  /** Starts moving a bend, or pulling a segment into a new bend once the pointer moves. */
+  const beginBendEdit = useCallback(
+    (wire: WorldWireNode, edit: { waypointIndex: number | null; insertSegmentIndex: number | null }, clientX: number, clientY: number) => {
+      bendEditRef.current = {
+        wireId: wire.id,
+        start: wire.fromPoint,
+        end: wire.toPoint,
+        baseWaypoints: freeWaypointsOf(wire),
+        waypointIndex: edit.waypointIndex,
+        insertSegmentIndex: edit.insertSegmentIndex,
+        preview: null,
+      };
+      setMode({ type: 'MOVING_WIRE_HANDLE', wireId: wire.id, startClient: { x: clientX, y: clientY }, moved: false });
+    },
+    []
+  );
+
   const handlePointerDown = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
       activePointerIdRef.current = e.pointerId;
+      shiftKeyRef.current = e.shiftKey;
       if (!e.currentTarget.hasPointerCapture(e.pointerId)) {
         e.currentTarget.setPointerCapture(e.pointerId);
       }
@@ -383,6 +494,7 @@ export function useInteractionManager({
           sourcePinId: mode.fromPinId,
           sourcePoint: mode.fromPoint,
           previousTargetPinId: mode.hoveredTargetPinId,
+          lastPoint: mode.bends[mode.bends.length - 1] ?? mode.fromPoint,
         });
         if (target) {
           completeWire(
@@ -391,6 +503,7 @@ export function useInteractionManager({
               toNodeId: target.pin.nodeId,
               fromPinId: mode.fromPinId,
               toPinId: target.pin.id,
+              waypoints: mode.bends,
             },
             e.currentTarget,
             e.pointerId
@@ -398,9 +511,14 @@ export function useInteractionManager({
           return;
         }
 
-        setHoveredHit(null);
-        releasePointerCapture(e.currentTarget, e.pointerId);
-        resetInteraction();
+        // Clicking empty canvas while drawing places a bend (Esc or right-click cancels).
+        const lastPoint = mode.bends[mode.bends.length - 1] ?? mode.fromPoint;
+        const bend = placeBendPoint(worldPoint, lastPoint, e.shiftKey);
+        if (Math.hypot(bend.x - lastPoint.x, bend.y - lastPoint.y) > 0.5) {
+          setMode((previous) =>
+            previous.type === 'DRAWING_WIRE' ? { ...previous, bends: [...previous.bends, bend], previewPoint: bend } : previous
+          );
+        }
         return;
       }
 
@@ -414,6 +532,47 @@ export function useInteractionManager({
         return;
       }
 
+      const previousDown = lastPointerDownRef.current;
+      const isDoubleClick =
+        previousDown !== null &&
+        e.timeStamp - previousDown.time <= DOUBLE_CLICK_MS &&
+        Math.hypot(e.clientX - previousDown.clientX, e.clientY - previousDown.clientY) <= DOUBLE_CLICK_SLOP;
+      lastPointerDownRef.current = isDoubleClick ? null : { time: e.timeStamp, clientX: e.clientX, clientY: e.clientY };
+
+      if (isDoubleClick) {
+        // Double-click a bend to remove it; double-click a wire to add a bend there.
+        if (hit?.type === 'wire-handle' && hit.handle.kind === 'elbow') {
+          const wire = scene.wireById[hit.handle.wireId];
+          if (wire) {
+            clearHandlePreview(wire.id);
+            const waypoints = freeWaypointsOf(wire);
+            const index = wire.routing === 'free' ? hit.handle.waypointIndex : (hit.handle.routeIndex ?? 1) - 1;
+            commitWireBends(wire, removeBend(waypoints, index), true);
+            onSelectWire(wire.id);
+            resetInteraction();
+            return;
+          }
+        }
+
+        const wire =
+          hit?.type === 'wire-segment' || hit?.type === 'wire'
+            ? hit.wire
+            : hit?.type === 'wire-handle' && hit.handle.kind === 'segment'
+              ? scene.wireById[hit.handle.wireId]
+              : null;
+        if (wire) {
+          clearHandlePreview(wire.id);
+          const waypoints = freeWaypointsOf(wire);
+          const route = buildRoutePoints(wire.fromPoint, wire.toPoint, waypoints, 'free');
+          const segmentIndex = nearestSegmentIndex(route, worldPoint);
+          commitWireBends(wire, insertBend(waypoints, segmentIndex, placeBendPoint(worldPoint, null, false)).waypoints, false);
+          onSelectWire(wire.id);
+          onSelectComponent(null);
+          resetInteraction();
+          return;
+        }
+      }
+
       if (hit?.type === 'wire-handle') {
         const wire = scene.wireById[hit.handle.wireId];
         if (!wire) {
@@ -425,7 +584,7 @@ export function useInteractionManager({
 
         if (hit.handle.kind === 'endpoint' && hit.handle.endpoint) {
           const isFromEndpoint = hit.handle.endpoint === 'from';
-          pendingHandleWaypointsRef.current = null;
+          bendEditRef.current = null;
           setHoveredHit(hit);
           setMode({
             type: 'REWIRING_WIRE_ENDPOINT',
@@ -440,24 +599,21 @@ export function useInteractionManager({
             targetLockState: null,
             crowdedTargets: false,
             previewAxis: 'free',
+            routing: wire.routing,
+            waypoints: wire.waypoints,
           });
           return;
         }
 
-        pendingHandleWaypointsRef.current = null;
-        setMode({
-          type: 'MOVING_WIRE_HANDLE',
-          wireId: hit.handle.wireId,
-          handle: {
-            axis: hit.handle.axis,
-            kind: hit.handle.kind,
-            waypointIndex: hit.handle.waypointIndex,
-            segmentIndex: hit.handle.segmentIndex,
-            routeIndex: hit.handle.routeIndex,
-            endpoint: hit.handle.endpoint,
-          },
-          initialWaypoints: wire.waypoints,
-        });
+        if (hit.handle.kind === 'elbow') {
+          const waypointIndex = wire.routing === 'free' ? hit.handle.waypointIndex : (hit.handle.routeIndex ?? 1) - 1;
+          beginBendEdit(wire, { waypointIndex, insertSegmentIndex: null }, e.clientX, e.clientY);
+          return;
+        }
+
+        // Mid-segment grip: pull to make a new bend there.
+        const route = buildRoutePoints(wire.fromPoint, wire.toPoint, freeWaypointsOf(wire), 'free');
+        beginBendEdit(wire, { waypointIndex: null, insertSegmentIndex: nearestSegmentIndex(route, hit.handle.position) }, e.clientX, e.clientY);
         return;
       }
 
@@ -477,6 +633,7 @@ export function useInteractionManager({
           targetLockState: null,
           crowdedTargets: false,
           previewAxis: 'free',
+          bends: [],
         });
         return;
       }
@@ -494,47 +651,34 @@ export function useInteractionManager({
         return;
       }
 
-      if (hit?.type === 'wire-segment') {
-        if (selectedWireId === hit.wire.id) {
-          const segmentStart = hit.wire.points[hit.segmentIndex];
-          const segmentEnd = hit.wire.points[hit.segmentIndex + 1];
-          if (segmentStart && segmentEnd) {
-            onSelectWire(hit.wire.id);
-            onSelectComponent(null);
-            pendingHandleWaypointsRef.current = null;
-            setMode({
-              type: 'MOVING_WIRE_HANDLE',
-              wireId: hit.wire.id,
-              handle: {
-                axis: Math.abs(segmentStart.x - segmentEnd.x) <= 0.5 ? 'x' : 'y',
-                kind: 'segment',
-                waypointIndex: -1,
-                segmentIndex: hit.segmentIndex,
-              },
-              initialWaypoints: hit.wire.waypoints,
-            });
-            return;
-          }
+      if (hit?.type === 'wire-segment' || hit?.type === 'wire') {
+        const wire = hit.wire;
+        if (selectedWireId === wire.id) {
+          // Pulling the selected wire bends it where it was grabbed (a click alone changes nothing).
+          const route = buildRoutePoints(wire.fromPoint, wire.toPoint, freeWaypointsOf(wire), 'free');
+          beginBendEdit(wire, { waypointIndex: null, insertSegmentIndex: nearestSegmentIndex(route, worldPoint) }, e.clientX, e.clientY);
+          return;
         }
 
-        onSelectWire(hit.wire.id);
+        onSelectWire(wire.id);
         onSelectComponent(null);
         return;
       }
 
-      if (hit?.type === 'wire') {
-        onSelectWire(hit.wire.id);
-        onSelectComponent(null);
-        return;
-      }
-
+      // Empty canvas: clear the selection and start a selection box (a click alone just clears).
       onSelectComponent(null);
       onSelectWire(null);
+      onClearBoxSelection?.();
+      setMode({ type: 'SELECTING_BOX', startClient: { x: e.clientX, y: e.clientY }, startWorld: worldPoint, currentWorld: worldPoint, moved: false });
     },
     [
+      beginBendEdit,
       beginPan,
+      clearHandlePreview,
+      commitWireBends,
       completeWire,
       mode,
+      onClearBoxSelection,
       onSelectComponent,
       onSelectWire,
       releasePointerCapture,
@@ -543,6 +687,7 @@ export function useInteractionManager({
       resolveWireTargetFromContext,
       scene,
       screenToWorld,
+      selectedWireId,
       transform.x,
       transform.y,
     ]
@@ -551,6 +696,7 @@ export function useInteractionManager({
   const handlePointerMove = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
       const worldPoint = screenToWorld(e.clientX, e.clientY);
+      shiftKeyRef.current = e.shiftKey;
 
       if (mode.type === 'IDLE') {
         setHoveredHit(resolveInteractiveHit(worldPoint));
@@ -559,6 +705,12 @@ export function useInteractionManager({
 
       if (mode.type === 'PANNING') {
         updatePan(e.clientX, e.clientY);
+        return;
+      }
+
+      if (mode.type === 'SELECTING_BOX') {
+        const moved = mode.moved || Math.hypot(e.clientX - mode.startClient.x, e.clientY - mode.startClient.y) > DRAG_THRESHOLD;
+        setMode((previous) => (previous.type === 'SELECTING_BOX' ? { ...previous, currentWorld: worldPoint, moved } : previous));
         return;
       }
 
@@ -587,35 +739,44 @@ export function useInteractionManager({
           sourcePinId: mode.fromPinId,
           sourcePoint: mode.fromPoint,
           previousTargetPinId: mode.hoveredTargetPinId,
+          lastPoint: mode.bends[mode.bends.length - 1] ?? mode.fromPoint,
         });
         return;
       }
 
       if (mode.type === 'REWIRING_WIRE_ENDPOINT') {
-        updateWirePreviewFromClient(e.clientX, e.clientY, {
-          sourceNodeId: mode.fixedNodeId,
-          sourcePinId: mode.fixedPinId,
-          sourcePoint: mode.fixedPoint,
-          previousTargetPinId: mode.hoveredTargetPinId,
-        });
+        const context = getActiveWireContext(mode);
+        if (context) {
+          updateWirePreviewFromClient(e.clientX, e.clientY, context);
+        }
         return;
       }
 
       if (mode.type === 'MOVING_WIRE_HANDLE') {
-        const wire = scene.wireById[mode.wireId];
-        if (!wire) return;
-        const nextWaypoints = moveWireHandle(
-          wire.fromPoint,
-          wire.toPoint,
-          wire.waypoints,
-          mode.handle,
-          worldPoint
-        );
-        pendingHandleWaypointsRef.current = { wireId: mode.wireId, waypoints: nextWaypoints };
+        const edit = bendEditRef.current;
+        if (!edit || edit.wireId !== mode.wireId) return;
+
+        if (!mode.moved) {
+          if (Math.hypot(e.clientX - mode.startClient.x, e.clientY - mode.startClient.y) <= DRAG_THRESHOLD) {
+            return;
+          }
+          setMode((previous) => (previous.type === 'MOVING_WIRE_HANDLE' ? { ...previous, moved: true } : previous));
+        }
+
+        if (edit.waypointIndex === null && edit.insertSegmentIndex !== null) {
+          const inserted = insertBend(edit.baseWaypoints, edit.insertSegmentIndex, placeBendPoint(worldPoint, null, false));
+          edit.baseWaypoints = inserted.waypoints;
+          edit.waypointIndex = inserted.waypointIndex;
+          edit.insertSegmentIndex = null;
+        }
+        if (edit.waypointIndex === null) return;
+
+        const nextWaypoints = moveBend(edit.start, edit.baseWaypoints, edit.waypointIndex, worldPoint, e.shiftKey);
+        edit.preview = nextWaypoints;
         onPreviewWireWaypoints(mode.wireId, nextWaypoints);
       }
     },
-    [mode, onPreviewWireWaypoints, resolveInteractiveHit, scene, scheduleDragPreview, screenToWorld, selectedComponentId, selectedWireId, transform.scale, updatePan, updateWirePreviewFromClient]
+    [getActiveWireContext, mode, onPreviewWireWaypoints, resolveInteractiveHit, scheduleDragPreview, screenToWorld, transform.scale, updatePan, updateWirePreviewFromClient]
   );
 
   const handlePointerUp = useCallback(
@@ -640,12 +801,8 @@ export function useInteractionManager({
 
       if (mode.type === 'REWIRING_WIRE_ENDPOINT') {
         const worldPoint = screenToWorld(e.clientX, e.clientY);
-        const target = resolveWireTargetFromContext(worldPoint, {
-          sourceNodeId: mode.fixedNodeId,
-          sourcePinId: mode.fixedPinId,
-          sourcePoint: mode.fixedPoint,
-          previousTargetPinId: mode.hoveredTargetPinId,
-        });
+        const context = getActiveWireContext(mode);
+        const target = context ? resolveWireTargetFromContext(worldPoint, context) : null;
 
         if (target) {
           onRewireWireEndpoint({
@@ -669,6 +826,7 @@ export function useInteractionManager({
           sourcePinId: mode.fromPinId,
           sourcePoint: mode.fromPoint,
           previousTargetPinId: mode.hoveredTargetPinId,
+          lastPoint: mode.bends[mode.bends.length - 1] ?? mode.fromPoint,
         });
 
         if (wireJustStartedRef.current) {
@@ -684,6 +842,7 @@ export function useInteractionManager({
                 toNodeId: target.pin.nodeId,
                 fromPinId: mode.fromPinId,
                 toPinId: target.pin.id,
+                waypoints: mode.bends,
               },
               e.currentTarget,
               e.pointerId
@@ -691,6 +850,7 @@ export function useInteractionManager({
             return;
           }
 
+          // Released away from a pin: keep drawing; clicks now place bends or finish on a pin.
           setMode((previous) =>
             previous.type === 'DRAWING_WIRE'
               ? {
@@ -711,8 +871,27 @@ export function useInteractionManager({
         return;
       }
 
+      if (mode.type === 'SELECTING_BOX') {
+        if (mode.moved) {
+          const end = screenToWorld(e.clientX, e.clientY);
+          onBoxSelect?.({
+            minX: Math.min(mode.startWorld.x, end.x),
+            minY: Math.min(mode.startWorld.y, end.y),
+            maxX: Math.max(mode.startWorld.x, end.x),
+            maxY: Math.max(mode.startWorld.y, end.y),
+          });
+        }
+        releasePointerCapture(e.currentTarget, e.pointerId);
+        resetInteraction();
+        return;
+      }
+
       if (mode.type === 'MOVING_WIRE_HANDLE') {
-        commitHandlePreview(mode.wireId, mode.initialWaypoints);
+        if (mode.moved) {
+          commitHandlePreview(mode.wireId);
+        } else {
+          clearHandlePreview(mode.wireId);
+        }
         releasePointerCapture(e.currentTarget, e.pointerId);
         resetInteraction();
         return;
@@ -721,7 +900,7 @@ export function useInteractionManager({
       releasePointerCapture(e.currentTarget, e.pointerId);
       resetInteraction();
     },
-    [commitHandlePreview, completeWire, mode, onCommitComponentMove, onRewireWireEndpoint, releasePointerCapture, resetInteraction, resolveWireTargetFromContext, screenToWorld, transform.scale]
+    [clearHandlePreview, commitHandlePreview, completeWire, getActiveWireContext, mode, onBoxSelect, onCommitComponentMove, onRewireWireEndpoint, onTapComponent, releasePointerCapture, resetInteraction, resolveWireTargetFromContext, screenToWorld, transform.scale]
   );
 
   const handlePointerCancel = useCallback(
@@ -764,9 +943,32 @@ export function useInteractionManager({
         return;
       }
 
+      if (ctrlOrCmd && e.key.toLowerCase() === 'a' && onSelectAll) {
+        e.preventDefault();
+        onSelectAll();
+        return;
+      }
+      if (ctrlOrCmd && e.key.toLowerCase() === 'c' && onCopySelection) {
+        onCopySelection();
+        return;
+      }
+      if (ctrlOrCmd && e.key.toLowerCase() === 'v' && onPasteClipboard) {
+        e.preventDefault();
+        onPasteClipboard();
+        return;
+      }
+      if (ctrlOrCmd && e.key.toLowerCase() === 'd' && onDuplicateSelection) {
+        e.preventDefault();
+        onDuplicateSelection();
+        return;
+      }
+
       const key = e.key.toLowerCase();
       if (key === 'escape') {
         e.preventDefault();
+        if (mode.type === 'IDLE' && onClearBoxSelection?.()) {
+          return;
+        }
         if (mode.type === 'MOVING_WIRE_HANDLE') {
           clearHandlePreview(mode.wireId);
           setHoveredHit(null);
@@ -790,11 +992,25 @@ export function useInteractionManager({
         resetInteraction();
         return;
       }
-      if (key === 'r' && selectedComponentId) {
+      if (key === 'r' && selectedComponentId && !ctrlOrCmd) {
         e.preventDefault();
-        onRotateComponent(selectedComponentId);
+        // R turns clockwise, Shift+R anticlockwise.
+        onRotateComponent(selectedComponentId, e.shiftKey ? -1 : 1);
+      }
+      if (key === 'backspace' && mode.type === 'DRAWING_WIRE') {
+        // While drawing, Backspace takes back the last bend instead of deleting anything.
+        e.preventDefault();
+        setMode((previous) => {
+          if (previous.type !== 'DRAWING_WIRE' || previous.bends.length === 0) return previous;
+          return { ...previous, bends: previous.bends.slice(0, -1) };
+        });
+        return;
       }
       if (key === 'delete' || key === 'backspace') {
+        if (mode.type === 'IDLE' && onDeleteBoxSelection?.()) {
+          e.preventDefault();
+          return;
+        }
         if (selectedComponentId) {
           e.preventDefault();
           onDeleteComponent(selectedComponentId);
@@ -816,9 +1032,15 @@ export function useInteractionManager({
   }, [
     clearHandlePreview,
     mode,
+    onClearBoxSelection,
+    onDeleteBoxSelection,
     onDeleteComponent,
     onDeleteWire,
     onRotateComponent,
+    onSelectAll,
+    onCopySelection,
+    onPasteClipboard,
+    onDuplicateSelection,
     onSelectWire,
     resetInteraction,
     selectedComponentId,

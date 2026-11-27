@@ -2,15 +2,22 @@
 
 import React from 'react';
 
+import { getWireCasingColor } from '@/lib/wiring/wireColors';
 import type { WireDraftState, WorldWireNode, WireHandleNode } from './sceneTypes';
 
 interface WireEngineProps {
   wires: WorldWireNode[];
   selectedWireId: string | null;
+  /** Wires picked with a selection box (drawn like the selected wire, without handles). */
+  selectedWireIds?: ReadonlySet<string>;
   hoveredWireId: string | null;
   wireDraft: WireDraftState | null;
   recentlyCreatedWireId?: string | null;
 }
+
+/** Glow shown around a wire whose net is HIGH while simulating; the wire keeps its own colour. */
+const HIGH_SIGNAL_GLOW = '#34d399';
+const DRAFT_FALLBACK_COLOR = '#22d3ee';
 
 function pointsToPath(points: Array<{ x: number; y: number }>) {
   if (points.length === 0) {
@@ -20,20 +27,18 @@ function pointsToPath(points: Array<{ x: number; y: number }>) {
   return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
 }
 
-function getSignalColor(signalState: WorldWireNode['signalState'], fallbackColor: string) {
-  if (signalState === 'HIGH') {
-    return '#34d399';
-  }
-
-  if (signalState === 'LOW') {
-    return '#94a3b8';
-  }
-
-  return fallbackColor;
-}
-
-function renderHandle(handle: WireHandleNode) {
+function renderHandle(handle: WireHandleNode, routing: WorldWireNode['routing']) {
   if (handle.kind === 'segment') {
+    if (routing === 'free') {
+      // Grip in the middle of a segment: drag it to add a bend there.
+      return (
+        <g key={handle.id} data-wire-id={handle.wireId} data-wire-handle-kind={handle.kind}>
+          <circle cx={handle.position.x} cy={handle.position.y} r={7} fill="rgba(34,211,238,0.10)" />
+          <circle cx={handle.position.x} cy={handle.position.y} r={3.6} fill="rgba(8,17,29,0.85)" stroke="#67e8f9" strokeWidth={1.3} />
+        </g>
+      );
+    }
+
     return (
       <g key={handle.id} data-wire-id={handle.wireId} data-wire-handle-kind={handle.kind}>
         <circle cx={handle.position.x} cy={handle.position.y} r={10.5} fill="rgba(34,211,238,0.12)" />
@@ -47,6 +52,16 @@ function renderHandle(handle: WireHandleNode) {
       <g key={handle.id} data-wire-id={handle.wireId} data-wire-handle-kind={handle.kind} data-wire-handle-endpoint={handle.endpoint}>
         <rect x={handle.position.x - 7.5} y={handle.position.y - 7.5} width={15} height={15} rx={3.2} fill="rgba(34,211,238,0.14)" />
         <rect x={handle.position.x - 4.3} y={handle.position.y - 4.3} width={8.6} height={8.6} rx={2.2} fill="#22d3ee" stroke="#ecfeff" strokeWidth={1.05} />
+      </g>
+    );
+  }
+
+  if (routing === 'free') {
+    // A bend: drag to move it, double-click to remove it.
+    return (
+      <g key={handle.id} data-wire-id={handle.wireId} data-wire-handle-kind={handle.kind} data-wire-bend-index={handle.waypointIndex}>
+        <circle cx={handle.position.x} cy={handle.position.y} r={9.5} fill="rgba(34,211,238,0.14)" />
+        <circle cx={handle.position.x} cy={handle.position.y} r={4.8} fill="#ecfeff" stroke="#22d3ee" strokeWidth={2} />
       </g>
     );
   }
@@ -80,10 +95,13 @@ function renderHandle(handle: WireHandleNode) {
 function WireEngineImpl({
   wires,
   selectedWireId,
+  selectedWireIds,
   hoveredWireId,
   wireDraft,
   recentlyCreatedWireId,
 }: WireEngineProps) {
+  const draftColor = wireDraft?.color ?? DRAFT_FALLBACK_COLOR;
+
   return (
     <>
       <defs>
@@ -97,31 +115,32 @@ function WireEngineImpl({
       </defs>
 
       {wires.map((wire) => {
-        const isSelected = selectedWireId === wire.id || wire.isSelected;
+        const isPrimarySelected = selectedWireId === wire.id || wire.isSelected;
+        const isSelected = isPrimarySelected || Boolean(selectedWireIds?.has(wire.id));
         const isHovered = hoveredWireId === wire.id || wire.isHovered;
         const path = pointsToPath(wire.interactionPoints);
         const isRecentlyCreated = recentlyCreatedWireId === wire.id;
-        const signalColor = getSignalColor(wire.signalState, wire.color);
-        const strokeWidth = isSelected ? 4.2 : isHovered ? 3.6 : wire.isActive ? 3.2 : 2.8;
+        const isHigh = wire.signalState === 'HIGH';
+        const strokeWidth = isSelected ? 4.2 : isHovered ? 3.6 : isHigh ? 3.2 : 2.8;
 
         return (
-          <g key={wire.id}>
-            {wire.signalState && wire.signalState !== 'FLOAT' ? (
+          <g key={wire.id} data-wire-color={wire.color} data-wire-routing={wire.routing}>
+            {isHigh ? (
               <path
                 d={path}
-                stroke={signalColor}
-                strokeWidth={isSelected ? 9 : 7}
+                stroke={HIGH_SIGNAL_GLOW}
+                strokeWidth={isSelected ? 11 : 9}
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                opacity={wire.signalState === 'HIGH' ? 0.16 : 0.08}
+                opacity={0.3}
                 filter="url(#wire-glow-overlay)"
-                className={wire.signalState === 'HIGH' ? 'animate-wire-pulse' : undefined}
-                style={wire.signalState === 'HIGH' ? ({ '--wire-color': signalColor } as React.CSSProperties) : undefined}
+                className="animate-wire-pulse"
+                style={{ '--wire-color': HIGH_SIGNAL_GLOW } as React.CSSProperties}
               />
             ) : null}
 
-            {wire.isActive || isSelected || isHovered || isRecentlyCreated ? (
+            {isSelected || isHovered || isRecentlyCreated ? (
               <path
                 d={path}
                 stroke={wire.color}
@@ -129,12 +148,21 @@ function WireEngineImpl({
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                opacity={isSelected ? 0.22 : isHovered ? 0.12 : isRecentlyCreated ? 0.14 : 0.1}
+                opacity={isSelected ? 0.22 : isHovered ? 0.12 : 0.14}
                 filter="url(#wire-glow-overlay)"
-                className={wire.isActive ? 'animate-wire-pulse' : undefined}
-                style={wire.isActive ? ({ '--wire-color': wire.color } as React.CSSProperties) : undefined}
               />
             ) : null}
+
+            {/* Casing: a thin edge like real insulation, so dark wires show on the dark canvas. */}
+            <path
+              d={path}
+              stroke={getWireCasingColor(wire.color)}
+              strokeWidth={strokeWidth + 2}
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              pointerEvents="none"
+            />
 
             <path
               d={path}
@@ -142,24 +170,27 @@ function WireEngineImpl({
               data-wire-role="main"
               data-from-anchor-id={wire.fromAnchorId ?? ''}
               data-to-anchor-id={wire.toAnchorId ?? ''}
-              stroke={wire.signalState && wire.signalState !== 'FLOAT' ? signalColor : wire.color}
+              stroke={wire.color}
               strokeWidth={strokeWidth}
               fill="none"
               strokeLinecap="round"
               strokeLinejoin="round"
-              opacity={wire.isActive ? 1 : isSelected ? 0.98 : 0.92}
               className={isRecentlyCreated ? 'animate-wire-draw' : undefined}
             />
 
-            {isSelected ? wire.bendHandles.map((handle) => renderHandle(handle)) : null}
+            {isPrimarySelected ? wire.bendHandles.map((handle) => renderHandle(handle, wire.routing)) : null}
           </g>
         );
       })}
 
       {wireDraft ? (
-        <g>
-          <path d={pointsToPath(wireDraft.points)} stroke="#22d3ee" strokeWidth={wireDraft.targetLockState === 'locked' ? 8.5 : 8} fill="none" strokeLinecap="round" strokeLinejoin="round" opacity={wireDraft.crowdedTargets ? 0.18 : 0.16} filter="url(#wire-glow-overlay)" />
-          <path d={pointsToPath(wireDraft.points)} stroke="#22d3ee" strokeWidth={wireDraft.targetLockState === 'locked' ? 3.7 : 3.4} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="8 6" opacity={0.98} className="animate-wire-preview" />
+        <g data-wire-draft-color={draftColor}>
+          <path d={pointsToPath(wireDraft.points)} stroke={draftColor} strokeWidth={wireDraft.targetLockState === 'locked' ? 8.5 : 8} fill="none" strokeLinecap="round" strokeLinejoin="round" opacity={wireDraft.crowdedTargets ? 0.18 : 0.16} filter="url(#wire-glow-overlay)" />
+          <path d={pointsToPath(wireDraft.points)} stroke={getWireCasingColor(draftColor)} strokeWidth={wireDraft.targetLockState === 'locked' ? 5.7 : 5.4} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="8 6" opacity={0.9} />
+          <path d={pointsToPath(wireDraft.points)} stroke={draftColor} strokeWidth={wireDraft.targetLockState === 'locked' ? 3.7 : 3.4} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="8 6" opacity={0.98} className="animate-wire-preview" />
+          {(wireDraft.bends ?? []).map((bend, index) => (
+            <circle key={`draft-bend-${index}`} cx={bend.x} cy={bend.y} r={3.6} fill="#ecfeff" stroke={draftColor} strokeWidth={1.6} />
+          ))}
           <g>
             <circle cx={wireDraft.fromPoint.x} cy={wireDraft.fromPoint.y} r={9} fill="rgba(34,211,238,0.14)" />
             <circle cx={wireDraft.fromPoint.x} cy={wireDraft.fromPoint.y} r={4.6} fill="#22d3ee" stroke="#ecfeff" strokeWidth={1.1} />
@@ -194,4 +225,3 @@ function WireEngineImpl({
 }
 
 export default React.memo(WireEngineImpl);
-

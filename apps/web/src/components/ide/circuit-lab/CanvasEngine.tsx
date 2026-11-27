@@ -70,6 +70,8 @@ interface CanvasEngineProps {
   containerRef?: React.RefObject<HTMLDivElement | null>;
   recentlyCreatedWireId?: string | null;
   recentlyConnectedPinId?: string | null;
+  /** Wires picked with a selection box. */
+  selectedWireIds?: ReadonlySet<string>;
 }
 
 export default function CanvasEngine({
@@ -79,6 +81,7 @@ export default function CanvasEngine({
   containerRef,
   recentlyCreatedWireId,
   recentlyConnectedPinId,
+  selectedWireIds,
 }: CanvasEngineProps) {
   const connectedComponentIds = new Set<string>();
   scene.wires.forEach((wire) => {
@@ -99,13 +102,13 @@ export default function CanvasEngine({
   return (
     <div
       ref={containerRef}
-      className="relative h-full w-full overflow-hidden rounded-[20px] bg-[#050a12]"
+      className="relative h-full w-full overflow-hidden rounded-[20px] bg-[color:var(--cl-bg)]"
       data-canvas-root="true"
       data-testid="circuit-canvas-root"
     >
       {CANVAS_STYLE}
 
-      <div className="absolute inset-0 z-0 bg-[linear-gradient(180deg,rgba(10,16,26,0.96)_0%,rgba(4,8,14,1)_100%)]" aria-hidden="true" />
+      <div className="absolute inset-0 z-0 bg-[linear-gradient(180deg,var(--cl-raised)_0%,var(--cl-bg-deep)_100%)]" aria-hidden="true" />
 
       <div className="absolute inset-0 z-[5]" aria-hidden="true">
         <svg className="h-full w-full" width="100%" height="100%">
@@ -136,6 +139,7 @@ export default function CanvasEngine({
             <WireEngine
               wires={scene.wires}
               selectedWireId={selectedWireId}
+              selectedWireIds={selectedWireIds}
               hoveredWireId={hoveredWireId}
               wireDraft={interactionProps.wireDraft}
               recentlyCreatedWireId={recentlyCreatedWireId}

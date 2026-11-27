@@ -147,7 +147,7 @@ export default function BlockTerminalShell({
                 {tab.icon}
                 {tab.id === "serial" ? "Serial" : tab.id === "build" ? "Build" : "Connection"}
                 {unread > 0 ? (
-                  <span className="rounded-full bg-[color:var(--ui-color-primary)] px-1.5 py-0.5 text-[10px] font-bold text-white">{unread} new</span>
+                  <span className="rounded-full bg-[color:var(--ui-color-primary-fill)] px-1.5 py-0.5 text-[10px] font-bold text-white">{unread} new</span>
                 ) : null}
               </button>
             );

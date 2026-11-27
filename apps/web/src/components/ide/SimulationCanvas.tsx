@@ -86,6 +86,9 @@ export default function SimulationCanvas({
     pulseWidths,
     busEvents,
     traceEvents,
+    neopixelFrames,
+    lcdStates,
+    pwmDuty,
     serialLines,
     serialConfig,
     isRunning,
@@ -132,8 +135,11 @@ export default function SimulationCanvas({
         boardName,
         busEvents,
         traceEvents,
+        neopixelFrames,
+        lcdStates,
+        pwmDuty,
       }),
-    [avrDigitalPinState, avrElectricalPinState, boardName, busEvents, components, netlist, pulseWidthState, resolvedConnections, simulationTick, traceEvents]
+    [avrDigitalPinState, avrElectricalPinState, boardName, busEvents, components, lcdStates, neopixelFrames, netlist, pulseWidthState, pwmDuty, resolvedConnections, simulationTick, traceEvents]
   );
 
   useEffect(() => {

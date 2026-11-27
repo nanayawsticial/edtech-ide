@@ -22,7 +22,8 @@ export function createBoardNodeId(componentType: string, pinId: string) {
 }
 
 export function parseBoardNodeId(nodeId: string) {
-  const prefixes = Object.values(KNOWN_BOARD_PREFIXES);
+  // Longest first, so "PICO_2W_GP15" is a Pico 2 W pin, not pin "2W_GP15" of a "PICO".
+  const prefixes = Array.from(new Set(Object.values(KNOWN_BOARD_PREFIXES))).sort((left, right) => right.length - left.length);
   for (const prefix of prefixes) {
     if (nodeId.startsWith(`${prefix}_`)) {
       return {

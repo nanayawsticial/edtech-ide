@@ -74,7 +74,7 @@ export default function TopBar({
   return (
     <>
       <motion.header
-        className="overflow-hidden rounded-[18px] border border-white/6 bg-[#0a1017] shadow-[0_24px_54px_-42px_rgba(0,0,0,0.95)] sm:rounded-[22px]"
+        className="overflow-hidden rounded-[18px] border border-white/6 bg-[color:var(--cl-raised)] shadow-[0_24px_54px_-42px_rgba(0,0,0,0.95)] sm:rounded-[22px]"
         variants={fadeInUp}
         initial="hidden"
         animate="visible"
@@ -133,7 +133,7 @@ export default function TopBar({
             <Button
               icon={nextWorkspaceIcon}
               onClick={onOpenCodingEnvironment}
-              className="min-h-10 rounded-full border border-cyan-300/16 bg-[linear-gradient(180deg,#4257c7_0%,#3446a4_100%)] px-4 text-sm text-white shadow-[0_16px_32px_-24px_rgba(66,87,199,0.82)] hover:bg-[linear-gradient(180deg,#4c62d6_0%,#3b50bc_100%)]"
+              className="min-h-10 rounded-full border border-cyan-300/16 bg-[linear-gradient(180deg,var(--cl-accent-from)_0%,var(--cl-accent-to)_100%)] px-4 text-sm text-white shadow-[0_16px_32px_-24px_var(--cl-accent-glow)] hover:bg-[linear-gradient(180deg,var(--cl-accent-hover-from)_0%,var(--cl-accent-hover-to)_100%)]"
             >
               {nextWorkspaceLabel}
             </Button>

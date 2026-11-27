@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, Flame, Minus, MoonStar, Plus, RotateCcw, Settings2, Sparkles, SunMedium, Type, WrapText } from "lucide-react";
+import { AlertTriangle, Check, Flame, Minus, MoonStar, Plus, RotateCcw, Settings2, Sparkles, Type, WrapText } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { pageTransition } from "@/components/ui/motion";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -52,12 +52,6 @@ const themeOptions: Array<{
   description: string;
   icon: React.ComponentType<{ size?: number }>;
 }> = [
-  {
-    id: "light",
-    label: "Light",
-    description: "Clean canvas and lighter editor surfaces.",
-    icon: SunMedium,
-  },
   {
     id: "dark",
     label: "Dark",
@@ -112,7 +106,7 @@ function PreferenceToggle({ title, description, enabled, onToggle }: PreferenceT
         onClick={() => onToggle(!enabled)}
         className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full border transition-colors duration-150 ${
           enabled
-            ? "border-[color:var(--ui-color-primary)]/25 bg-[color:var(--ui-color-primary)]"
+            ? "border-[color:var(--ui-color-primary)]/25 bg-[color:var(--ui-color-primary-fill)]"
             : "border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-quiet)]"
         }`}
       >
@@ -322,7 +316,7 @@ export default function PreferencesDialog({
                     <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--ui-color-text-soft)]">Theme</h3>
                     <p className="mt-1 text-sm text-[var(--ui-color-text-muted)]">Preview the editor and Blockly workspace in one click.</p>
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
                     {themeOptions.map((option) => {
                       const Icon = option.icon;
                       const isActive = option.id === theme;
@@ -330,13 +324,21 @@ export default function PreferencesDialog({
                         <button
                           key={option.id}
                           type="button"
+                          aria-pressed={isActive}
                           onClick={() => onThemeChange(option.id)}
-                          className={`text-left transition-all ${
+                          // .ui-foundation-panel sets border and box-shadow outside Tailwind's layers,
+                          // so the selected state uses an outline, which that class leaves alone.
+                          className={`relative text-left transition-all ${
                             isActive
-                              ? "ui-foundation-panel rounded-[24px] border-[color:var(--ui-color-primary)]/28 shadow-[0_28px_60px_-44px_rgba(24,39,75,0.35)]"
+                              ? "ui-foundation-panel rounded-[24px] outline outline-2 -outline-offset-1 outline-[color:var(--ui-color-primary)]"
                               : "ui-foundation-panel-quiet rounded-[24px] hover:border-[color:var(--ui-border-strong)]"
                           } px-4 py-4`}
                         >
+                          {isActive ? (
+                            <span className="absolute right-3 top-3 inline-flex h-6 w-6 items-center justify-center rounded-full bg-[color:var(--ui-color-primary-fill)] text-white">
+                              <Check size={13} strokeWidth={3} />
+                            </span>
+                          ) : null}
                           <span className="inline-flex h-10 w-10 items-center justify-center rounded-[14px] border border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-elevated)] text-[var(--ui-color-primary)]">
                             <Icon size={16} />
                           </span>
@@ -393,7 +395,7 @@ export default function PreferencesDialog({
 
                 <section className="ui-foundation-panel-quiet rounded-[26px] px-4 py-4">
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] border border-rose-200 bg-rose-50 text-rose-500">
+                    <div className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] border border-rose-400/30 bg-rose-500/10 text-rose-300">
                       <AlertTriangle size={18} />
                     </div>
                     <div className="min-w-0">
@@ -405,7 +407,7 @@ export default function PreferencesDialog({
                         variant="secondary"
                         icon={<RotateCcw size={15} />}
                         onClick={() => setConfirmResetOpen(true)}
-                        className="mt-4 min-h-10 rounded-[16px] border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-600 hover:border-rose-300 hover:bg-rose-100"
+                        className="mt-4 min-h-10 rounded-[16px] border-rose-400/30 bg-rose-500/10 px-4 py-2 text-sm text-rose-300 hover:border-rose-400/45 hover:bg-rose-500/20"
                       >
                         Reset App
                       </Button>

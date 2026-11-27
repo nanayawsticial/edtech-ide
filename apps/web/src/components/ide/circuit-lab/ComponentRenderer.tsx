@@ -7,6 +7,7 @@ import { WORKSPACE_SCALE } from '@/lib/wiring/componentGeometry';
 
 import type { WorldComponentNode } from './sceneTypes';
 import TrafficLightVisual from './TrafficLightVisual';
+import { DcMotorVisual, Lcd1602, NeoPixelRing, PicoBoardVisual, RelayModuleVisual, SevenSegmentDigit } from './ModuleVisuals';
 
 interface ComponentRendererProps {
   node: WorldComponentNode;
@@ -130,16 +131,18 @@ function ComponentRenderer({
         const Led = 'wokwi-led' as React.ElementType;
         const color = String(state.color || 'red');
         const value = state.outputHigh ? 1 : 0;
+        // How much current flows (from the electrical solve): a big resistor gives a dim LED.
+        const brightness = state.outputHigh ? Math.max(0.15, Math.min(1, Number(state.brightness ?? 1))) : 0;
 
         return (
           <div className="relative h-full w-full">
-            <Led color={color} value={value} style={FILL_STYLE} />
+            <Led color={color} value={value} brightness={brightness || 1} style={FILL_STYLE} />
             <div
               className="pointer-events-none absolute inset-[-18%] rounded-full transition-opacity duration-300"
               style={{
                 background: `radial-gradient(circle, ${color} 0%, transparent 68%)`,
                 filter: 'blur(16px)',
-                opacity: state.outputHigh ? 0.3 : 0,
+                opacity: 0.3 * brightness,
               }}
             />
             <div
@@ -233,6 +236,34 @@ function ComponentRenderer({
         const SoundSensor = 'wokwi-small-sound-sensor' as React.ElementType;
         return <SoundSensor ledPower={Boolean(state.powered)} ledSignal={Boolean(state.loud)} style={FILL_STYLE} />;
       }
+      case 'SLIDE_SWITCH': {
+        const SlideSwitch = 'wokwi-slide-switch' as React.ElementType;
+        return <SlideSwitch value={Number(state.value ?? 0) === 1 ? 1 : 0} style={FILL_STYLE} />;
+      }
+      case 'PIR': {
+        const Pir = 'wokwi-pir-motion-sensor' as React.ElementType;
+        return (
+          <div className="relative h-full w-full">
+            <Pir style={FILL_STYLE} />
+            {state.motion ? (
+              // Waves over the dome while it sees movement.
+              <div className="pointer-events-none absolute left-1/2 top-[36%] h-[70%] w-[70%] -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full border-2 border-amber-300/70" />
+            ) : null}
+          </div>
+        );
+      }
+      case 'SEVEN_SEGMENT':
+        return <SevenSegmentDigit values={Array.isArray(state.values) ? (state.values as number[]) : []} />;
+      case 'RASPBERRY_PI_PICO_2W':
+        return <PicoBoardVisual />;
+      case 'NEOPIXEL_RING':
+        return <NeoPixelRing colors={Array.isArray(state.colors) ? (state.colors as string[]) : []} pixels={Number(state.pixels ?? 12)} />;
+      case 'LCD1602':
+        return <Lcd1602 lines={Array.isArray(state.lines) ? (state.lines as string[]) : ['', '']} backlight={state.backlight !== false} />;
+      case 'RELAY':
+        return <RelayModuleVisual energized={Boolean(state.energized)} powered={Boolean(state.powered)} />;
+      case 'DC_MOTOR':
+        return <DcMotorVisual direction={Number(state.direction ?? 0) as -1 | 0 | 1} />;
       default:
         return <StaticSvg svg={definition.svg} />;
     }
@@ -298,6 +329,18 @@ function ComponentRenderer({
 
         {isPowered ? (
           <div className="pointer-events-none absolute -right-1.5 -top-1.5 h-3.5 w-3.5 rounded-full border border-emerald-300/80 bg-emerald-400/90 shadow-[0_0_14px_rgba(16,185,129,0.55)]" />
+        ) : null}
+
+        {typeof component.state?.name === 'string' && component.state.name ? (
+          // The learner's name for the part, kept upright whichever way the part is turned.
+          <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 -translate-x-1/2" data-part-name={component.state.name}>
+            <div
+              className="whitespace-nowrap rounded-full border border-white/15 bg-[color:var(--cl-panel)]/90 px-2 py-0.5 text-[10px] font-semibold text-white/90"
+              style={{ transform: `rotate(${-rotation}deg)` }}
+            >
+              {component.state.name}
+            </div>
+          </div>
         ) : null}
 
         {showUnwiredBadge ? (

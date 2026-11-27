@@ -555,5 +555,271 @@ export const CIRCUIT_COMPONENT_METADATA: CircuitComponentMetadata[] = [
         }
       ]
     }
+  },
+  {
+    "id": "SLIDE_SWITCH",
+    "name": "Slide Switch",
+    "category": "Basic",
+    "description": "Click it to slide: the middle pin joins pin 1 or pin 3.",
+    "aliases": [
+      "slide-switch",
+      "slide_switch",
+      "switch",
+      "spdt"
+    ],
+    "keywords": [
+      "switch",
+      "slide",
+      "toggle",
+      "on off",
+      "spdt",
+      "slide switch",
+      "slide_switch",
+      "basic",
+      "slide-switch"
+    ],
+    "placeable": true,
+    "singleton": false,
+    "previewSourceKey": "SLIDE_SWITCH",
+    "defaultState": {
+      "value": 0
+    },
+    "propertySchema": {
+      "fields": []
+    }
+  },
+  {
+    "id": "PIR",
+    "name": "PIR Motion Sensor",
+    "category": "Sensors",
+    "description": "Motion sensor: OUT goes HIGH while it sees movement. Click it to wave.",
+    "aliases": [
+      "pir",
+      "motion-sensor",
+      "pir-sensor",
+      "hc-sr501"
+    ],
+    "keywords": [
+      "pir",
+      "motion",
+      "movement",
+      "sensor",
+      "hc-sr501",
+      "pir motion sensor",
+      "sensors",
+      "motion-sensor",
+      "pir-sensor"
+    ],
+    "placeable": true,
+    "singleton": false,
+    "previewSourceKey": "PIR",
+    "defaultState": {
+      "motion": false
+    },
+    "propertySchema": {
+      "fields": [
+        {
+          "key": "motion",
+          "label": "Motion",
+          "type": "boolean",
+          "description": "Whether the sensor sees movement right now."
+        }
+      ]
+    }
+  },
+  {
+    "id": "SEVEN_SEGMENT",
+    "name": "7-Segment Display",
+    "category": "Displays",
+    "description": "One digit of eight LEDs (A to G and the dot) sharing a common leg.",
+    "aliases": [
+      "7-segment",
+      "7segment",
+      "seven-segment",
+      "seven_segment"
+    ],
+    "keywords": [
+      "7-segment",
+      "seven segment",
+      "digit",
+      "display",
+      "number",
+      "7-segment display",
+      "seven_segment",
+      "displays",
+      "7segment",
+      "seven-segment"
+    ],
+    "placeable": true,
+    "singleton": false,
+    "previewSourceKey": "SEVEN_SEGMENT",
+    "defaultState": {
+      "common": "cathode"
+    },
+    "propertySchema": {
+      "fields": []
+    }
+  },
+  {
+    "id": "RELAY",
+    "name": "Relay Module",
+    "category": "Actuators",
+    "description": "A switch worked by a pin: IN HIGH joins COM to NO, otherwise COM to NC.",
+    "aliases": [
+      "relay",
+      "relay-module",
+      "relay_module"
+    ],
+    "keywords": [
+      "relay",
+      "switch",
+      "module",
+      "coil",
+      "relay module",
+      "actuators",
+      "relay-module",
+      "relay_module"
+    ],
+    "placeable": true,
+    "singleton": false,
+    "previewSourceKey": "RELAY",
+    "defaultState": {
+      "energized": false
+    },
+    "propertySchema": {
+      "fields": []
+    }
+  },
+  {
+    "id": "DC_MOTOR",
+    "name": "DC Motor",
+    "category": "Actuators",
+    "description": "Spins while one terminal is HIGH and the other LOW; swap them to reverse.",
+    "aliases": [
+      "motor",
+      "dc-motor",
+      "dc_motor"
+    ],
+    "keywords": [
+      "motor",
+      "dc motor",
+      "spin",
+      "fan",
+      "dc_motor",
+      "actuators",
+      "dc-motor"
+    ],
+    "placeable": true,
+    "singleton": false,
+    "previewSourceKey": "DC_MOTOR",
+    "defaultState": {
+      "direction": 0
+    },
+    "propertySchema": {
+      "fields": []
+    }
+  },
+  {
+    "id": "NEOPIXEL_RING",
+    "name": "NeoPixel Ring",
+    "category": "Displays",
+    "description": "Twelve WS2812 colour LEDs in a ring, driven from one pin (Adafruit NeoPixel library).",
+    "aliases": [
+      "neopixel",
+      "neopixel-ring",
+      "ws2812",
+      "led-ring"
+    ],
+    "keywords": [
+      "neopixel",
+      "ws2812",
+      "rgb",
+      "ring",
+      "led ring",
+      "addressable",
+      "neopixel ring",
+      "neopixel_ring",
+      "displays",
+      "neopixel-ring",
+      "led-ring"
+    ],
+    "placeable": true,
+    "singleton": false,
+    "previewSourceKey": "NEOPIXEL_RING",
+    "defaultState": {
+      "pixels": 12
+    },
+    "propertySchema": {
+      "fields": []
+    }
+  },
+  {
+    "id": "LCD1602",
+    "name": "LCD 16x2 (I2C)",
+    "category": "Displays",
+    "description": "Two rows of 16 characters over I2C (LiquidCrystal_I2C library, address 0x27 or 0x3F).",
+    "aliases": [
+      "lcd",
+      "lcd1602",
+      "lcd-i2c",
+      "lcd16x2"
+    ],
+    "keywords": [
+      "lcd",
+      "16x2",
+      "screen",
+      "display",
+      "i2c",
+      "text",
+      "lcd 16x2 (i2c)",
+      "lcd1602",
+      "displays",
+      "lcd-i2c",
+      "lcd16x2"
+    ],
+    "placeable": true,
+    "singleton": false,
+    "previewSourceKey": "LCD1602",
+    "defaultState": {
+      "address": 39
+    },
+    "propertySchema": {
+      "fields": []
+    }
+  },
+  {
+    "id": "RASPBERRY_PI_PICO_2W",
+    "name": "Raspberry Pi Pico 2 W",
+    "category": "Boards",
+    "description": "Wi-Fi microcontroller for the MicroPython lessons. Circuit Lab shows its wiring; the code runs on the real board.",
+    "aliases": [
+      "pico",
+      "pico-2w",
+      "pico2w",
+      "raspberry-pi-pico-2w",
+      "pico_2w"
+    ],
+    "keywords": [
+      "pico",
+      "raspberry pi",
+      "rp2350",
+      "micropython",
+      "wifi",
+      "board",
+      "raspberry pi pico 2 w",
+      "raspberry_pi_pico_2w",
+      "boards",
+      "pico-2w",
+      "pico2w",
+      "raspberry-pi-pico-2w",
+      "pico_2w"
+    ],
+    "placeable": true,
+    "singleton": true,
+    "previewSourceKey": "RASPBERRY_PI_PICO_2W",
+    "defaultState": {},
+    "propertySchema": {
+      "fields": []
+    }
   }
 ];

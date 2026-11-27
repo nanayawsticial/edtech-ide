@@ -1042,7 +1042,7 @@ const handleGenerate = useCallback((force = false) => {
           />
 
           <div
-            className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-[radial-gradient(circle_at_top,rgba(134,78,251,0.2),transparent_42%),linear-gradient(180deg,#32106f_0%,#270e5b_100%)]"
+            className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-[radial-gradient(circle_at_top,var(--blockly-canvas-glow),transparent_42%),linear-gradient(180deg,var(--blockly-canvas-from)_0%,var(--blockly-canvas-to)_100%)]"
             onClickCapture={handleStageClickCapture}
           >
             <div ref={containerRef} className="absolute inset-0 h-full w-full min-h-0 min-w-0" />

@@ -18,11 +18,11 @@ type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "border-transparent bg-[linear-gradient(135deg,var(--ui-color-primary)_0%,var(--ui-color-primary-strong)_100%)] text-white shadow-[var(--ui-shadow-button)] hover:brightness-[1.04]",
+    "border-transparent bg-[linear-gradient(135deg,var(--ui-color-primary-fill)_0%,var(--ui-color-primary-fill-strong)_100%)] text-white shadow-[var(--ui-shadow-button)] hover:brightness-110",
   secondary:
-    "border-[color:var(--ui-border-strong)] bg-[color:var(--ui-surface-elevated)] text-[var(--ui-color-text)] shadow-[var(--ui-shadow-card)] hover:border-[color:var(--ui-color-primary)]/44 hover:bg-white/95",
+    "border-[color:var(--ui-border-strong)] bg-[color:var(--ui-surface-elevated)] text-[var(--ui-color-text)] shadow-[var(--ui-shadow-card)] hover:border-[color:var(--ui-color-primary)]/44 hover:bg-[color:var(--ui-color-surface)]",
   soft:
-    "border border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-quiet)] text-[var(--ui-color-text)] shadow-[0_14px_30px_-26px_rgba(15,23,42,0.25)] hover:border-[color:var(--ui-border-strong)] hover:bg-[color:var(--ui-surface-elevated)]",
+    "border border-[color:var(--ui-border-soft)] bg-[color:var(--ui-surface-quiet)] text-[var(--ui-color-text)] shadow-[0_14px_30px_-26px_rgba(0,0,0,0.5)] hover:border-[color:var(--ui-border-strong)] hover:bg-[color:var(--ui-surface-elevated)]",
   ghost:
     "border border-transparent bg-transparent text-[var(--ui-color-text-muted)] shadow-none hover:border-[color:var(--ui-border-soft)] hover:bg-[color:var(--ui-surface-quiet)] hover:text-[var(--ui-color-text)]",
   inverse:

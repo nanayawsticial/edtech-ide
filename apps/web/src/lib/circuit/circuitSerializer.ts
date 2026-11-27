@@ -72,6 +72,7 @@ function sanitizeNet(value: unknown): NetData | null {
           (point) => typeof point?.x === 'number' && typeof point?.y === 'number'
         )
       : undefined,
+    routing: candidate.routing === 'free' ? 'free' : undefined,
   };
 }
 

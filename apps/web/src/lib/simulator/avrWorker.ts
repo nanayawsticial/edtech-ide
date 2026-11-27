@@ -24,6 +24,9 @@ import {
 import { assemble } from 'avr8js/dist/esm/utils/assembler';
 
 import type { PinElectricalState, SimulationBusEvent, SimulationSerialConfig } from './simulationTypes';
+import { LCD_I2C_ADDRESSES, LcdI2cDecoder } from './lcdI2cDecoder';
+import { Ws2812Decoder, ws2812FrameToColors } from './ws2812Decoder';
+import { PwmTracker } from './pwmTracker';
 
 type InboundMessage =
   | { type: 'run'; hex: string }
@@ -42,6 +45,9 @@ type OutboundMessage =
   | { type: 'serial-byte'; value: number; direction: 'tx' | 'rx'; cycle: number }
   | { type: 'serial-config'; config: SimulationSerialConfig }
   | { type: 'bus-event'; event: SimulationBusEvent }
+  | { type: 'neopixel-frame'; pin: string; colors: string[]; cycle: number }
+  | { type: 'lcd-state'; address: number; lines: [string, string]; backlight: boolean; displayOn: boolean }
+  | { type: 'pwm-duty'; pin: string; duty: number | null }
   | { type: 'error'; message: string };
 
 const FLASH_SIZE = 0x8000;
@@ -58,6 +64,12 @@ let activeCpu: CPU | null = null;
 const pendingDigitalInputs = new Map<string, boolean>();
 const pendingAnalogInputs = new Map<string, number>();
 const pendingSerialInput: number[] = [];
+/** NeoPixel decoders, one per pin that has carried WS2812 pulses. */
+const ws2812Decoders = new Map<string, { decoder: Ws2812Decoder; port: AVRIOPort; index: number }>();
+/** Character LCD decoders, one per I2C address the sketch writes to (0x27, 0x3F). */
+const lcdDecoders = new Map<number, LcdI2cDecoder>();
+/** analogWrite duty cycle trackers, one per pin, with the port to report the final level from. */
+const pwmTrackers = new Map<string, { tracker: PwmTracker; port: AVRIOPort; index: number }>();
 
 function normalizePinId(pin: string) {
   return pin.trim().toUpperCase();
@@ -249,6 +261,35 @@ function emitPortChanges(cpu: CPU, ioPort: AVRIOPort, boardPins: string[]) {
 
       const state = ioPort.pinState(index);
       const electricalState = pinStateToElectricalState(state);
+
+      // Every edge also goes to a WS2812 decoder for this pin. While NeoPixel bits are arriving
+      // (hundreds of edges per show()), the per-edge pin messages are skipped.
+      if (state === PinState.High || state === PinState.Low) {
+        let entry = ws2812Decoders.get(pinName);
+        if (!entry) {
+          entry = { decoder: new Ws2812Decoder({ cpuFrequency: CPU_FREQUENCY }), port: ioPort, index };
+          ws2812Decoders.set(pinName, entry);
+        }
+        const wasActive = entry.decoder.active;
+        const frame = entry.decoder.edge(state === PinState.High, cpu.cycles);
+        if (frame) {
+          self.postMessage({ type: 'neopixel-frame', pin: pinName, colors: ws2812FrameToColors(frame), cycle: cpu.cycles } as OutboundMessage);
+        }
+        if (wasActive || entry.decoder.active) {
+          return;
+        }
+
+        // analogWrite toggles a pin hundreds of times a second: report its duty cycle instead.
+        let pwm = pwmTrackers.get(pinName);
+        if (!pwm) {
+          pwm = { tracker: new PwmTracker({ cpuFrequency: CPU_FREQUENCY }), port: ioPort, index };
+          pwmTrackers.set(pinName, pwm);
+        }
+        pwm.tracker.edge(state === PinState.High, cpu.cycles);
+        if (pwm.tracker.active(cpu.cycles)) {
+          return;
+        }
+      }
       if (state === PinState.High || state === PinState.Low) {
         self.postMessage({
           type: 'pin-change',
@@ -367,6 +408,14 @@ class InstrumentedTWIHandler {
 
   writeByte(value: number) {
     this.currentData.push(value);
+    if (this.currentAddress !== null && (LCD_I2C_ADDRESSES as readonly number[]).includes(this.currentAddress)) {
+      let lcd = lcdDecoders.get(this.currentAddress);
+      if (!lcd) {
+        lcd = new LcdI2cDecoder();
+        lcdDecoders.set(this.currentAddress, lcd);
+      }
+      lcd.write(value);
+    }
     emitBusEvent({
       bus: 'i2c',
       action: 'write-byte',
@@ -415,7 +464,40 @@ function drainSerialQueue(cpu: CPU) {
   }
 }
 
+/** Posts NeoPixel frames that have latched and LCD screens that changed during the last slice. */
+function flushDecodedPeripherals(cpu: CPU) {
+  ws2812Decoders.forEach((entry, pinName) => {
+    const frame = entry.decoder.poll(cpu.cycles);
+    if (frame) {
+      self.postMessage({ type: 'neopixel-frame', pin: pinName, colors: ws2812FrameToColors(frame), cycle: cpu.cycles } as OutboundMessage);
+      // The burst skipped per-edge messages, so report where the pin ended up.
+      emitPinSnapshot(cpu, entry.port, pinName, entry.index);
+    }
+  });
+  pwmTrackers.forEach((entry, pinName) => {
+    const duty = entry.tracker.poll(cpu.cycles);
+    if (duty === undefined) return;
+    self.postMessage({ type: 'pwm-duty', pin: pinName, duty } as OutboundMessage);
+    if (duty === null) {
+      // PWM stopped: report the level the pin settled at.
+      const state = entry.port.pinState(entry.index);
+      if (state === PinState.High || state === PinState.Low) {
+        self.postMessage({ type: 'pin-change', pin: pinName, high: state === PinState.High, cycle: cpu.cycles, electricalState: pinStateToElectricalState(state) } as OutboundMessage);
+      }
+    }
+  });
+  lcdDecoders.forEach((lcd, address) => {
+    const change = lcd.takeChange();
+    if (change) {
+      self.postMessage({ type: 'lcd-state', address, ...change } as OutboundMessage);
+    }
+  });
+}
+
 function startSimulation(programBytes: Uint8Array) {
+  ws2812Decoders.clear();
+  lcdDecoders.clear();
+  pwmTrackers.clear();
   stopLoop();
 
   const cpu = new CPU(bytesToProgram(programBytes));
@@ -473,6 +555,7 @@ function startSimulation(programBytes: Uint8Array) {
     }
 
     drainSerialQueue(cpu);
+    flushDecodedPeripherals(cpu);
   }, 16);
 
   self.postMessage({ type: 'ready' } as OutboundMessage);

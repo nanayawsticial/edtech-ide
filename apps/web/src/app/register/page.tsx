@@ -177,7 +177,7 @@ export default function RegisterPage() {
             icon={<ArrowRight size={18} />}
             disabled={isLoading || passwordMismatch}
             fullWidth
-            className="min-h-[58px] rounded-[20px] bg-[linear-gradient(135deg,#5cb2ff,#7b61ff)] text-white hover:bg-[linear-gradient(135deg,#56a7f0,#7157f5)]"
+            className="min-h-[58px] rounded-[20px] bg-[linear-gradient(135deg,var(--brand-cta-from),var(--brand-cta-to))] text-white hover:bg-[linear-gradient(135deg,var(--brand-cta-hover-from),var(--brand-cta-hover-to))]"
           >
             {isLoading ? "Creating account..." : "Create account"}
           </Button>

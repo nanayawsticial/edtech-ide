@@ -20,55 +20,6 @@ import { extractCompileFeedback } from '@/lib/simulator/compileFeedback';
 import { useSimulationStore } from '@/stores/simulationStore';
 
 const THEMES: Record<string, editor.IStandaloneThemeData> = {
-  'sticial-light': {
-    base: 'vs',
-    inherit: true,
-    rules: [
-      { token: 'comment', foreground: '6a8a60' },
-      { token: 'comment.block', foreground: '6a8a60' },
-      { token: 'keyword', foreground: 'b5580c' },
-      { token: 'keyword.control', foreground: 'b5580c' },
-      { token: 'storage.type', foreground: 'b5580c' },
-      { token: 'number', foreground: '0b6f9e' },
-      { token: 'number.float', foreground: '0b6f9e' },
-      { token: 'number.hex', foreground: '0b6f9e' },
-      { token: 'string', foreground: 'a44e00' },
-      { token: 'string.escape', foreground: 'c16000' },
-      { token: 'entity.name.function', foreground: '1a55a6' },
-      { token: 'support.function', foreground: '1a55a6' },
-      { token: 'keyword.directive', foreground: '7a3b8c' },
-      { token: 'meta.preprocessor', foreground: '7a3b8c' },
-      { token: 'constant', foreground: '0b6f9e' },
-      { token: 'variable', foreground: '1e293b' },
-      { token: 'operator', foreground: '2d3a8c' },
-      { token: 'delimiter.bracket', foreground: '334155' },
-      { token: 'delimiter', foreground: '334155' },
-    ],
-    colors: {
-      'editor.background': '#faf8f5',
-      'editor.foreground': '#1e293b',
-      'editor.lineHighlightBackground': '#eff3fa',
-      'editor.lineHighlightBorder': '#dde4f0',
-      'editor.selectionBackground': '#ccd9f880',
-      'editor.inactiveSelectionBackground': '#ccd9f840',
-      'editorLineNumber.foreground': '#a0adc0',
-      'editorLineNumber.activeForeground': '#3047a6',
-      'editorGutter.background': '#f2efea',
-      'editorCursor.foreground': '#3047a6',
-      'editorIndentGuide.background1': '#e2e8f0',
-      'editorIndentGuide.activeBackground1': '#c4cedf',
-      'editorBracketMatch.background': '#ccd9f860',
-      'editorBracketMatch.border': '#3047a6',
-      'editor.findMatchBackground': '#ffe58080',
-      'editor.findMatchHighlightBackground': '#ffe58040',
-      'editorWidget.background': '#ffffff',
-      'editorWidget.border': '#d1daea',
-      'scrollbarSlider.background': '#3047a622',
-      'scrollbarSlider.hoverBackground': '#3047a633',
-      'scrollbarSlider.activeBackground': '#3047a644',
-      'minimap.background': '#f2efea',
-    },
-  },
   'sticial-dark': {
     base: 'vs-dark',
     inherit: true,
@@ -100,7 +51,7 @@ const THEMES: Record<string, editor.IStandaloneThemeData> = {
       'editor.lineHighlightBorder': '#1e3050',
       'editor.selectionBackground': '#5f7bf740',
       'editor.inactiveSelectionBackground': '#5f7bf720',
-      'editorLineNumber.foreground': '#3a4d6a',
+      'editorLineNumber.foreground': '#6f7f9c',
       'editorLineNumber.activeForeground': '#7f96ff',
       'editorGutter.background': '#09101e',
       'editorCursor.foreground': '#7f96ff',
@@ -122,8 +73,8 @@ const THEMES: Record<string, editor.IStandaloneThemeData> = {
     base: 'vs-dark',
     inherit: true,
     rules: [
-      { token: 'comment', foreground: '7a635f' },
-      { token: 'comment.block', foreground: '7a635f' },
+      { token: 'comment', foreground: '9c8178' },
+      { token: 'comment.block', foreground: '9c8178' },
       { token: 'keyword', foreground: 'f97316' },
       { token: 'keyword.control', foreground: 'f97316' },
       { token: 'storage.type', foreground: 'f97316' },
@@ -149,7 +100,7 @@ const THEMES: Record<string, editor.IStandaloneThemeData> = {
       'editor.lineHighlightBorder': '#3a1e20',
       'editor.selectionBackground': '#f9731640',
       'editor.inactiveSelectionBackground': '#f9731620',
-      'editorLineNumber.foreground': '#5a3635',
+      'editorLineNumber.foreground': '#9e746a',
       'editorLineNumber.activeForeground': '#f97316',
       'editorGutter.background': '#130b0c',
       'editorCursor.foreground': '#f97316',
@@ -170,24 +121,10 @@ const THEMES: Record<string, editor.IStandaloneThemeData> = {
 };
 
 function getMonacoThemeName(platformTheme: ThemeMode): string {
-  switch (platformTheme) {
-    case 'dark':
-      return 'sticial-dark';
-    case 'magma':
-      return 'sticial-magma';
-    default:
-      return 'sticial-light';
-  }
+  return platformTheme === 'magma' ? 'sticial-magma' : 'sticial-dark';
 }
 
 const HEADER_STYLES: Record<ThemeMode, { bg: string; border: string; fg: string; badge: string; badgeText: string }> = {
-  light: {
-    bg: '#f2efea',
-    border: '#dde4f0',
-    fg: '#3047a6',
-    badge: '#eff3fa',
-    badgeText: '#526173',
-  },
   dark: {
     bg: '#09101e',
     border: '#1e3050',
@@ -492,7 +429,7 @@ export default function TextEditor({
             >
               <button
                 onClick={() => setEditorFontSize(clampEditorFontSize(fontSize - 1))}
-                className="rounded p-1 hover:bg-black/10 dark:hover:bg-white/10"
+                className="rounded p-1 hover:bg-white/10"
                 title="Decrease font size"
                 disabled={fontSize <= MIN_EDITOR_FONT_SIZE}
               >
@@ -501,7 +438,7 @@ export default function TextEditor({
               <span className="w-7 text-center font-mono text-[10px]">{fontSize}</span>
               <button
                 onClick={() => setEditorFontSize(clampEditorFontSize(fontSize + 1))}
-                className="rounded p-1 hover:bg-black/10 dark:hover:bg-white/10"
+                className="rounded p-1 hover:bg-white/10"
                 title="Increase font size"
                 disabled={fontSize >= MAX_EDITOR_FONT_SIZE}
               >

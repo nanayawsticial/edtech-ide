@@ -109,7 +109,7 @@ export function CategorySidebar({
                   onClick={() => onLearningLevelChange(level)}
                   className={`rounded-[12px] border px-2 py-1.5 text-[11px] font-semibold transition-all ${
                     isActive
-                      ? 'border-violet-300/30 bg-[linear-gradient(180deg,#8a56ff_0%,#7641ea_100%)] text-white shadow-[0_20px_34px_-24px_rgba(118,65,234,0.76)]'
+                      ? 'border-violet-300/30 bg-[linear-gradient(180deg,var(--ide-category-from)_0%,var(--ide-category-to)_100%)] text-white shadow-[0_20px_34px_-24px_rgba(118,65,234,0.76)]'
                       : 'border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-card)] text-[color:var(--blockly-sidebar-text-soft)] hover:border-[color:var(--blockly-sidebar-border-strong)] hover:text-[color:var(--blockly-sidebar-text)]'
                   }`}
                 >
@@ -157,7 +157,7 @@ export function CategorySidebar({
                   title={categoryDescription}
                   className={`group flex w-full items-center gap-2.5 rounded-[14px] border px-2.5 py-2 text-left transition-all ${
                     isActive
-                      ? 'border-violet-300/35 bg-[linear-gradient(180deg,#8a56ff_0%,#7641ea_100%)] text-white shadow-[0_22px_38px_-26px_rgba(134,78,251,0.72)]'
+                      ? 'border-violet-300/35 bg-[linear-gradient(180deg,var(--ide-category-from)_0%,var(--ide-category-to)_100%)] text-white shadow-[0_22px_38px_-26px_rgba(134,78,251,0.72)]'
                       : isLocked
                         ? 'border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-card)] text-[color:var(--blockly-sidebar-text-soft)] opacity-70'
                         : 'border-[color:var(--blockly-sidebar-border)] bg-[color:var(--blockly-sidebar-card)] text-[color:var(--blockly-sidebar-text)] hover:border-[color:var(--blockly-sidebar-border-strong)] hover:bg-[color:var(--blockly-sidebar-card-strong)] hover:text-[color:var(--blockly-sidebar-text)]'

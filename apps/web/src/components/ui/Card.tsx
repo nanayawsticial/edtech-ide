@@ -29,7 +29,7 @@ const variantClasses: Record<CardVariant, string> = {
   quiet:
     "bg-[color:var(--ui-surface-quiet)] shadow-[0_12px_28px_-24px_rgba(15,23,42,0.16)]",
   immersive:
-    "ui-always-dark bg-[linear-gradient(180deg,rgba(18,22,36,0.98)_0%,rgba(13,16,28,0.96)_100%)] shadow-[0_28px_72px_-42px_rgba(0,0,0,0.92)] border-white/10",
+    "ui-always-dark bg-[linear-gradient(180deg,var(--ui-card-immersive-from)_0%,var(--ui-card-immersive-to)_100%)] shadow-[0_28px_72px_-42px_rgba(0,0,0,0.92)] border-white/10",
 };
 
 export function Card({
