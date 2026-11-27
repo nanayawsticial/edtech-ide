@@ -13,6 +13,48 @@ export function waits(ms: number): StepCheck {
   return { kind: 'code', pattern: `delay\\(\\s*${ms}\\s*\\)`, label: `Waits ${ms} milliseconds` };
 }
 
+/** C++ statements as regular expressions, for `loopRunsInOrder`. */
+export const writeStatement = (pin: number | string, state: 'HIGH' | 'LOW') => `digitalWrite\\(\\s*${pin}\\s*,\\s*${state}\\s*\\);`;
+/** "wait 1 seconds" makes the same delay(1000) as "wait 1000 milliseconds", so either block counts. */
+export const waitStatement = (ms: number) => `delay\\(\\s*${ms}\\s*\\);`;
+
+/**
+ * These statements come one straight after another inside forever (the loop must hold no braces
+ * before them). Checks the order, not just that the blocks are there: on, off, wait makes an LED
+ * that looks always off.
+ */
+export function loopRunsInOrder(label: string, ...statements: string[]): StepCheck {
+  return { kind: 'code', pattern: `void loop\\(\\)\\s*\\{[^}]*${statements.join('\\s*')}`, label };
+}
+
+/** Inside forever, `pin` goes on, then a wait, then off, then a wait, in that order. */
+export function blinksInOrder(pin: number, ms = 1000): StepCheck {
+  return loopRunsInOrder(
+    `Pin ${pin}: on, wait, off, wait, in that order`,
+    writeStatement(pin, 'HIGH'),
+    waitStatement(ms),
+    writeStatement(pin, 'LOW'),
+    waitStatement(ms),
+  );
+}
+
+// --- Wording shared by the numbered block steps ---
+
+/** Opens the first code step of an activity that starts a new circuit. */
+export const BLOCKS_INTRO =
+  'Click Open Blocks at the top of the screen. Your program has two big blocks: "on start" runs once, when the board switches on, and "forever" runs again and again.';
+
+/** Where the very first block goes: says how to drag, for learners who have never done it. */
+export const DRAG_INTO_ON_START = 'Press and hold it, drag it inside "on start", and let go when it clicks into place.';
+export const DRAG_INTO_FOREVER = 'Press and hold it, drag it inside "forever", and let go when it clicks into place.';
+
+/** The Start drawer has "wait 1 seconds" just above "wait 1000 milliseconds": point at the right one. */
+export const WAIT_MS_FIND = 'Take "wait 1000 milliseconds", just under "wait 1 seconds".';
+
+/** Clearing "forever" before building something new in it. */
+export const EMPTY_FOREVER =
+  'First empty "forever": drag the top block inside it onto the bin in the bottom-right corner. The blocks under it go with it.';
+
 export function all(...checks: StepCheck[]): StepCheck {
   return { kind: 'all', checks };
 }

@@ -3,7 +3,7 @@
 export const coreBlocks = [
 {
             type: "arduino_setup_loop",
-            message0: "legacy setup %1 %2 loop %3 %4",
+            message0: "setup %1 %2 loop %3 %4",
             args0: [
                 { type: "input_dummy" },
                 { type: "input_statement", name: "SETUP" },
@@ -11,7 +11,7 @@ export const coreBlocks = [
                 { type: "input_statement", name: "LOOP" }
             ],
             style: "setup_blocks",
-            tooltip: "Legacy combined root block kept for older projects. New projects should use on start and forever.",
+            tooltip: "Setup runs once when the board starts; loop repeats forever. Older projects use this block; new ones use on start and forever.",
             helpUrl: ""
         },
         // Root blocks (Code Kit style — two independent root blocks)

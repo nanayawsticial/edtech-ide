@@ -89,6 +89,11 @@ const DEFAULT_CATEGORY_CHROME: CategoryChrome = { icon: <BlocksIcon size={16} st
 /** A block group as the sidebar shows it: the toolbox summary plus its icon and colour. */
 export type ShelfCategory = GuidedToolboxCategorySummary & CategoryChrome;
 
+/** The icon and colour the sidebar gives a block group, by group id ("output", "start", ...). */
+export function getGuidedCategoryChrome(id: string): CategoryChrome {
+  return GUIDED_CATEGORY_METADATA[id] || DEFAULT_CATEGORY_CHROME;
+}
+
 export function toShelfCategory(category: GuidedToolboxCategorySummary): ShelfCategory {
   const chrome = GUIDED_CATEGORY_METADATA[category.id] || DEFAULT_CATEGORY_CHROME;
   return { ...category, icon: chrome.icon, color: chrome.color };

@@ -1,19 +1,28 @@
-import type { Lesson, LessonActivity, LessonStep, StepCheck } from '../types';
+import type { BlockInstruction, Lesson, LessonActivity, LessonStep, StepCheck } from '../types';
 import {
   all,
+  blinksInOrder,
+  BLOCKS_INTRO,
+  DRAG_INTO_FOREVER,
+  DRAG_INTO_ON_START,
+  EMPTY_FOREVER,
   forever,
+  loopRunsInOrder,
   onStart,
   pinModeBlock,
   PLACING_HINT,
   program,
   RERUN_STEP_BODY,
   RUN_STEP_BODY,
+  setsOutput,
   STARTER_BOARD_PARTS,
+  WAIT_MS_FIND,
   waitBlock,
-  waits,
+  waitStatement,
   WIRING_HINT,
   writeBlock,
   writesPin,
+  writeStatement,
 } from './helpers';
 
 // Adapted from the STEMAIDE CODER manuals "4. Traffic Light Module" (4.0-4.6). The manuals' code
@@ -44,16 +53,27 @@ const LAMPS: Record<Lamp, { pin: number; modulePin: 'R' | 'Y' | 'G'; name: strin
   },
 };
 
+/** The lamps are added in this order, and each activity keeps the pins set up before it. */
+const LAMP_ORDER: Lamp[] = ['red', 'yellow', 'green'];
+
 const PARTS = [...STARTER_BOARD_PARTS, { type: 'TRAFFIC_LIGHT', label: 'Traffic light module', count: 1 }];
 
 function wiredLamp(lamp: Lamp): StepCheck {
   return { kind: 'wired', type: 'TRAFFIC_LIGHT', pin: LAMPS[lamp].modulePin, to: String(LAMPS[lamp].pin) };
 }
 
+/** "on start" with every lamp pin set up so far, up to and including `lamp`. */
+function setupUpTo(lamp: Lamp) {
+  const lamps = LAMP_ORDER.slice(0, LAMP_ORDER.indexOf(lamp) + 1);
+  return onStart(...lamps.map((each) => pinModeBlock(LAMPS[each].pin)));
+}
+
 function lampOn(lamp: Lamp, index: number): LessonActivity {
   const { pin, modulePin, name, meaning } = LAMPS[lamp];
+  const colour = name.toLowerCase();
   const first = index === 0;
   const steps: LessonStep[] = [];
+  const finished = program(setupUpTo(lamp), forever(writeBlock(pin, 'HIGH')));
 
   if (first) {
     steps.push(
@@ -82,31 +102,50 @@ function lampOn(lamp: Lamp, index: number): LessonActivity {
     steps.push({
       id: 'wire',
       kind: 'wire',
-      title: `Wire ${name.toLowerCase()}`,
+      title: `Wire ${colour}`,
       body: `Keep your circuit. Connect the module's ${modulePin} pin to pin ${pin}.`,
       hint: WIRING_HINT,
       check: wiredLamp(lamp),
     });
   }
 
+  const build: BlockInstruction[] = [
+    {
+      type: 'arduino_pinMode',
+      group: 'output',
+      block: 'set pin ▾ to OUTPUT ▾',
+      place: first ? DRAG_INTO_ON_START : 'Snap it inside "on start", under the last "set pin" block.',
+      set: `Choose pin ${pin}. Leave OUTPUT as it is.`,
+    },
+    {
+      type: 'arduino_digitalWrite',
+      group: 'output',
+      block: 'digital write pin ▾ to HIGH ▾',
+      place: first ? DRAG_INTO_FOREVER : 'Drag it inside the empty "forever".',
+      set: `Choose pin ${pin}. Leave HIGH: HIGH sends power to the ${colour} lamp.`,
+    },
+  ];
+
   steps.push(
     {
       id: 'code',
       kind: 'code',
-      title: `Switch ${name.toLowerCase()} on`,
+      title: `Switch ${colour} on`,
       body: first
-        ? 'Open Blocks. In loop, add "digital write pin 5 to HIGH". HIGH sends power out of pin 5 to the red lamp.'
-        : `Open Blocks. Delete the blocks inside loop (drag them to the bin). Then add "digital write pin ${pin} to HIGH".`,
-      blocks: ['loop', `digital write pin ${pin} to HIGH`],
+        ? `${BLOCKS_INTRO} Get pin 5 ready in "on start", then switch the red lamp on in "forever".`
+        : `${EMPTY_FOREVER} Then get pin ${pin} ready and switch the ${colour} lamp on.`,
+      build,
+      picture: finished,
+      expect: `The ${colour} lamp comes on and stays on.`,
       cpp: `const int ${lamp} = ${pin};\n\npinMode(${lamp}, OUTPUT);\ndigitalWrite(${lamp}, HIGH);`,
-      check: writesPin(pin, 'HIGH'),
+      check: all(setsOutput(pin), writesPin(pin, 'HIGH')),
     },
     { id: 'run', kind: 'run', title: 'Run the simulation', body: first ? RUN_STEP_BODY : RERUN_STEP_BODY, check: { kind: 'simulating' } },
     {
       id: 'observe',
       kind: 'observe',
-      title: `See the ${name.toLowerCase()} light`,
-      body: `The ${name.toLowerCase()} lamp should be on and stay on.`,
+      title: `See the ${colour} light`,
+      body: `The ${colour} lamp should be on and stay on.`,
       check: { kind: 'seen', tokens: [`TRAFFIC_LIGHT:${lamp}`], label: `${name} lamp is on` },
     },
   );
@@ -114,22 +153,24 @@ function lampOn(lamp: Lamp, index: number): LessonActivity {
   return {
     id: `traffic-${index + 1}`,
     title: `${name} light on`,
-    goal: `Switch on the ${name.toLowerCase()} lamp of the traffic light.`,
+    goal: `Switch on the ${colour} lamp of the traffic light.`,
     realWorld: meaning,
     parts: PARTS,
     steps,
-    solution: program(onStart(pinModeBlock(pin)), forever(writeBlock(pin, 'HIGH'))),
-    observe: `The ${name.toLowerCase()} lamp is on.`,
+    solution: finished,
+    observe: `The ${colour} lamp is on.`,
     wrapUp: `Each lamp has its own pin, so your program can choose exactly which light is on.`,
   };
 }
 
 function lampBlink(lamp: Lamp, index: number): LessonActivity {
   const { pin, name, blinkMeaning } = LAMPS[lamp];
+  const colour = name.toLowerCase();
+  const finished = program(setupUpTo(lamp), forever(writeBlock(pin, 'HIGH'), waitBlock(400), writeBlock(pin, 'LOW'), waitBlock(400)));
   return {
     id: `traffic-${index + 1}`,
     title: `${name} light blinking`,
-    goal: `Make the ${name.toLowerCase()} lamp blink.`,
+    goal: `Make the ${colour} lamp blink.`,
     realWorld: blinkMeaning,
     parts: PARTS,
     steps: [
@@ -137,23 +178,124 @@ function lampBlink(lamp: Lamp, index: number): LessonActivity {
         id: 'code',
         kind: 'code',
         title: 'On, wait, off, wait',
-        body: `In loop, after "digital write pin ${pin} to HIGH", add: wait 400 milliseconds, set pin ${pin} LOW, wait 400 milliseconds.`,
-        blocks: [`digital write pin ${pin} to HIGH`, 'wait 400 milliseconds', `digital write pin ${pin} to LOW`, 'wait 400 milliseconds'],
+        body: `Keep your blocks. Under "digital write pin ${pin} to HIGH" in "forever", add three more: wait, off, wait.`,
+        build: [
+          {
+            type: 'time_delay',
+            group: 'start',
+            block: 'wait 1000 milliseconds',
+            find: WAIT_MS_FIND,
+            place: `Snap it under "digital write pin ${pin} to HIGH" in "forever".`,
+            set: 'Click 1000 and type 400. 400 milliseconds is less than half a second.',
+          },
+          {
+            type: 'arduino_digitalWrite',
+            group: 'output',
+            block: 'digital write pin ▾ to HIGH ▾',
+            place: 'Snap it under the "wait" block.',
+            set: `Choose pin ${pin}, then change HIGH to LOW.`,
+          },
+          {
+            type: 'time_delay',
+            group: 'start',
+            block: 'wait 1000 milliseconds',
+            find: WAIT_MS_FIND,
+            place: 'Snap it at the bottom of "forever".',
+            set: 'Change 1000 to 400.',
+          },
+        ],
+        picture: finished,
+        expect: `The ${colour} lamp switches on and off a few times a second.`,
         cpp: `digitalWrite(${lamp}, HIGH);\ndelay(400);\ndigitalWrite(${lamp}, LOW);\ndelay(400);`,
-        check: all(writesPin(pin, 'HIGH'), writesPin(pin, 'LOW'), waits(400)),
+        check: all(writesPin(pin, 'LOW'), blinksInOrder(pin, 400)),
       },
       { id: 'run', kind: 'run', title: 'Run the simulation', body: RERUN_STEP_BODY, check: { kind: 'simulating' } },
       {
         id: 'observe',
         kind: 'observe',
         title: 'Watch it blink',
-        body: `The ${name.toLowerCase()} lamp should switch on and off a few times a second.`,
+        body: `The ${colour} lamp should switch on and off a few times a second.`,
         check: { kind: 'blinked', type: 'TRAFFIC_LIGHT', times: 4 },
       },
     ],
-    solution: program(onStart(pinModeBlock(pin)), forever(writeBlock(pin, 'HIGH'), waitBlock(400), writeBlock(pin, 'LOW'), waitBlock(400))),
-    observe: `The ${name.toLowerCase()} lamp blinks.`,
+    solution: finished,
+    observe: `The ${colour} lamp blinks.`,
     wrapUp: 'A short wait makes a fast blink. Try 1000 milliseconds to see the difference.',
+  };
+}
+
+/** The full sequence, one lamp at a time: on, wait, off. */
+const PHASES: Array<{ lamp: Lamp; ms: number }> = [
+  { lamp: 'red', ms: 3000 },
+  { lamp: 'yellow', ms: 1000 },
+  { lamp: 'green', ms: 3000 },
+  { lamp: 'yellow', ms: 1000 },
+];
+
+const phaseBlocks = ({ lamp, ms }: { lamp: Lamp; ms: number }) => [
+  writeBlock(LAMPS[lamp].pin, 'HIGH'),
+  waitBlock(ms),
+  writeBlock(LAMPS[lamp].pin, 'LOW'),
+];
+const phaseStatements = ({ lamp, ms }: { lamp: Lamp; ms: number }) => [
+  writeStatement(LAMPS[lamp].pin, 'HIGH'),
+  waitStatement(ms),
+  writeStatement(LAMPS[lamp].pin, 'LOW'),
+];
+
+function sequenceStep(index: number): LessonStep {
+  const phase = PHASES[index];
+  const { pin, name } = LAMPS[phase.lamp];
+  const colour = name.toLowerCase();
+  const seconds = phase.ms / 1000;
+  const last = index === PHASES.length - 1;
+  const intro = [
+    `${EMPTY_FOREVER} Then build the red part: red on, wait three seconds, red off.`,
+    'At the bottom of "forever", add the yellow part: yellow on, wait one second, yellow off.',
+    'At the bottom of "forever", add the green part: green on, wait three seconds, green off.',
+    'Finish with yellow again, so drivers get ready to stop before red comes back.',
+  ][index];
+
+  return {
+    id: `code-${index + 1}`,
+    kind: 'code',
+    title: last ? 'Yellow again' : `The ${colour} part`,
+    body: intro,
+    build: [
+      {
+        type: 'arduino_digitalWrite',
+        group: 'output',
+        block: 'digital write pin ▾ to HIGH ▾',
+        place: index === 0 ? 'Drag it inside the empty "forever".' : 'Snap it at the bottom of "forever".',
+        set: `Choose pin ${pin} (${colour}). Leave HIGH.`,
+      },
+      {
+        type: 'time_delay',
+        group: 'start',
+        block: 'wait 1000 milliseconds',
+        find: WAIT_MS_FIND,
+        place: 'Snap it under that block.',
+        set: phase.ms === 1000 ? 'Leave it at 1000: one second.' : `Change 1000 to ${phase.ms}. ${phase.ms} milliseconds is ${seconds} seconds.`,
+      },
+      {
+        type: 'arduino_digitalWrite',
+        group: 'output',
+        block: 'digital write pin ▾ to HIGH ▾',
+        place: 'Snap it under the "wait" block.',
+        set: `Choose pin ${pin}, then change HIGH to LOW.`,
+      },
+    ],
+    picture: program(setupUpTo('green'), forever(...PHASES.slice(0, index + 1).flatMap(phaseBlocks))),
+    expect: last
+      ? 'Red for three seconds, yellow for one, green for three, yellow for one, then red again, over and over.'
+      : index === 0
+        ? 'Red is on for three seconds, goes off, and comes straight back on, because "forever" starts again.'
+        : `Each lamp you have added so far takes its turn. Keep going: the sequence is not finished yet.`,
+    cpp: `digitalWrite(${phase.lamp}, HIGH);\ndelay(${phase.ms});\ndigitalWrite(${phase.lamp}, LOW);`,
+    hint: index === 0 ? undefined : 'Quicker: right-click a block and choose Duplicate, then change the copy.',
+    check: last
+      ? loopRunsInOrder('Red, yellow, green, yellow, in that order', ...PHASES.flatMap(phaseStatements))
+      : loopRunsInOrder(`${name}: on, wait ${seconds} second${seconds === 1 ? '' : 's'}, off`, ...phaseStatements(phase)),
   };
 }
 
@@ -164,21 +306,7 @@ const fullSequence: LessonActivity = {
   realWorld: 'Traffic lights keep junctions safe by giving each direction its turn in a fixed order.',
   parts: PARTS,
   steps: [
-    {
-      id: 'code',
-      kind: 'code',
-      title: 'Program the sequence',
-      body: 'Delete the blocks inside loop. Then build: red on, wait 3000, red off; yellow on, wait 1000, yellow off; green on, wait 3000, green off; yellow on, wait 1000, yellow off.',
-      blocks: [
-        'digital write pin 5 to HIGH', 'wait 3000 milliseconds', 'digital write pin 5 to LOW',
-        'digital write pin 6 to HIGH', 'wait 1000 milliseconds', 'digital write pin 6 to LOW',
-        'digital write pin 7 to HIGH', 'wait 3000 milliseconds', 'digital write pin 7 to LOW',
-        'digital write pin 6 to HIGH', 'wait 1000 milliseconds', 'digital write pin 6 to LOW',
-      ],
-      cpp: 'digitalWrite(red, HIGH);    delay(3000); digitalWrite(red, LOW);\ndigitalWrite(yellow, HIGH); delay(1000); digitalWrite(yellow, LOW);\ndigitalWrite(green, HIGH);  delay(3000); digitalWrite(green, LOW);\ndigitalWrite(yellow, HIGH); delay(1000); digitalWrite(yellow, LOW);',
-      hint: 'Build one colour (on, wait, off), then right-click its blocks and choose Duplicate for the next one.',
-      check: all(writesPin(5, 'HIGH'), writesPin(6, 'HIGH'), writesPin(7, 'HIGH'), waits(3000), waits(1000)),
-    },
+    ...PHASES.map((_, index) => sequenceStep(index)),
     { id: 'run', kind: 'run', title: 'Run the simulation', body: RERUN_STEP_BODY, check: { kind: 'simulating' } },
     {
       id: 'observe',
@@ -188,15 +316,7 @@ const fullSequence: LessonActivity = {
       check: { kind: 'seen', tokens: ['TRAFFIC_LIGHT:red', 'TRAFFIC_LIGHT:yellow', 'TRAFFIC_LIGHT:green'], label: 'Red, yellow and green each come on' },
     },
   ],
-  solution: program(
-    onStart(pinModeBlock(5), pinModeBlock(6), pinModeBlock(7)),
-    forever(
-      writeBlock(5, 'HIGH'), waitBlock(3000), writeBlock(5, 'LOW'),
-      writeBlock(6, 'HIGH'), waitBlock(1000), writeBlock(6, 'LOW'),
-      writeBlock(7, 'HIGH'), waitBlock(3000), writeBlock(7, 'LOW'),
-      writeBlock(6, 'HIGH'), waitBlock(1000), writeBlock(6, 'LOW'),
-    ),
-  ),
+  solution: program(setupUpTo('green'), forever(...PHASES.flatMap(phaseBlocks))),
   observe: 'The lights run red, yellow, green, yellow, over and over.',
   wrapUp: 'You built a working traffic light controller: three outputs in a timed sequence, the same logic real ones use.',
 };

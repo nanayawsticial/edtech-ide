@@ -295,13 +295,20 @@ export default function BlockEditor({
     [eventBus, serializeWorkspace]
   );
 
+  // An empty program starts with "on start" and "forever", the blocks the lessons teach. (Older
+  // projects may still hold the combined "setup / loop" block; it keeps working.)
   const createDefaultSetupBlock = useCallback(() => {
     if (!workspaceRef.current) return;
 
-    const legacyRootBlock = workspaceRef.current.newBlock('arduino_setup_loop');
-    legacyRootBlock.initSvg();
-    legacyRootBlock.render();
-    legacyRootBlock.moveBy(56, 56);
+    const onStart = workspaceRef.current.newBlock('arduino_on_start');
+    onStart.initSvg();
+    onStart.render();
+    onStart.moveBy(56, 56);
+
+    const forever = workspaceRef.current.newBlock('arduino_forever');
+    forever.initSvg();
+    forever.render();
+    forever.moveBy(56, 196);
 
     syncBlockCount();
   }, [syncBlockCount]);

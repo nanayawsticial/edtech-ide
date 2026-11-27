@@ -49,6 +49,38 @@ export type StepCheck = { label?: string } & (
 
 export type LessonStepKind = 'place' | 'wire' | 'code' | 'run' | 'observe';
 
+/** A group in the Blocks sidebar, by id (the learner sees its label, e.g. "Output"). */
+export type BlockGroupId =
+  | 'start'
+  | 'your-circuit'
+  | 'output'
+  | 'decide'
+  | 'sense'
+  | 'numbers'
+  | 'variables'
+  | 'functions'
+  | 'messages'
+  | 'displays';
+
+/** One block to add, in order: which block, where to find it, where it goes, what to change. */
+export interface BlockInstruction {
+  /** The Blockly block type. The lesson tests check it is in `group` and in the step's picture. */
+  type: string;
+  /**
+   * The group in the Blocks sidebar the block is in. Left out for a block already in the learner's
+   * program, which they move or change instead of adding a new one.
+   */
+  group?: BlockGroupId;
+  /** The words on the block as the learner sees it in the drawer, e.g. "set pin ▾ to OUTPUT ▾". */
+  block: string;
+  /** Where in the drawer to look, when the block is hard to spot: far down, or next to a look-alike. */
+  find?: string;
+  /** Where it goes, as a short sentence: 'Snap it inside "on start".' */
+  place: string;
+  /** What to change on it, as a short sentence: 'Click the pin number and choose 6.' */
+  set?: string;
+}
+
 export interface LessonStep {
   id: string;
   kind: LessonStepKind;
@@ -57,6 +89,18 @@ export interface LessonStep {
   body: string;
   /** Blocks to use, by the text the learner sees on them, e.g. "digital write pin 6 to HIGH". */
   blocks?: string[];
+  /**
+   * Block lessons: each block to add, in order, shown as a numbered list. Takes the place of
+   * `blocks` when given.
+   */
+  build?: BlockInstruction[];
+  /**
+   * How the blocks should look at the end of this step (Blockly XML), drawn as a picture. The
+   * lesson tests require this step's code checks to pass on it.
+   */
+  picture?: string;
+  /** What happens when the program runs after this step (or that nothing shows yet, and why). */
+  expect?: string;
   /** The C++ these blocks make, as taught in the manual. */
   cpp?: string;
   /** MicroPython for the learner to copy into main.py (typed-code lessons), with a Copy button. */

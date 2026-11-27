@@ -213,11 +213,73 @@ for (const lesson of Object.values(LESSONS)) {
     if (showSolution) console.log(`--- ${activity.id}\n${codeFor(activity.solution)}`);
 
     for (const { step, check } of codeChecks) {
-      const code = codeFor(step.solution ?? activity.solution);
+      // A step's picture shows the blocks at the end of that step, so its checks must pass on it.
+      const code = codeFor(step.picture ?? step.solution ?? activity.solution);
       const [result] = evaluateCheck(check, { ...baseContext, code });
       assert.ok(result.passed, `${activity.id}/${step.id}: "${result.label}" (${check.pattern}) fails on the reference solution:\n${code}`);
     }
   }
+}
+
+// Numbered block instructions send the learner to a sidebar group: the block must really be in
+// that group's drawer, and in the step's picture of how the blocks should look.
+let blockInstructionCount = 0;
+{
+  const { GUIDED_TOOLBOX_GROUPS, isLearningLevelUnlocked } = loader.loadModule(path.join(srcRoot, 'lib', 'blockly', 'guidedToolbox.ts'));
+  const { TOOLBOX_CATEGORY_DEFINITIONS } = loader.loadModule(path.join(srcRoot, 'lib', 'blockly', 'registry.ts'));
+  // Variables and Functions fill themselves in Blockly; these are the blocks they offer.
+  const CUSTOM_CATEGORY_BLOCKS = {
+    VARIABLE: ['variables_get', 'variables_set', 'math_change'],
+    PROCEDURE: ['procedures_defnoreturn', 'procedures_defreturn', 'procedures_callnoreturn', 'procedures_callreturn'],
+  };
+  const blocksInGroup = new Map(
+    GUIDED_TOOLBOX_GROUPS.map((group) => [
+      group.id,
+      new Set(
+        TOOLBOX_CATEGORY_DEFINITIONS.filter((category) => group.categoryNames.includes(category.name)).flatMap((category) => [
+          ...category.entries.filter((entry) => entry.kind === 'block').map((entry) => entry.type),
+          ...(CUSTOM_CATEGORY_BLOCKS[category.custom] ?? []),
+        ])
+      ),
+    ])
+  );
+  for (const lesson of Object.values(LESSONS)) {
+    for (const activity of lesson.activities) {
+      for (const step of activity.steps) {
+        for (const instruction of step.build ?? []) {
+          const where = `${activity.id}/${step.id}: "${instruction.block}"`;
+          // No group: the block is already in the learner's program, to move or change.
+          if (instruction.group) {
+            assert.ok(blocksInGroup.has(instruction.group), `${where}: there is no "${instruction.group}" group`);
+            // The sidebar only shows a group once the activity's learning level unlocks it.
+            const groupLevel = GUIDED_TOOLBOX_GROUPS.find((group) => group.id === instruction.group).level;
+            assert.ok(
+              isLearningLevelUnlocked(groupLevel, activity.learningLevel ?? 'starter'),
+              `${where}: the ${instruction.group} group needs learning level "${groupLevel}", but the activity is "${activity.learningLevel ?? 'starter'}"`
+            );
+          }
+          // "Your Circuit" fills itself from the parts on the canvas, so any part block can be there.
+          if (instruction.group && instruction.group !== 'your-circuit') {
+            assert.ok(blocksInGroup.get(instruction.group).has(instruction.type), `${where}: ${instruction.type} is not in the ${instruction.group} drawer`);
+          }
+          assert.ok(step.picture?.includes(`type="${instruction.type}"`), `${where}: ${instruction.type} is not in the step's picture`);
+          assert.ok(instruction.place.trim() && /[.!]$/.test(instruction.place.trim()), `${where}: say where the block goes, as a sentence`);
+          blockInstructionCount += 1;
+        }
+      }
+    }
+  }
+}
+
+// The order check catches blocks in the wrong order: on, off, wait makes an LED that looks off.
+{
+  const { blinksInOrder } = loader.loadModule(path.join(srcRoot, 'lib', 'lessons', 'content', 'helpers.ts'));
+  const loop = (body) => `void setup() {\n  pinMode(6, OUTPUT);\n}\n\nvoid loop() {\n${body}}\n`;
+  const inOrder = (code) => evaluateCheck(blinksInOrder(6), { ...baseContext, code })[0].passed;
+  assert.equal(inOrder(loop('  digitalWrite(6, HIGH);\n  delay(1000);\n  digitalWrite(6, LOW);\n  delay(1000);\n')), true, 'order: on, wait, off, wait');
+  assert.equal(inOrder(loop('  digitalWrite(6, HIGH);\n  digitalWrite(6, LOW);\n  delay(1000);\n')), false, 'order: on, off, wait is caught');
+  assert.equal(inOrder(loop('  digitalWrite(6, HIGH);\n  delay(1000);\n  digitalWrite(6, LOW);\n')), false, 'order: the second wait is needed');
+  assert.equal(inOrder('void setup() {\n  digitalWrite(6, HIGH);\n  delay(1000);\n  digitalWrite(6, LOW);\n  delay(1000);\n}\n\nvoid loop() {\n}\n'), false, 'order: in on start it runs only once');
 }
 
 // Kit drivers: the "file" check, and the bundled copies are the real drivers.
@@ -461,7 +523,8 @@ if (pythonCommand) {
 
 console.log(
   `Validated ${Object.keys(LESSONS).length} lessons (${activityCount} activities, ${stepCount} steps), ` +
-    `the lesson step checks, ${solutionCount} block solutions against the real code generator, and ` +
+    `the lesson step checks, ${solutionCount} block solutions against the real code generator, ` +
+    `${blockInstructionCount} block instructions against the sidebar groups, and ` +
     `${typedSolutionCount} typed-code solutions, Wi-Fi details carried into ${wifiCarryCount} programs` +
     (pythonCommand
       ? ` (${pythonChecked} MicroPython programs parsed, ${fakePicoRuns} run on a fake Pico).`
