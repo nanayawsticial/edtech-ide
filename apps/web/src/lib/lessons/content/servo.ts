@@ -1,5 +1,22 @@
-import type { Lesson, LessonActivity, StepCheck } from '../types';
-import { all, countBlock, forever, onStart, PLACING_HINT, program, servoAttachBlock, servoWriteBlock, waitBlock, WIRING_HINT } from './helpers';
+import type { BlockInstruction, Lesson, LessonActivity, StepCheck } from '../types';
+import {
+  all,
+  BLOCKS_INTRO,
+  countBlock,
+  DRAG_INTO_ON_START,
+  EMPTY_FOREVER,
+  forever,
+  loopRunsInOrder,
+  onStart,
+  PLACING_HINT,
+  program,
+  servoAttachBlock,
+  servoWriteBlock,
+  WAIT_MS_FIND,
+  waitBlock,
+  waitStatement,
+  WIRING_HINT,
+} from './helpers';
 
 // Adapted from the STEMAIDE CODER manuals "7. Servo Motor" (7.0 One Angle, 7.1 Sweep). Signal on pin 10.
 
@@ -19,6 +36,16 @@ const attaches: StepCheck = { kind: 'code', pattern: '\\.attach\\(\\s*10\\s*\\)'
 function turnsTo(angle: number | string): StepCheck {
   return { kind: 'code', pattern: `\\.write\\(\\s*${angle}\\s*\\)`, label: `Servo is told to turn to ${angle}${typeof angle === 'number' ? '°' : ''}` };
 }
+
+const writeAngleStatement = (angle: number) => `\\w+\\.write\\(\\s*${angle}\\s*\\);`;
+
+/** The servo blocks that name myServo sit low in the Sensors drawer, below look-alikes. */
+const FIND_NAMED_SERVO =
+  'Scroll down the drawer to the second "Named instances" heading. Use the blocks that say myServo, not "No Servo Connected".';
+
+const SET_SERVO = 'set servo myServo to 90 degrees';
+
+const oneAngleProgram = program(onStart(servoAttachBlock(10)), forever(servoWriteBlock(90), waitBlock(1000), servoWriteBlock(180), waitBlock(1000)));
 
 const oneAngle: LessonActivity = {
   id: 'servo-1',
@@ -48,8 +75,19 @@ const oneAngle: LessonActivity = {
       id: 'code-attach',
       kind: 'code',
       title: 'Attach the servo',
-      body: 'Open Blocks. From Sensors, drag "attach servo on pin" into setup. Name it myServo and pick pin 10.',
-      blocks: ['setup', 'attach servo myServo on pin 10'],
+      body: `${BLOCKS_INTRO} In "on start", tell the board that a servo called myServo is on pin 10.`,
+      build: [
+        {
+          type: 'arduino_servo_attach',
+          group: 'sense',
+          block: 'attach servo myServo on pin ▾',
+          find: FIND_NAMED_SERVO,
+          place: DRAG_INTO_ON_START,
+          set: 'Leave the name myServo. Click the pin number and choose 10.',
+        },
+      ],
+      picture: program(onStart(servoAttachBlock(10)), forever()),
+      expect: 'Nothing moves yet: the board now knows where the servo is.',
       cpp: '#include <Servo.h>\nServo motor;\n\nmotor.attach(10);',
       check: attaches,
     },
@@ -57,11 +95,49 @@ const oneAngle: LessonActivity = {
       id: 'code-move',
       kind: 'code',
       title: 'Turn to 90° and 180°',
-      body: 'In loop: set the servo to 90 degrees, wait 1000 milliseconds, set it to 180 degrees, wait 1000 milliseconds.',
-      blocks: ['loop', 'set servo myServo to 90 degrees', 'wait 1000 milliseconds', 'set servo myServo to 180 degrees', 'wait 1000 milliseconds'],
+      body: 'In "forever": turn to 90 degrees, wait, turn to 180 degrees, wait. The waits give the arm time to get there.',
+      build: [
+        {
+          type: 'arduino_servo_set_angle',
+          group: 'sense',
+          block: SET_SERVO,
+          find: 'It is two blocks under "attach servo myServo", in the same place.',
+          place: 'Drag it inside "forever".',
+          set: 'Leave 90.',
+        },
+        {
+          type: 'time_delay',
+          group: 'start',
+          block: 'wait 1000 milliseconds',
+          find: WAIT_MS_FIND,
+          place: 'Snap it under the "set servo" block.',
+          set: 'Leave it at 1000: one second.',
+        },
+        {
+          type: 'arduino_servo_set_angle',
+          group: 'sense',
+          block: SET_SERVO,
+          place: 'Snap it under the "wait" block.',
+          set: 'Click 90 and type 180.',
+        },
+        {
+          type: 'time_delay',
+          group: 'start',
+          block: 'wait 1000 milliseconds',
+          find: WAIT_MS_FIND,
+          place: 'Snap it at the bottom of "forever".',
+          set: 'Leave it at 1000.',
+        },
+      ],
+      picture: oneAngleProgram,
+      expect: 'The servo arm swings to 90°, waits a second, swings to 180°, waits, and does it again.',
       cpp: 'motor.write(90);\ndelay(1000);\nmotor.write(180);\ndelay(1000);',
-      hint: 'The wait gives the servo time to get there before it is told to move again.',
-      check: all(turnsTo(90), turnsTo(180)),
+      hint: 'Without the waits, the servo is told to move again before it gets there, and it hardly moves.',
+      check: all(
+        turnsTo(90),
+        turnsTo(180),
+        loopRunsInOrder('90°, wait, 180°, wait, in that order', writeAngleStatement(90), waitStatement(1000), writeAngleStatement(180), waitStatement(1000)),
+      ),
     },
     {
       id: 'run',
@@ -78,13 +154,50 @@ const oneAngle: LessonActivity = {
       check: { kind: 'servoReached', angles: [90, 180] },
     },
   ],
-  solution: program(
-    onStart(servoAttachBlock(10)),
-    forever(servoWriteBlock(90), waitBlock(1000), servoWriteBlock(180), waitBlock(1000)),
-  ),
+  solution: oneAngleProgram,
   observe: 'The servo arm swings between 90° and 180°.',
   wrapUp: 'Servos turn to the exact angle you ask for. That is what makes them useful for arms, doors and steering.',
 };
+
+/** A "count with" loop that turns the servo one degree at a time: the loop, the servo block, "i", the wait. */
+function countingBlocks(from: number, to: number, firstPlace: string, which: string): BlockInstruction[] {
+  return [
+    {
+      type: 'controls_for_loop',
+      group: 'decide',
+      block: 'count with i from 0 to 10 by 1',
+      place: firstPlace,
+      set: from === 0 ? 'Change 10 to 180. Leave 0 and 1.' : `Change 0 to ${from} and 10 to ${to}: it counts down from ${from} to ${to}.`,
+    },
+    {
+      type: 'arduino_servo_set_angle',
+      group: 'sense',
+      block: SET_SERVO,
+      find: 'It is under the second "Named instances" heading, below "attach servo myServo".',
+      place: `Snap it inside the ${which} "count with" block.`,
+    },
+    {
+      type: 'variables_get',
+      group: 'variables',
+      block: 'i',
+      place: `Drop it onto the 90 in the ${which} "set servo" block, so the servo turns to i degrees.`,
+    },
+    {
+      type: 'time_delay',
+      group: 'start',
+      block: 'wait 1000 milliseconds',
+      find: WAIT_MS_FIND,
+      place: `Snap it under the ${which} "set servo" block, still inside "count with".`,
+      set: 'Change 1000 to 10: a tiny pause between each degree.',
+    },
+  ];
+}
+
+const sweepUp = program(onStart(servoAttachBlock(10)), forever(countBlock(0, 180, servoWriteBlock('i'), waitBlock(10))));
+const sweepProgram = program(
+  onStart(servoAttachBlock(10)),
+  forever(countBlock(0, 180, servoWriteBlock('i'), waitBlock(10)), countBlock(180, 0, servoWriteBlock('i'), waitBlock(10))),
+);
 
 const sweep: LessonActivity = {
   id: 'servo-2',
@@ -98,19 +211,24 @@ const sweep: LessonActivity = {
       id: 'code-up',
       kind: 'code',
       title: 'Count up to 180',
-      body: 'Keep your circuit. Remove the blocks inside loop. Add "count with i from 0 to 180 by 1" from Decide. Inside it, set the servo to i degrees and wait 10 milliseconds.',
-      blocks: ['count with i from 0 to 180 by 1', 'set servo myServo to (i) degrees', 'wait 10 milliseconds'],
+      body: `Keep your circuit. ${EMPTY_FOREVER} Then use a counting block: it counts i from 0 to 180, and each time it turns the servo to i degrees.`,
+      build: countingBlocks(0, 180, 'Drag it inside the empty "forever".', 'first'),
+      picture: sweepUp,
+      expect: 'The arm sweeps smoothly from 0° to 180°, then jumps straight back to 0° and sweeps again.',
       cpp: 'for (int i = 0; i <= 180; i++) {\n  motor.write(i);\n  delay(10);\n}',
-      hint: 'Find the round "i" block under Variables and drop it into the angle of the servo block.',
+      hint: 'The round "i" block appears in the Variables drawer once the "count with" block is in your program.',
       check: all({ kind: 'code', pattern: 'for\\s*\\(', label: 'Has a counting loop' }, turnsTo('i')),
     },
     {
       id: 'code-down',
       kind: 'code',
       title: 'Count back down',
-      body: 'Below the first loop, add a second "count with" from 180 to 0 by 1 (the same as counting down), again setting the servo to i and waiting 10 milliseconds.',
-      blocks: ['count with i from 180 to 0 by 1', 'set servo myServo to (i) degrees', 'wait 10 milliseconds'],
+      body: 'To sweep back smoothly instead of jumping, add a second counting block under the first one that counts from 180 down to 0.',
+      build: countingBlocks(180, 0, 'Snap it under the first "count with" block, not inside it.', 'second'),
+      picture: sweepProgram,
+      expect: 'The arm sweeps smoothly all the way across and all the way back, again and again.',
       cpp: 'for (int i = 180; i >= 0; i--) {\n  motor.write(i);\n  delay(10);\n}',
+      hint: 'Quicker: right-click the first "count with" block and choose Duplicate. The copy comes with the blocks inside it; change its numbers to 180 and 0.',
       check: { kind: 'code', pattern: 'for\\s*\\([\\s\\S]*for\\s*\\(', label: 'Has a second loop counting back' },
     },
     {
@@ -128,13 +246,7 @@ const sweep: LessonActivity = {
       check: { kind: 'servoReached', angles: [0, 180] },
     },
   ],
-  solution: program(
-    onStart(servoAttachBlock(10)),
-    forever(
-      countBlock(0, 180, servoWriteBlock('i'), waitBlock(10)),
-      countBlock(180, 0, servoWriteBlock('i'), waitBlock(10)),
-    ),
-  ),
+  solution: sweepProgram,
   observe: 'The servo sweeps smoothly from 0° to 180° and back.',
   wrapUp: 'Many small steps with short waits make smooth movement. Change the wait to make the sweep faster or slower.',
 };

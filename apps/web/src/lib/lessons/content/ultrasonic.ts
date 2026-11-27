@@ -1,6 +1,8 @@
 import type { Lesson } from '../types';
 import {
   all,
+  BLOCKS_INTRO,
+  DRAG_INTO_ON_START,
   forever,
   onStart,
   PLACING_HINT,
@@ -9,11 +11,15 @@ import {
   serialPrintLineBlock,
   sonarAddBlock,
   sonarReadBlock,
+  WAIT_MS_FIND,
   waitBlock,
+  waits,
   WIRING_HINT,
 } from './helpers';
 
 // Adapted from the STEMAIDE CODER manual "8. Ultrasonic Sensor" (8.0). Trig on pin 11, Echo on pin 12.
+
+const finished = program(onStart(sonarAddBlock(11, 12), serialBeginBlock(9600)), forever(serialPrintLineBlock(sonarReadBlock()), waitBlock(100)));
 
 export const ultrasonicLesson: Lesson = {
   slug: 'ultrasonic-sensor',
@@ -56,10 +62,27 @@ export const ultrasonicLesson: Lesson = {
           id: 'code-setup',
           kind: 'code',
           title: 'Set up the sensor and Serial Monitor',
-          body: 'Open Blocks. Into setup, add "add sonar" from Sensors with trig 11 and echo 12, and "Serial begin at baud 9600" from Messages.',
-          blocks: ['setup', 'add sonar mySonar trig 11 echo 12', 'Serial begin at baud 9600'],
+          body: `${BLOCKS_INTRO} In "on start", tell the board which pins the sensor uses, and switch on the Serial Monitor: the panel at the bottom of the screen where the board can send text.`,
+          build: [
+            {
+              type: 'arduino_sonar_add',
+              group: 'sense',
+              block: 'add sonar mySonar trig ▾ echo ▾',
+              find: 'Scroll down to the first "Named instances" heading: it is just under it. Do not use "add ultrasonic" at the top.',
+              place: DRAG_INTO_ON_START,
+              set: 'Leave the name mySonar. Choose 11 for trig and 12 for echo.',
+            },
+            {
+              type: 'arduino_serialBegin',
+              group: 'messages',
+              block: 'Serial begin at baud 9600 ▾',
+              place: 'Snap it under the "add sonar" block.',
+              set: 'Leave 9600 as it is.',
+            },
+          ],
+          picture: program(onStart(sonarAddBlock(11, 12), serialBeginBlock(9600)), forever()),
+          expect: 'Nothing shows yet: the board knows about the sensor, but you have not told it to measure anything.',
           cpp: 'int Trig = 11;\nint Echo = 12;\n\npinMode(Trig, OUTPUT);\npinMode(Echo, INPUT);\nSerial.begin(9600);',
-          hint: 'Serial begin lets the board send text to the Serial Monitor at the bottom of the screen.',
           check: all(
             { kind: 'code', pattern: '_trig = 11;', label: 'Trig is on pin 11' },
             { kind: 'code', pattern: '_echo = 12;', label: 'Echo is on pin 12' },
@@ -70,11 +93,36 @@ export const ultrasonicLesson: Lesson = {
           id: 'code-print',
           kind: 'code',
           title: 'Print the distance',
-          body: 'In loop, add "Serial print line" and put "cm distance from mySonar" inside it. Then wait 100 milliseconds.',
-          blocks: ['loop', 'Serial print line', 'cm distance from mySonar', 'wait 100 milliseconds'],
+          body: 'In "forever", measure the distance and print it, ten times a second. The distance block is round: it drops into the gap on the "Serial print line" block.',
+          build: [
+            {
+              type: 'arduino_serialPrintln',
+              group: 'messages',
+              block: 'Serial print line ▢',
+              place: 'Drag it inside "forever".',
+            },
+            {
+              type: 'arduino_sonar_read',
+              group: 'sense',
+              block: 'cm ▾ distance from mySonar ▾',
+              find: 'It is just under "add sonar mySonar" in the Sensors drawer.',
+              place: 'Drop it into the gap on the "Serial print line" block.',
+              set: 'Leave cm: it measures in centimetres.',
+            },
+            {
+              type: 'time_delay',
+              group: 'start',
+              block: 'wait 1000 milliseconds',
+              find: WAIT_MS_FIND,
+              place: 'Snap it under the "Serial print line" block.',
+              set: 'Change 1000 to 100: a tenth of a second.',
+            },
+          ],
+          picture: finished,
+          expect: 'The Serial Monitor shows a new distance in centimetres ten times a second.',
           cpp: 'digitalWrite(Trig, HIGH);\ndelay(100);\ndigitalWrite(Trig, LOW);\nduration = pulseIn(Echo, HIGH);\ndistance = duration * 0.034 / 2;\nSerial.println(distance);\ndelay(100);',
           hint: 'The "cm distance" block does the pulse timing for you. The C++ shows what it does: sound travels 0.034 cm per microsecond, there and back, so the time is halved.',
-          check: { kind: 'code', pattern: 'Serial\\.println\\([^)]*_read_cm\\(\\)', label: 'Prints the distance' },
+          check: all({ kind: 'code', pattern: 'Serial\\.println\\([^)]*_read_cm\\(\\)', label: 'Prints the distance' }, waits(100)),
         },
         {
           id: 'run',
@@ -91,10 +139,7 @@ export const ultrasonicLesson: Lesson = {
           hint: 'The Live inputs box appears while the simulation runs. On a real board, move your hand in front of the sensor instead.',
         },
       ],
-      solution: program(
-        onStart(sonarAddBlock(11, 12), serialBeginBlock(9600)),
-        forever(serialPrintLineBlock(sonarReadBlock()), waitBlock(100)),
-      ),
+      solution: finished,
       observe: 'The Serial Monitor shows the distance in centimetres, updating as it changes.',
       wrapUp: 'You turned an echo into a measurement. The same idea helps robots avoid walls and cars park safely.',
     },

@@ -1,6 +1,9 @@
 import type { Lesson } from '../types';
 import {
   all,
+  blinksInOrder,
+  BLOCKS_INTRO,
+  DRAG_INTO_ON_START,
   forever,
   onStart,
   pinModeBlock,
@@ -10,8 +13,8 @@ import {
   RUN_STEP_BODY,
   setsOutput,
   STARTER_BOARD_PARTS,
+  WAIT_MS_FIND,
   waitBlock,
-  waits,
   WIRING_HINT,
   writeBlock,
   writesPin,
@@ -20,6 +23,8 @@ import {
 // Adapted from the STEMAIDE CODER manuals "2. Buzzer" (2.1 On and Off, 2.2 Beep). + leg on pin 3.
 
 const PARTS = [...STARTER_BOARD_PARTS, { type: 'BUZZER', label: 'Buzzer', count: 1 }];
+
+const beeping = program(onStart(pinModeBlock(3)), forever(writeBlock(3, 'HIGH'), waitBlock(1000), writeBlock(3, 'LOW'), waitBlock(1000)));
 
 export const buzzerLesson: Lesson = {
   slug: 'buzzer',
@@ -57,11 +62,27 @@ export const buzzerLesson: Lesson = {
           id: 'code-on',
           kind: 'code',
           title: 'Switch it on',
-          body: 'Open Blocks. Into setup, add "set pin 3 to OUTPUT" and then "digital write pin 3 to HIGH". Setup runs once, so the buzzer is switched on and stays on.',
-          blocks: ['setup', 'set pin 3 to OUTPUT', 'digital write pin 3 to HIGH'],
+          body: `${BLOCKS_INTRO} Put two blocks inside "on start": one gets pin 3 ready, the other switches the buzzer on.`,
+          build: [
+            {
+              type: 'arduino_pinMode',
+              group: 'output',
+              block: 'set pin ▾ to OUTPUT ▾',
+              place: DRAG_INTO_ON_START,
+              set: 'Click the pin number and choose 3. Leave OUTPUT as it is.',
+            },
+            {
+              type: 'arduino_digitalWrite',
+              group: 'output',
+              block: 'digital write pin ▾ to HIGH ▾',
+              place: 'Snap it under the "set pin" block.',
+              set: 'Choose pin 3. Leave HIGH: HIGH means on.',
+            },
+          ],
+          picture: program(onStart(pinModeBlock(3), writeBlock(3, 'HIGH')), forever()),
+          expect: 'The buzzer switches on and stays on. "on start" only runs once, so nothing ever switches it off.',
           cpp: 'int buzzer = 3;\n\npinMode(buzzer, OUTPUT);\ndigitalWrite(buzzer, HIGH);',
           check: all(setsOutput(3), writesPin(3, 'HIGH')),
-          solution: program(onStart(pinModeBlock(3), writeBlock(3, 'HIGH'))),
         },
         { id: 'run', kind: 'run', title: 'Run the simulation', body: RUN_STEP_BODY, check: { kind: 'simulating' } },
         {
@@ -75,8 +96,17 @@ export const buzzerLesson: Lesson = {
           id: 'code-off',
           kind: 'code',
           title: 'Switch it off',
-          body: 'Change the HIGH in "digital write pin 3" to LOW, then run the simulation again. The buzzer goes quiet.',
-          blocks: ['digital write pin 3 to LOW'],
+          body: 'Now make it stop. You only need to change one word.',
+          build: [
+            {
+              type: 'arduino_digitalWrite',
+              block: 'digital write pin 3 to HIGH',
+              place: 'It is inside "on start", under "set pin".',
+              set: 'Click HIGH and change it to LOW. LOW means off.',
+            },
+          ],
+          picture: program(onStart(pinModeBlock(3), writeBlock(3, 'LOW')), forever()),
+          expect: 'Run the simulation again: the buzzer stays quiet.',
           cpp: 'digitalWrite(buzzer, LOW);',
           check: writesPin(3, 'LOW'),
         },
@@ -96,11 +126,43 @@ export const buzzerLesson: Lesson = {
           id: 'code',
           kind: 'code',
           title: 'Beep in a loop',
-          body: 'Keep your circuit. Move the "digital write" block out of setup. In loop: set pin 3 HIGH, wait 1000 milliseconds, set it LOW, wait 1000 milliseconds.',
-          blocks: ['loop', 'digital write pin 3 to HIGH', 'wait 1000 milliseconds', 'digital write pin 3 to LOW', 'wait 1000 milliseconds'],
+          body: 'Keep your circuit. A beep is the buzzer going on and off again and again, so these blocks belong in "forever": on, wait, off, wait.',
+          build: [
+            {
+              type: 'arduino_digitalWrite',
+              block: 'digital write pin 3 to LOW',
+              place: 'It is in "on start". Drag it out of "on start" and drop it inside "forever".',
+              set: 'Change LOW to HIGH.',
+            },
+            {
+              type: 'time_delay',
+              group: 'start',
+              block: 'wait 1000 milliseconds',
+              find: WAIT_MS_FIND,
+              place: 'Snap it under the "digital write" block in "forever".',
+              set: 'Leave it at 1000. 1000 milliseconds is one second.',
+            },
+            {
+              type: 'arduino_digitalWrite',
+              group: 'output',
+              block: 'digital write pin ▾ to HIGH ▾',
+              place: 'Snap it under the "wait" block.',
+              set: 'Choose pin 3, then change HIGH to LOW.',
+            },
+            {
+              type: 'time_delay',
+              group: 'start',
+              block: 'wait 1000 milliseconds',
+              find: WAIT_MS_FIND,
+              place: 'Snap it at the bottom of "forever".',
+              set: 'Leave it at 1000.',
+            },
+          ],
+          picture: beeping,
+          expect: 'The buzzer beeps for one second, then is quiet for one second, again and again.',
           cpp: 'digitalWrite(buzzer, HIGH);\ndelay(1000);\ndigitalWrite(buzzer, LOW);\ndelay(1000);',
           hint: 'Try a shorter wait, like 200 milliseconds, for a faster, more urgent beep.',
-          check: all(writesPin(3, 'HIGH'), writesPin(3, 'LOW'), waits(1000)),
+          check: all(writesPin(3, 'HIGH'), writesPin(3, 'LOW'), blinksInOrder(3)),
         },
         { id: 'run', kind: 'run', title: 'Run the simulation', body: RERUN_STEP_BODY, check: { kind: 'simulating' } },
         {
@@ -111,7 +173,7 @@ export const buzzerLesson: Lesson = {
           check: { kind: 'blinked', type: 'BUZZER', times: 4 },
         },
       ],
-      solution: program(onStart(pinModeBlock(3)), forever(writeBlock(3, 'HIGH'), waitBlock(1000), writeBlock(3, 'LOW'), waitBlock(1000))),
+      solution: beeping,
       observe: 'The buzzer beeps for one second, then is quiet for one second.',
       wrapUp: 'On, wait, off, wait: the same pattern that blinks an LED makes an alarm beep.',
     },

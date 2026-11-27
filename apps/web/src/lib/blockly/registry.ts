@@ -272,7 +272,7 @@ export const TOOLBOX_CATEGORY_DEFINITIONS: ToolboxCategoryDefinition[] = [
   },
   {
     id: 'Control', name: 'Control', categoryStyle: 'control_category', entries: [
-      block('arduino_on_start'), block('arduino_forever'), block('arduino_setup_loop'), sep(16), block('time_wait_seconds', shadowNumber('SECONDS', 1)), block('time_delay', shadowNumber('MS', 1000)), block('time_wait_until'), block('arduino_millis'),
+      block('arduino_on_start'), block('arduino_forever'), sep(16), block('time_wait_seconds', shadowNumber('SECONDS', 1)), block('time_delay', shadowNumber('MS', 1000)), block('time_wait_until'), block('arduino_millis'),
     ],
   },
   {
@@ -281,7 +281,7 @@ export const TOOLBOX_CATEGORY_DEFINITIONS: ToolboxCategoryDefinition[] = [
     ],
   },
   {
-    id: 'Loops', name: 'Loops', categoryStyle: 'loops_category', entries: [block('controls_forever'), block('controls_repeat', '<field name="TIMES">10</field>'), block('controls_repeat_until'), block('controls_for_loop')],
+    id: 'Loops', name: 'Loops', categoryStyle: 'loops_category', entries: [block('controls_forever'), block('controls_repeat', '<field name="TIMES">10</field>'), block('controls_repeat_until'), block('controls_for_loop', `${shadowNumber('FROM', 0)}${shadowNumber('TO', 10)}${shadowNumber('BY', 1)}`)],
   },
   {
     id: 'Math', name: 'Math', categoryStyle: 'math_category', entries: [

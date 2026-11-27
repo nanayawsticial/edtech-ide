@@ -1,19 +1,26 @@
-import type { Lesson, LessonActivity, StepCheck } from '../types';
+import type { Lesson, LessonActivity, LessonStep, StepCheck } from '../types';
 import {
   all,
+  BLOCKS_INTRO,
   buttonAddBlock,
   buttonPressedBlock,
+  DRAG_INTO_ON_START,
   forever,
   ifElseBlock,
   onStart,
+  pinModeBlock,
   PLACING_HINT,
   program,
+  RERUN_STEP_BODY,
+  RUN_STEP_BODY,
+  setsOutput,
   STARTER_BOARD_PARTS,
+  WAIT_MS_FIND,
   waitBlock,
-  waits,
+  waitStatement,
   WIRING_HINT,
   writeBlock,
-  writesPin,
+  writeStatement,
 } from './helpers';
 
 // Adapted from the STEMAIDE CODER manuals "3. Push Button" (activities 3.1-3.4).
@@ -28,6 +35,17 @@ const BUTTON_WIRING_HINT =
 
 const buttonCode: StepCheck = { kind: 'code', pattern: `_pin = ${BUTTON_PIN};`, label: `Button is on pin ${BUTTON_PIN}` };
 const readsButton: StepCheck = { kind: 'code', pattern: 'digitalRead\\(\\w+_pin\\) == LOW', label: 'Checks if the button is pressed' };
+/** The start of the "do" slot of the if/else on the button, in the C++. */
+const IF_PRESSED = 'digitalRead\\(\\w+_pin\\) == LOW\\)*\\s*\\{';
+
+/** `pin` is switched HIGH in "do" (pressed) and LOW in "else" (not pressed), not the other way round. */
+function followsButton(pin: number): StepCheck {
+  return {
+    kind: 'code',
+    pattern: `${IF_PRESSED}[^}]*${writeStatement(pin, 'HIGH')}[^}]*\\}\\s*else\\s*\\{[^}]*${writeStatement(pin, 'LOW')}`,
+    label: `Pin ${pin}: HIGH in "do", LOW in "else"`,
+  };
+}
 
 function ledWiring(count: number): StepCheck {
   return all(
@@ -36,9 +54,13 @@ function ledWiring(count: number): StepCheck {
   );
 }
 
+function setup(pins: readonly number[]) {
+  return onStart(buttonAddBlock(BUTTON_PIN), ...pins.map((pin) => pinModeBlock(pin)));
+}
+
 function lightWhilePressed(pins: readonly number[]) {
   return program(
-    onStart(buttonAddBlock(BUTTON_PIN)),
+    setup(pins),
     forever(
       ifElseBlock(
         buttonPressedBlock(),
@@ -53,6 +75,46 @@ function cppFor(pins: readonly number[]) {
   const on = pins.map((pin) => `  digitalWrite(${pin}, HIGH);`).join('\n');
   const off = pins.map((pin) => `  digitalWrite(${pin}, LOW);`).join('\n');
   return `pinMode(${BUTTON_PIN}, INPUT_PULLUP);\n\nif (digitalRead(${BUTTON_PIN}) == LOW) {\n${on}\n} else {\n${off}\n}`;
+}
+
+const RUN_AGAIN: LessonStep = { id: 'run', kind: 'run', title: 'Run the simulation', body: RERUN_STEP_BODY, check: { kind: 'simulating' } };
+
+/** Adds one more LED pin to the button program: set it up, HIGH in "do", LOW in "else". */
+function addLedStep(pin: number, pins: readonly number[]): LessonStep {
+  return {
+    id: 'code',
+    kind: 'code',
+    title: `Add pin ${pin}`,
+    body: `Keep all your blocks. Get pin ${pin} ready, then switch it on in "do" and off in "else", like the other LEDs.`,
+    build: [
+      {
+        type: 'arduino_pinMode',
+        group: 'output',
+        block: 'set pin ▾ to OUTPUT ▾',
+        place: 'Snap it inside "on start", under the last "set pin" block.',
+        set: `Choose pin ${pin}. Leave OUTPUT.`,
+      },
+      {
+        type: 'arduino_digitalWrite',
+        group: 'output',
+        block: 'digital write pin ▾ to HIGH ▾',
+        place: 'Snap it in the "do" slot, under the last block there.',
+        set: `Choose pin ${pin}. Leave HIGH.`,
+      },
+      {
+        type: 'arduino_digitalWrite',
+        group: 'output',
+        block: 'digital write pin ▾ to HIGH ▾',
+        place: 'Snap it in the "else" slot, under the last block there.',
+        set: `Choose pin ${pin}, then change HIGH to LOW.`,
+      },
+    ],
+    picture: lightWhilePressed(pins),
+    expect: `All ${pins.length} LEDs light together while the button is held, and go off together when you let go.`,
+    cpp: cppFor(pins),
+    hint: 'Quicker: right-click a "digital write" block and choose Duplicate, then change the pin number on the copy.',
+    check: all(readsButton, setsOutput(pin), ...pins.map((p) => followsButton(p))),
+  };
 }
 
 const first: LessonActivity = {
@@ -104,28 +166,68 @@ const first: LessonActivity = {
       id: 'code-button',
       kind: 'code',
       title: 'Tell the board about the button',
-      body: 'Open Blocks. From Output, drag "add button on pin" into setup. Keep the name myButton and pick pin 7.',
-      blocks: ['setup', 'add button myButton on pin 7'],
-      cpp: `pinMode(${BUTTON_PIN}, INPUT_PULLUP);`,
+      body: `${BLOCKS_INTRO} In "on start", tell the board where the button and the LED are.`,
+      build: [
+        {
+          type: 'arduino_button_add',
+          group: 'output',
+          block: 'add button myButton on pin ▾',
+          place: DRAG_INTO_ON_START,
+          set: 'Leave the name myButton. Click the pin number and choose 7.',
+        },
+        {
+          type: 'arduino_pinMode',
+          group: 'output',
+          block: 'set pin ▾ to OUTPUT ▾',
+          place: 'Snap it under the "add button" block.',
+          set: "Choose pin 3, the LED's pin. Leave OUTPUT.",
+        },
+      ],
+      picture: program(setup([3]), forever()),
+      expect: 'Nothing happens yet: the board now knows where the button and the LED are. The next step makes them work together.',
+      cpp: `pinMode(${BUTTON_PIN}, INPUT_PULLUP);\npinMode(3, OUTPUT);`,
       hint: 'INPUT_PULLUP means the pin reads HIGH normally and LOW while the button joins it to GND.',
-      check: buttonCode,
+      check: all(buttonCode, setsOutput(3)),
     },
     {
       id: 'code-decide',
       kind: 'code',
       title: 'Light the LED while pressed',
-      body: 'In loop, add "if do else" from Decide. Put "is myButton pressed?" in the if. In "do", set pin 3 HIGH. In "else", set pin 3 LOW.',
-      blocks: ['loop', 'if do else', 'is myButton pressed?', 'digital write pin 3 to HIGH', 'digital write pin 3 to LOW'],
+      body: 'In "forever", the board asks a question again and again: is the button pressed? If it is, switch the LED on. If not ("else"), switch it off.',
+      build: [
+        {
+          type: 'controls_if',
+          group: 'decide',
+          block: 'if … do … else',
+          place: 'Take the one with "else" in it. Drag it inside "forever".',
+        },
+        {
+          type: 'arduino_button_is_pressed',
+          group: 'output',
+          block: 'is myButton pressed?',
+          place: 'Drop it into the gap next to "if".',
+        },
+        {
+          type: 'arduino_digitalWrite',
+          group: 'output',
+          block: 'digital write pin ▾ to HIGH ▾',
+          place: 'Snap it into the "do" slot.',
+          set: 'Choose pin 3. Leave HIGH.',
+        },
+        {
+          type: 'arduino_digitalWrite',
+          group: 'output',
+          block: 'digital write pin ▾ to HIGH ▾',
+          place: 'Snap it into the "else" slot.',
+          set: 'Choose pin 3, then change HIGH to LOW.',
+        },
+      ],
+      picture: lightWhilePressed([3]),
+      expect: 'The LED lights while you hold the button down, and goes off when you let go.',
       cpp: cppFor([3]),
-      check: all(readsButton, writesPin(3, 'HIGH'), writesPin(3, 'LOW')),
+      check: all(readsButton, followsButton(3)),
     },
-    {
-      id: 'run',
-      kind: 'run',
-      title: 'Run the simulation',
-      body: 'Click Run Simulation at the top of the Blocks screen, then click Build to watch your circuit.',
-      check: { kind: 'simulating' },
-    },
+    { id: 'run', kind: 'run', title: 'Run the simulation', body: RUN_STEP_BODY, check: { kind: 'simulating' } },
     {
       id: 'observe',
       kind: 'observe',
@@ -185,22 +287,8 @@ function more(index: number): LessonActivity {
         hint: WIRING_HINT,
         check: ledWiring(count),
       },
-      {
-        id: 'code',
-        kind: 'code',
-        title: `Add pin ${pin}`,
-        body: `In "do", add a block that sets pin ${pin} HIGH. In "else", add one that sets pin ${pin} LOW.`,
-        blocks: [`digital write pin ${pin} to HIGH`, `digital write pin ${pin} to LOW`],
-        cpp: cppFor(pins),
-        check: all(readsButton, ...pins.flatMap((p) => [writesPin(p, 'HIGH'), writesPin(p, 'LOW')])),
-      },
-      {
-        id: 'run',
-        kind: 'run',
-        title: 'Run the simulation',
-        body: 'Click Run Simulation at the top of the Blocks screen (if it is still running, stop it and run it again so it uses your new code), then click Build to watch your circuit.',
-        check: { kind: 'simulating' },
-      },
+      addLedStep(pin, pins),
+      RUN_AGAIN,
       {
         id: 'observe',
         kind: 'observe',
@@ -211,6 +299,17 @@ function more(index: number): LessonActivity {
     ],
   };
 }
+
+const flashing = program(
+  setup(LED_PINS),
+  forever(
+    ifElseBlock(
+      buttonPressedBlock(),
+      [...LED_PINS.map((pin) => writeBlock(pin, 'HIGH')), waitBlock(500), ...LED_PINS.map((pin) => writeBlock(pin, 'LOW')), waitBlock(500)],
+      LED_PINS.map((pin) => writeBlock(pin, 'LOW')),
+    ),
+  ),
+);
 
 const blinkWhileHeld: LessonActivity = {
   id: 'button-4',
@@ -236,23 +335,53 @@ const blinkWhileHeld: LessonActivity = {
       hint: WIRING_HINT,
       check: ledWiring(4),
     },
+    { ...addLedStep(6, LED_PINS), id: 'code-add' },
     {
       id: 'code',
       kind: 'code',
       title: 'Flash while held',
-      body: 'In "do": set pins 3, 4, 5 and 6 HIGH, wait 500 milliseconds, set them all LOW, wait 500 milliseconds. Keep "else" setting them all LOW.',
-      blocks: ['digital write pin 3 to HIGH', '…pins 4, 5, 6 HIGH', 'wait 500 milliseconds', 'digital write pin 3 to LOW', '…pins 4, 5, 6 LOW', 'wait 500 milliseconds'],
+      body: 'Now make the LEDs flash while the button is held. In "do", under the four HIGH blocks, add: wait, all four off, wait. Leave "else" as it is.',
+      build: [
+        {
+          type: 'time_delay',
+          group: 'start',
+          block: 'wait 1000 milliseconds',
+          find: WAIT_MS_FIND,
+          place: 'Snap it in "do", under "digital write pin 6 to HIGH".',
+          set: 'Change 1000 to 500: half a second.',
+        },
+        ...LED_PINS.map((pin, index) => ({
+          type: 'arduino_digitalWrite',
+          group: 'output' as const,
+          block: 'digital write pin ▾ to HIGH ▾',
+          place: index === 0 ? 'Snap it under the "wait" block.' : 'Snap it under the last block in "do".',
+          set: `Choose pin ${pin}, then change HIGH to LOW.`,
+        })),
+        {
+          type: 'time_delay',
+          group: 'start',
+          block: 'wait 1000 milliseconds',
+          find: WAIT_MS_FIND,
+          place: 'Snap it at the bottom of "do".',
+          set: 'Change 1000 to 500.',
+        },
+      ],
+      picture: flashing,
+      expect: 'While you hold the button, all four LEDs flash on and off together. Let go and they stay off.',
       cpp: `pinMode(${BUTTON_PIN}, INPUT_PULLUP);\n\nif (digitalRead(${BUTTON_PIN}) == LOW) {\n  digitalWrite(3, HIGH); digitalWrite(4, HIGH);\n  digitalWrite(5, HIGH); digitalWrite(6, HIGH);\n  delay(500);\n  digitalWrite(3, LOW); digitalWrite(4, LOW);\n  digitalWrite(5, LOW); digitalWrite(6, LOW);\n  delay(500);\n} else {\n  // all four LOW\n}`,
-      hint: 'Because loop repeats forever, the flashing keeps going for as long as the button is held.',
-      check: all(readsButton, ...LED_PINS.flatMap((p) => [writesPin(p, 'HIGH'), writesPin(p, 'LOW')]), waits(500)),
+      hint: 'Because "forever" repeats, the flashing keeps going for as long as the button is held.',
+      check: all(readsButton, {
+        kind: 'code',
+        pattern: `${IF_PRESSED}\\s*${[
+          ...LED_PINS.map((pin) => writeStatement(pin, 'HIGH')),
+          waitStatement(500),
+          ...LED_PINS.map((pin) => writeStatement(pin, 'LOW')),
+          waitStatement(500),
+        ].join('\\s*')}`,
+        label: 'In "do": all four on, wait, all four off, wait',
+      }),
     },
-    {
-      id: 'run',
-      kind: 'run',
-      title: 'Run the simulation',
-      body: 'Click Run Simulation at the top of the Blocks screen (if it is still running, stop it and run it again so it uses your new code), then click Build to watch your circuit.',
-      check: { kind: 'simulating' },
-    },
+    RUN_AGAIN,
     {
       id: 'observe',
       kind: 'observe',
@@ -261,21 +390,7 @@ const blinkWhileHeld: LessonActivity = {
       check: { kind: 'blinked', times: 16 },
     },
   ],
-  solution: program(
-    onStart(buttonAddBlock(BUTTON_PIN)),
-    forever(
-      ifElseBlock(
-        buttonPressedBlock(),
-        [
-          ...LED_PINS.map((pin) => writeBlock(pin, 'HIGH')),
-          waitBlock(500),
-          ...LED_PINS.map((pin) => writeBlock(pin, 'LOW')),
-          waitBlock(500),
-        ],
-        LED_PINS.map((pin) => writeBlock(pin, 'LOW')),
-      ),
-    ),
-  ),
+  solution: flashing,
   observe: 'All four LEDs flash together for as long as the button is held.',
   wrapUp: 'You combined a decision with a repeating pattern. Many devices work like this: do something over and over while a condition is true.',
 };

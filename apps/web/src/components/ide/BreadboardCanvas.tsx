@@ -1370,7 +1370,7 @@ export default function BreadboardCanvas({
   }, [eventBus, removeComponent, removeNet, selectComponent, selectedComponentId, selectedWireId]);
 
   return (
-    <div className="relative flex h-full w-full overflow-hidden rounded-[18px] bg-[color:var(--cl-bg)] font-sans selection:bg-cyan-400/20 sm:rounded-[24px]">
+    <div className="relative isolate flex h-full w-full overflow-hidden rounded-[18px] bg-[color:var(--cl-bg)] font-sans selection:bg-cyan-400/20 sm:rounded-[24px]">
       {isCompactViewport && isPaletteVisible ? (
         <button
           type="button"

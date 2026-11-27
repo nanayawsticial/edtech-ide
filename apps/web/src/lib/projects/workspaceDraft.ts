@@ -15,7 +15,7 @@ import { DEFAULT_ARDUINO_CODE, DEFAULT_MICROPYTHON_CODE } from '@/templates/code
 export const WORKSPACE_DRAFT_KEY_PREFIX = 'edtech:workspace-draft:';
 const DRAFT_VERSION = 1;
 const CIRCUIT_FILE_NAME = 'circuit.json';
-const ROOT_BLOCK_TYPES = new Set(['arduino_setup_loop']);
+const ROOT_BLOCK_TYPES = new Set(['arduino_setup_loop', 'arduino_on_start', 'arduino_forever']);
 
 export interface WorkspaceCircuit {
   components: ComponentData[];
@@ -76,7 +76,7 @@ export function hasWorkInProgress(snapshot: WorkspaceSnapshot, codingMode: strin
 
   if (codingMode === 'block') {
     const xml = snapshot.files.find((file) => file.name === 'main.blockly' || file.type === 'blockly')?.content ?? '';
-    // An empty workspace still has its setup/loop block.
+    // An empty workspace still has its root blocks (on start and forever, or the older setup/loop).
     return [...xml.matchAll(/<block\b[^>]*\btype="([^"]+)"/g)].some((match) => !ROOT_BLOCK_TYPES.has(match[1]));
   }
 

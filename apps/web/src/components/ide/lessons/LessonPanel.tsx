@@ -1,15 +1,21 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Circle, Copy, Lightbulb, X } from 'lucide-react';
+import * as Blockly from 'blockly';
+import { BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Circle, Copy, Lightbulb, Play, X } from 'lucide-react';
 
 import { useBoard } from '@/contexts/BoardContext';
+import { useTheme } from '@/contexts/ThemeContext';
+import { getGuidedCategoryChrome } from '@/components/ide/block-editor/config';
+import { defineCustomBlocks } from '@/lib/blockly/blocks';
+import { GUIDED_TOOLBOX_GROUPS } from '@/lib/blockly/guidedToolbox';
+import { getBlocklyTheme } from '@/lib/blockly/theme';
 
 import { getLesson } from '@/lib/lessons';
 import { carryOverWifiDetails } from '@/lib/lessons/wifiDetails';
 import { LIBRARY_FILE_NAMES, MICROPYTHON_LIBRARIES, type MicroPythonLibraryId } from '@/lib/lessons/libraries';
 import { EMPTY_OBSERVATIONS, evaluateCheck, observeVisualChange, type LessonCheckContext, type LessonObservations } from '@/lib/lessons/checks';
-import type { LessonActivity, LessonStep, LessonStepKind } from '@/lib/lessons/types';
+import type { BlockGroupId, BlockInstruction, LessonActivity, LessonStep, LessonStepKind } from '@/lib/lessons/types';
 import type { ToolboxLearningLevel } from '@/lib/blockly/guidedToolbox';
 import { normalizeComponentType } from '@/lib/wiring/componentDefinitions';
 import { useBlocklyStore } from '@/stores/blocklyStore';
@@ -275,15 +281,173 @@ function LibraryToAdd({ id, fileNames }: { id: MicroPythonLibraryId; fileNames: 
   );
 }
 
+/** Opens a group's drawer of blocks in the Blocks screen, as clicking it in the sidebar does. */
+function openBlockGroup(group: BlockGroupId) {
+  const blockly = useBlocklyStore.getState();
+  blockly.setSelectedCategoryName(group);
+  blockly.setIsFlyoutVisible(true);
+}
+
+function BlockGroupButton({ group }: { group: BlockGroupId }) {
+  const label = GUIDED_TOOLBOX_GROUPS.find((candidate) => candidate.id === group)?.label ?? group;
+  const { icon, color } = getGuidedCategoryChrome(group);
+  return (
+    <button
+      type="button"
+      onClick={() => openBlockGroup(group)}
+      title={`Open the ${label} blocks`}
+      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 align-middle text-white transition hover:brightness-110"
+      style={{ backgroundColor: color }}
+    >
+      <span className="[&>svg]:h-3.5 [&>svg]:w-3.5">{icon}</span>
+      <span className="text-[12px] font-semibold">{label}</span>
+    </button>
+  );
+}
+
+/**
+ * The blocks to add, one numbered instruction each: which block, which group it is in (a button
+ * that opens that group), where it goes and what to change on it.
+ */
+function BuildSteps({ build }: { build: BlockInstruction[] }) {
+  return (
+    <ol className="mt-3 space-y-2.5" aria-label="Blocks to add, in order">
+      {build.map((instruction, index) => (
+        <li key={`${instruction.type}-${index}`} className="flex gap-2.5">
+          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-500/30 text-[11px] font-bold text-indigo-100">
+            {index + 1}
+          </span>
+          <div className="min-w-0 space-y-1 text-[13px] leading-5 text-slate-200">
+            <p>
+              {instruction.group ? (
+                <>
+                  Open <BlockGroupButton group={instruction.group} /> and find{' '}
+                </>
+              ) : (
+                'In your blocks, find '
+              )}
+              <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[12px] text-white">{instruction.block}</span>
+            </p>
+            {/* A pointer shows once per step: the second "wait" block is in the same place as the first. */}
+            {instruction.find && !build.slice(0, index).some((earlier) => earlier.find === instruction.find) ? (
+              <p className="text-slate-400">{instruction.find}</p>
+            ) : null}
+            <p>{instruction.place}</p>
+            {instruction.set ? <p className="text-amber-100">{instruction.set}</p> : null}
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+const PICTURE_SCALE = 0.62;
+const PICTURE_PADDING = 10;
+/** Space between "on start" and "forever" in the picture, in workspace units. */
+const PICTURE_GAP = 28;
+
+/**
+ * Stacks the top blocks in one column (Blockly's cleanUp overlaps them in a read-only workspace),
+ * fits the box to them and puts them in its top-left corner.
+ */
+function layOutPicture(workspace: Blockly.WorkspaceSvg, host: HTMLDivElement) {
+  let y = 0;
+  for (const block of workspace.getTopBlocks(true)) {
+    const position = block.getRelativeToSurfaceXY();
+    block.moveBy(-position.x, y - position.y);
+    y += block.getHeightWidth().height + PICTURE_GAP;
+  }
+  const box = workspace.getBlocksBoundingBox();
+  // svgResize measures the box straight away, so its new height must not be eased in by a
+  // transition. (A workspace that can't scroll also pushes blocks back inside its old height.)
+  host.style.setProperty('transition', 'none', 'important');
+  host.style.height = `${Math.ceil((box.bottom - box.top) * workspace.scale) + PICTURE_PADDING * 2}px`;
+  Blockly.svgResize(workspace);
+  workspace.translate(PICTURE_PADDING - box.left * workspace.scale, PICTURE_PADDING - box.top * workspace.scale);
+}
+
+/**
+ * Draws blocks (Blockly XML) as a small read-only picture, the way they look in the Blocks screen,
+ * so the learner can compare it with their own.
+ */
+function BlockPicture({ xml }: { xml: string }) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const { theme } = useTheme();
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+
+    defineCustomBlocks();
+    // A second workspace would otherwise become the one Blockly's keyboard shortcuts act on.
+    const mainWorkspace = Blockly.common.getMainWorkspace();
+    const workspace = Blockly.inject(host, {
+      readOnly: true,
+      renderer: 'zelos',
+      theme: getBlocklyTheme(theme),
+      media: '/blockly/media/',
+      sounds: false,
+      trashcan: false,
+      zoom: { startScale: PICTURE_SCALE },
+      move: { scrollbars: false, drag: false, wheel: false },
+    });
+    if (mainWorkspace) Blockly.common.setMainWorkspace(mainWorkspace);
+
+    let cancelled = false;
+    try {
+      Blockly.Xml.domToWorkspace(Blockly.utils.xml.textToDom(xml), workspace);
+    } catch (error) {
+      console.warn('Lesson picture could not be drawn.', error);
+    }
+    void Blockly.renderManagement.finishQueuedRenders().then(() => {
+      if (!cancelled) layOutPicture(workspace, host);
+    });
+
+    return () => {
+      cancelled = true;
+      workspace.dispose();
+    };
+  }, [xml, theme]);
+
+  // The height is set by layOutPicture once the blocks are drawn.
+  return (
+    <div
+      ref={hostRef}
+      aria-hidden="true"
+      className="pointer-events-none mt-1.5 h-24 w-full overflow-hidden rounded-lg border border-white/10"
+    />
+  );
+}
+
 function StepView({ step, context }: { step: LessonStep; context: LessonCheckContext }) {
   const [showHint, setShowHint] = useState(false);
-  const [showCpp, setShowCpp] = useState(true);
+  // Learners following numbered block steps see the C++ only when they ask for it.
+  const [showCpp, setShowCpp] = useState(!step.build);
 
   return (
     <div>
       <p className="text-[14px] leading-6 text-slate-100">{step.body}</p>
 
-      {step.blocks?.length ? (
+      {step.build?.length ? <BuildSteps build={step.build} /> : null}
+
+      {step.picture ? (
+        <div className="mt-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Your blocks should look like this</p>
+          <BlockPicture xml={step.picture} />
+        </div>
+      ) : null}
+
+      {step.expect ? (
+        <p className="mt-3 flex gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] px-3 py-2 text-[13px] leading-5 text-emerald-100">
+          <Play size={14} className="mt-0.5 shrink-0 text-emerald-300" aria-hidden="true" />
+          <span>
+            <span className="font-semibold">When you run it: </span>
+            {step.expect}
+          </span>
+        </p>
+      ) : null}
+
+      {!step.build?.length && step.blocks?.length ? (
         <div className="mt-3">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Blocks</p>
           <ul className="mt-1.5 flex flex-wrap gap-1.5">

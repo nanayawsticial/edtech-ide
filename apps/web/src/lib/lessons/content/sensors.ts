@@ -1,8 +1,10 @@
-import type { Lesson } from '../types';
+import type { BlockInstruction, Lesson } from '../types';
 import {
   all,
   analogReadBlock,
+  BLOCKS_INTRO,
   digitalReadBlock,
+  DRAG_INTO_ON_START,
   forever,
   onStart,
   PLACING_HINT,
@@ -13,6 +15,7 @@ import {
   serialBeginBlock,
   serialPrintLineBlock,
   startsSerial,
+  WAIT_MS_FIND,
   waitBlock,
   waits,
   WIRING_HINT,
@@ -22,6 +25,23 @@ import {
 // "9. Sound Sensor" (9.0). LDR: DO -> pin 2, AO -> A0. Sound sensor: its analog output -> A0.
 
 const LIVE_INPUTS_HINT = 'While the simulation runs, a Live inputs box appears in the bottom-left corner. Its sliders change what the sensor feels.';
+
+/** "Serial begin" in "on start": the first block of both lessons. */
+const SERIAL_BEGIN: BlockInstruction = {
+  type: 'arduino_serialBegin',
+  group: 'messages',
+  block: 'Serial begin at baud 9600 ▾',
+  place: DRAG_INTO_ON_START,
+  set: 'Leave 9600 as it is.',
+};
+
+const SERIAL_PRINT_LINE_EXPLAINED =
+  'The Serial Monitor is the panel at the bottom of the screen where the board can send text. "Serial begin" switches it on.';
+
+const ldrProgram = program(
+  onStart(serialBeginBlock(9600)),
+  forever(serialPrintLineBlock(analogReadBlock('A0')), serialPrintLineBlock(digitalReadBlock(2)), waitBlock(500)),
+);
 
 export const ldrLesson: Lesson = {
   slug: 'light-dependent-resistor-ldr',
@@ -64,8 +84,10 @@ export const ldrLesson: Lesson = {
           id: 'code-setup',
           kind: 'code',
           title: 'Start the Serial Monitor',
-          body: 'Open Blocks. From Messages, add "Serial begin at baud 9600" into setup. It lets the board send text to the Serial Monitor at the bottom of the screen.',
-          blocks: ['setup', 'Serial begin at baud 9600'],
+          body: `${BLOCKS_INTRO} ${SERIAL_PRINT_LINE_EXPLAINED}`,
+          build: [SERIAL_BEGIN],
+          picture: program(onStart(serialBeginBlock(9600)), forever()),
+          expect: 'Nothing shows yet: the board is ready to send text, but you have not told it what to send.',
           cpp: 'const int LDR_PIN = A0;\nconst int DO_PIN = 2;\n\npinMode(DO_PIN, INPUT);\nSerial.begin(9600);',
           check: startsSerial,
         },
@@ -73,10 +95,46 @@ export const ldrLesson: Lesson = {
           id: 'code-read',
           kind: 'code',
           title: 'Print both readings',
-          body: 'In loop: add "Serial print line" with "analog read pin A0" inside it. Below it, another "Serial print line" with "digital read pin 2" inside. Then wait 500 milliseconds.',
-          blocks: ['loop', 'Serial print line (analog read pin A0)', 'Serial print line (digital read pin 2)', 'wait 500 milliseconds'],
+          body: 'In "forever", print the two readings, one under the other, then wait half a second. Reading blocks are round: they drop into the gap on a "Serial print line" block.',
+          build: [
+            {
+              type: 'arduino_serialPrintln',
+              group: 'messages',
+              block: 'Serial print line ▢',
+              place: 'Drag it inside "forever".',
+            },
+            {
+              type: 'arduino_analogRead',
+              group: 'output',
+              block: 'analog read pin ▾',
+              place: 'Drop it into the gap on the "Serial print line" block.',
+              set: 'Choose A0: the AO wire, a number for how bright it is.',
+            },
+            {
+              type: 'arduino_serialPrintln',
+              group: 'messages',
+              block: 'Serial print line ▢',
+              place: 'Snap it under the first "Serial print line" block.',
+            },
+            {
+              type: 'arduino_digitalRead',
+              group: 'output',
+              block: 'digital read pin ▾',
+              place: 'Drop it into the gap on the second "Serial print line" block.',
+              set: 'Choose pin 2: the DO wire, which says dark or not.',
+            },
+            {
+              type: 'time_delay',
+              group: 'start',
+              block: 'wait 1000 milliseconds',
+              find: WAIT_MS_FIND,
+              place: 'Snap it at the bottom of "forever".',
+              set: 'Change 1000 to 500: half a second.',
+            },
+          ],
+          picture: ldrProgram,
+          expect: 'The Serial Monitor shows two numbers every half second: the light reading, then 0 or 1.',
           cpp: 'int ldrValue = analogRead(LDR_PIN);\nint digitalValue = digitalRead(DO_PIN);\nSerial.print("Analog Value: ");\nSerial.println(ldrValue);\nSerial.print("Digital Value: ");\nSerial.println(digitalValue);\ndelay(500);',
-          hint: 'Find "analog read pin" and "digital read pin" under Output. Drop them into the gap on the "Serial print line" block.',
           check: all(readsAnalog('A0'), readsDigital(2), printsLine, waits(500)),
         },
         {
@@ -94,15 +152,14 @@ export const ldrLesson: Lesson = {
           hint: LIVE_INPUTS_HINT,
         },
       ],
-      solution: program(
-        onStart(serialBeginBlock(9600)),
-        forever(serialPrintLineBlock(analogReadBlock('A0')), serialPrintLineBlock(digitalReadBlock(2)), waitBlock(500)),
-      ),
+      solution: ldrProgram,
       observe: 'The analog reading falls as the light gets brighter, and the digital value is 1 when it is dark.',
       wrapUp: 'Your board can now sense light. Next you could switch an LED on when the digital value says it is dark: an automatic night light.',
     },
   ],
 };
+
+const soundProgram = program(onStart(serialBeginBlock(9600)), forever(serialPrintLineBlock(analogReadBlock('A0')), waitBlock(50)));
 
 export const soundSensorLesson: Lesson = {
   slug: 'sound-sensor',
@@ -144,8 +201,10 @@ export const soundSensorLesson: Lesson = {
           id: 'code-setup',
           kind: 'code',
           title: 'Start the Serial Monitor',
-          body: 'Open Blocks. From Messages, add "Serial begin at baud 9600" into setup.',
-          blocks: ['setup', 'Serial begin at baud 9600'],
+          body: `${BLOCKS_INTRO} ${SERIAL_PRINT_LINE_EXPLAINED}`,
+          build: [SERIAL_BEGIN],
+          picture: program(onStart(serialBeginBlock(9600)), forever()),
+          expect: 'Nothing shows yet: the board is ready to send text, but you have not told it what to send.',
           cpp: 'const int soundSensorPin = A0;\n\nSerial.begin(9600);',
           check: startsSerial,
         },
@@ -153,8 +212,32 @@ export const soundSensorLesson: Lesson = {
           id: 'code-read',
           kind: 'code',
           title: 'Print the loudness',
-          body: 'In loop: add "Serial print line" with "analog read pin A0" inside it, then wait 50 milliseconds.',
-          blocks: ['loop', 'Serial print line (analog read pin A0)', 'wait 50 milliseconds'],
+          body: 'In "forever", print the loudness reading, then wait a moment. The reading block is round: it drops into the gap on the "Serial print line" block.',
+          build: [
+            {
+              type: 'arduino_serialPrintln',
+              group: 'messages',
+              block: 'Serial print line ▢',
+              place: 'Drag it inside "forever".',
+            },
+            {
+              type: 'arduino_analogRead',
+              group: 'output',
+              block: 'analog read pin ▾',
+              place: 'Drop it into the gap on the "Serial print line" block.',
+              set: 'Choose A0: the sensor\'s output wire.',
+            },
+            {
+              type: 'time_delay',
+              group: 'start',
+              block: 'wait 1000 milliseconds',
+              find: WAIT_MS_FIND,
+              place: 'Snap it under the "Serial print line" block.',
+              set: 'Change 1000 to 50, so it checks the sound 20 times a second.',
+            },
+          ],
+          picture: soundProgram,
+          expect: 'The Serial Monitor fills with numbers: bigger when it is loud, smaller when it is quiet.',
           cpp: 'int soundValue = analogRead(soundSensorPin);\nSerial.println(soundValue);\ndelay(50);',
           check: all(readsAnalog('A0'), printsLine, waits(50)),
         },
@@ -173,7 +256,7 @@ export const soundSensorLesson: Lesson = {
           hint: LIVE_INPUTS_HINT,
         },
       ],
-      solution: program(onStart(serialBeginBlock(9600)), forever(serialPrintLineBlock(analogReadBlock('A0')), waitBlock(50))),
+      solution: soundProgram,
       observe: 'The number on the Serial Monitor rises when it is loud and falls when it is quiet.',
       wrapUp: 'Your board can now hear. Next you could light an LED or sound a buzzer when it gets too loud.',
     },

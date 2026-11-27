@@ -1,19 +1,25 @@
-import type { Lesson, LessonActivity, LessonStep } from '../types';
+import type { BlockInstruction, Lesson, LessonActivity, LessonStep } from '../types';
 import {
   all,
+  BLOCKS_INTRO,
+  DRAG_INTO_ON_START,
+  EMPTY_FOREVER,
   forever,
+  loopRunsInOrder,
   onStart,
   pinModeBlock,
   PLACING_HINT,
   program,
   RERUN_STEP_BODY,
   RUN_STEP_BODY,
+  setsOutput,
   STARTER_BOARD_PARTS,
+  WAIT_MS_FIND,
   waitBlock,
-  waits,
+  waitStatement,
   WIRING_HINT,
   writeBlock,
-  writesPin,
+  writeStatement,
 } from './helpers';
 
 // Adapted from the STEMAIDE CODER manuals "5. Red Green Blue (RGB) Module" (5.0-5.7). Pins from
@@ -33,8 +39,28 @@ function showColor(on: Channel[]) {
   return CHANNELS.map((channel) => writeBlock(PINS[channel], on.includes(channel) ? 'HIGH' : 'LOW'));
 }
 
+function showColorStatements(on: Channel[]) {
+  return CHANNELS.map((channel) => writeStatement(PINS[channel], on.includes(channel) ? 'HIGH' : 'LOW'));
+}
+
 function colorCpp(on: Channel[]) {
   return CHANNELS.map((channel) => `digitalWrite(${NAMES[channel]}, ${on.includes(channel) ? 'HIGH' : 'LOW'});`).join('\n');
+}
+
+/**
+ * The three "digital write" blocks that show a colour, one instruction each. `firstPlace` says where
+ * the first one goes; the other two snap under it.
+ */
+function colorBlocks(on: Channel[], firstPlace: string): BlockInstruction[] {
+  return CHANNELS.map((channel, index) => ({
+    type: 'arduino_digitalWrite',
+    group: 'output',
+    block: 'digital write pin ▾ to HIGH ▾',
+    place: index === 0 ? firstPlace : `Snap it under the ${index === 1 ? 'first' : 'second'} "digital write" block.`,
+    set: on.includes(channel)
+      ? `Choose pin ${PINS[channel]} (${channel}). Leave HIGH: ${channel} on.`
+      : `Choose pin ${PINS[channel]} (${channel}), then change HIGH to LOW: ${channel} off.`,
+  }));
 }
 
 const SETUP = onStart(pinModeBlock(2), pinModeBlock(7), pinModeBlock(10));
@@ -55,10 +81,11 @@ const REAL_WORLD: Record<Channel, { on: string; blink: string }> = {
 };
 
 function colorOn(channel: Channel, index: number): LessonActivity {
-  const pin = PINS[channel];
   const name = NAMES[channel];
+  const colour = name.toLowerCase();
   const first = index === 0;
   const steps: LessonStep[] = [];
+  const finished = program(SETUP, forever(...showColor([channel])));
 
   if (first) {
     steps.push(
@@ -87,6 +114,23 @@ function colorOn(channel: Channel, index: number): LessonActivity {
           { kind: 'wired', type: 'RGB_LED', pin: 'COM', to: 'GND' },
         ),
       },
+      {
+        id: 'code-setup',
+        kind: 'code',
+        title: 'Get the three colour pins ready',
+        body: `${BLOCKS_INTRO} An RGB LED uses three pins, one for each colour. Get all three ready in "on start".`,
+        build: CHANNELS.map((each, position) => ({
+          type: 'arduino_pinMode',
+          group: 'output',
+          block: 'set pin ▾ to OUTPUT ▾',
+          place: position === 0 ? DRAG_INTO_ON_START : `Snap it under the ${position === 1 ? 'first' : 'second'} "set pin" block.`,
+          set: `Choose pin ${PINS[each]} (${each}). Leave OUTPUT.`,
+        })),
+        picture: program(SETUP, forever()),
+        expect: 'Nothing lights up yet: this gets the three colour pins ready.',
+        cpp: 'pinMode(Red, OUTPUT);\npinMode(Green, OUTPUT);\npinMode(Blue, OUTPUT);',
+        check: all(setsOutput(2), setsOutput(7), setsOutput(10)),
+      },
     );
   }
 
@@ -94,33 +138,35 @@ function colorOn(channel: Channel, index: number): LessonActivity {
     {
       id: 'code',
       kind: 'code',
-      title: `Show ${name.toLowerCase()} only`,
+      title: `Show ${colour} only`,
       body: first
-        ? 'Open Blocks. In loop, set pin 2 (red) HIGH, pin 7 (green) LOW and pin 10 (blue) LOW.'
-        : `Delete the blocks inside loop. Then set pin ${pin} (${name.toLowerCase()}) HIGH and the other two colour pins LOW.`,
-      blocks: CHANNELS.map((c) => `digital write pin ${PINS[c]} to ${c === channel ? 'HIGH' : 'LOW'}`),
+        ? 'Now choose the colour. In "forever", switch red on and the other two colours off.'
+        : `${EMPTY_FOREVER} Then switch ${colour} on and the other two colours off.`,
+      build: colorBlocks([channel], first ? 'Drag it inside "forever".' : 'Drag it inside the empty "forever".'),
+      picture: finished,
+      expect: `The RGB LED glows ${colour}.`,
       cpp: colorCpp([channel]),
-      check: writesPin(pin, 'HIGH'),
+      check: loopRunsInOrder(`${name} on, the other two off`, ...showColorStatements([channel])),
     },
     { id: 'run', kind: 'run', title: 'Run the simulation', body: first ? RUN_STEP_BODY : RERUN_STEP_BODY, check: { kind: 'simulating' } },
     {
       id: 'observe',
       kind: 'observe',
-      title: `See ${name.toLowerCase()}`,
-      body: `The RGB LED should glow ${name.toLowerCase()}.`,
-      check: { kind: 'seen', tokens: [`RGB_LED:${channel}`], label: `RGB LED is ${name.toLowerCase()}` },
+      title: `See ${colour}`,
+      body: `The RGB LED should glow ${colour}.`,
+      check: { kind: 'seen', tokens: [`RGB_LED:${channel}`], label: `RGB LED is ${colour}` },
     },
   );
 
   return {
     id: `rgb-${index + 1}`,
     title: `${name} on`,
-    goal: `Make the RGB LED glow ${name.toLowerCase()}, with the other two colours off.`,
+    goal: `Make the RGB LED glow ${colour}, with the other two colours off.`,
     realWorld: REAL_WORLD[channel].on,
     parts: PARTS,
     steps,
-    solution: program(SETUP, forever(...showColor([channel]))),
-    observe: `The RGB LED glows ${name.toLowerCase()}.`,
+    solution: finished,
+    observe: `The RGB LED glows ${colour}.`,
     wrapUp: 'Each colour has its own pin, so you choose the colour by choosing which pins are HIGH.',
   };
 }
@@ -128,10 +174,12 @@ function colorOn(channel: Channel, index: number): LessonActivity {
 function colorBlink(channel: Channel, index: number): LessonActivity {
   const pin = PINS[channel];
   const name = NAMES[channel];
+  const colour = name.toLowerCase();
+  const finished = program(SETUP, forever(...showColor([channel]), waitBlock(500), writeBlock(pin, 'LOW'), waitBlock(500)));
   return {
     id: `rgb-${index + 1}`,
     title: `${name} blinking`,
-    goal: `Make the ${name.toLowerCase()} light blink.`,
+    goal: `Make the ${colour} light blink.`,
     realWorld: REAL_WORLD[channel].blink,
     parts: PARTS,
     steps: [
@@ -139,36 +187,105 @@ function colorBlink(channel: Channel, index: number): LessonActivity {
         id: 'code',
         kind: 'code',
         title: 'On, wait, off, wait',
-        body: `After the three colour blocks, add: wait 500 milliseconds, set pin ${pin} LOW, wait 500 milliseconds.`,
-        blocks: ['wait 500 milliseconds', `digital write pin ${pin} to LOW`, 'wait 500 milliseconds'],
+        body: `Keep your blocks. Under the three colour blocks in "forever", add three more: wait, ${colour} off, wait.`,
+        build: [
+          {
+            type: 'time_delay',
+            group: 'start',
+            block: 'wait 1000 milliseconds',
+            find: WAIT_MS_FIND,
+            place: 'Snap it under the three "digital write" blocks in "forever".',
+            set: 'Change 1000 to 500: half a second.',
+          },
+          {
+            type: 'arduino_digitalWrite',
+            group: 'output',
+            block: 'digital write pin ▾ to HIGH ▾',
+            place: 'Snap it under the "wait" block.',
+            set: `Choose pin ${pin} (${colour}), then change HIGH to LOW.`,
+          },
+          {
+            type: 'time_delay',
+            group: 'start',
+            block: 'wait 1000 milliseconds',
+            find: WAIT_MS_FIND,
+            place: 'Snap it at the bottom of "forever".',
+            set: 'Change 1000 to 500.',
+          },
+        ],
+        picture: finished,
+        expect: `The ${colour} light switches on and off every half second.`,
         cpp: `${colorCpp([channel])}\ndelay(500);\ndigitalWrite(${name}, LOW);\ndelay(500);`,
         hint: 'The manual waits only 50 milliseconds: on a real board that is a fast flicker. 500 is easier to see.',
-        check: all(writesPin(pin, 'HIGH'), writesPin(pin, 'LOW'), waits(500)),
+        check: loopRunsInOrder(
+          `${name}: on, wait, off, wait`,
+          ...showColorStatements([channel]),
+          waitStatement(500),
+          writeStatement(pin, 'LOW'),
+          waitStatement(500),
+        ),
       },
       { id: 'run', kind: 'run', title: 'Run the simulation', body: RERUN_STEP_BODY, check: { kind: 'simulating' } },
       {
         id: 'observe',
         kind: 'observe',
         title: 'Watch it blink',
-        body: `The ${name.toLowerCase()} light should switch on and off every half second.`,
+        body: `The ${colour} light should switch on and off every half second.`,
         check: { kind: 'blinked', type: 'RGB_LED', times: 4 },
       },
     ],
-    solution: program(SETUP, forever(...showColor([channel]), waitBlock(500), writeBlock(pin, 'LOW'), waitBlock(500))),
-    observe: `The RGB LED blinks ${name.toLowerCase()}.`,
+    solution: finished,
+    observe: `The RGB LED blinks ${colour}.`,
     wrapUp: 'The same on-wait-off-wait pattern works for every colour.',
   };
 }
 
-const RAINBOW: Array<{ name: string; on: Channel[] }> = [
-  { name: 'red', on: ['red'] },
-  { name: 'yellow', on: ['red', 'green'] },
-  { name: 'green', on: ['green'] },
-  { name: 'cyan', on: ['green', 'blue'] },
-  { name: 'blue', on: ['blue'] },
-  { name: 'magenta', on: ['red', 'blue'] },
-  { name: 'white', on: ['red', 'green', 'blue'] },
+const RAINBOW: Array<{ name: string; on: Channel[]; intro: string }> = [
+  { name: 'red', on: ['red'], intro: `${EMPTY_FOREVER} Then show red: red on, green off, blue off, and a wait.` },
+  { name: 'yellow', on: ['red', 'green'], intro: 'Now mix! Red and green light together look yellow. At the bottom of "forever", add red on, green on, blue off, and a wait.' },
+  { name: 'green', on: ['green'], intro: 'Next, green on its own: red off, green on, blue off, and a wait.' },
+  { name: 'cyan', on: ['green', 'blue'], intro: 'Green and blue together make cyan, a light blue: red off, green on, blue on, and a wait.' },
+  { name: 'blue', on: ['blue'], intro: 'Blue on its own: red off, green off, blue on, and a wait.' },
+  { name: 'magenta', on: ['red', 'blue'], intro: 'Red and blue together make magenta, a pinky purple: red on, green off, blue on, and a wait.' },
+  { name: 'white', on: ['red', 'green', 'blue'], intro: 'Last, all three together look white: red on, green on, blue on, and a wait.' },
 ];
+
+const colorAndWait = (on: Channel[]) => [...showColor(on), waitBlock(1000)];
+const colorAndWaitStatements = (on: Channel[]) => [...showColorStatements(on), waitStatement(1000)];
+
+function rainbowStep(index: number): LessonStep {
+  const color = RAINBOW[index];
+  const title = color.name[0].toUpperCase() + color.name.slice(1);
+  const last = index === RAINBOW.length - 1;
+  return {
+    id: `code-${color.name}`,
+    kind: 'code',
+    title,
+    body: color.intro,
+    build: [
+      ...colorBlocks(color.on, index === 0 ? 'Drag it inside the empty "forever".' : 'Snap it at the bottom of "forever".'),
+      {
+        type: 'time_delay',
+        group: 'start',
+        block: 'wait 1000 milliseconds',
+        find: WAIT_MS_FIND,
+        place: 'Snap it at the bottom of "forever".',
+        set: 'Leave it at 1000: each colour shows for one second.',
+      },
+    ],
+    picture: program(SETUP, forever(...RAINBOW.slice(0, index + 1).flatMap((each) => colorAndWait(each.on)))),
+    expect: last
+      ? 'The LED shows red, yellow, green, cyan, blue, magenta and white, one second each, over and over.'
+      : index === 0
+        ? 'The LED glows red.'
+        : `The LED shows each colour you have added so far for one second, then starts again from red.`,
+    cpp: `// ${color.name}\n${colorCpp(color.on)}\ndelay(1000);`,
+    hint: index === 0 ? undefined : 'Quicker: right-click a block and choose Duplicate, then change HIGH or LOW on the copy.',
+    check: last
+      ? loopRunsInOrder('All seven colours, in order', ...RAINBOW.flatMap((each) => colorAndWaitStatements(each.on)))
+      : loopRunsInOrder(`${title}, then a wait`, ...colorAndWaitStatements(color.on)),
+  };
+}
 
 const rainbow: LessonActivity = {
   id: 'rgb-7',
@@ -177,25 +294,7 @@ const rainbow: LessonActivity = {
   realWorld: 'Every pixel on a TV or phone screen is a tiny red, green and blue light mixed like this.',
   parts: PARTS,
   steps: [
-    {
-      id: 'code-mix',
-      kind: 'code',
-      title: 'Make yellow',
-      body: 'Delete the blocks inside loop. Set pin 2 (red) HIGH, pin 7 (green) HIGH and pin 10 (blue) LOW. Red and green light together look yellow.',
-      blocks: ['digital write pin 2 to HIGH', 'digital write pin 7 to HIGH', 'digital write pin 10 to LOW'],
-      cpp: colorCpp(['red', 'green']),
-      check: all(writesPin(2, 'HIGH'), writesPin(7, 'HIGH'), writesPin(10, 'LOW')),
-    },
-    {
-      id: 'code-rainbow',
-      kind: 'code',
-      title: 'Cycle through the colours',
-      body: 'After the yellow blocks, add "wait 1000 milliseconds". Then add three blocks and a wait for each colour: green, cyan (green + blue), blue, magenta (red + blue) and white (all three). Start the loop with red.',
-      blocks: ['red: 2 HIGH, 7 LOW, 10 LOW', 'yellow: 2 HIGH, 7 HIGH, 10 LOW', 'green: 2 LOW, 7 HIGH, 10 LOW', 'cyan: 2 LOW, 7 HIGH, 10 HIGH', 'blue: 2 LOW, 7 LOW, 10 HIGH', 'magenta: 2 HIGH, 7 LOW, 10 HIGH', 'white: all HIGH', 'wait 1000 milliseconds after each'],
-      cpp: `// yellow\n${colorCpp(['red', 'green'])}\ndelay(1000);\n// cyan\n${colorCpp(['green', 'blue'])}\ndelay(1000);\n// ...and so on for each colour`,
-      hint: 'Build one colour (three blocks and a wait), duplicate it, and change the HIGHs and LOWs.',
-      check: all(writesPin(10, 'HIGH'), waits(1000)),
-    },
+    ...RAINBOW.map((_, index) => rainbowStep(index)),
     { id: 'run', kind: 'run', title: 'Run the simulation', body: RERUN_STEP_BODY, check: { kind: 'simulating' } },
     {
       id: 'observe',
@@ -209,7 +308,7 @@ const rainbow: LessonActivity = {
       },
     },
   ],
-  solution: program(SETUP, forever(...RAINBOW.flatMap((color) => [...showColor(color.on), waitBlock(1000)]))),
+  solution: program(SETUP, forever(...RAINBOW.flatMap((color) => colorAndWait(color.on)))),
   observe: 'The RGB LED shows red, yellow, green, cyan, blue, magenta and white in turn.',
   wrapUp: 'Mixing red, green and blue light makes other colours. With PWM pins and analogWrite you could even mix in-between shades.',
 };
