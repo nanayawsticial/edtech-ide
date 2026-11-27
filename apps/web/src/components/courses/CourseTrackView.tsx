@@ -68,113 +68,115 @@ export function CourseTrackView({ track }: { track: CourseTrack }) {
 
   return (
     <MainLayout>
-      <PageLayout className='flex-1' contentClassName='gap-8 py-8 sm:py-12'>
-        <JourneyProgress
-          steps={[{ label: 'Choose track' }, { label: 'Pick lesson' }, { label: 'Open workspace' }]}
-          activeIndex={1}
-        />
-
-        <motion.section
-          className='ui-always-dark overflow-hidden rounded-[34px] border border-white/8 bg-[linear-gradient(180deg,var(--ui-immersive-from)_0%,var(--ui-immersive-to)_100%)] p-6 shadow-[0_40px_110px_-66px_rgba(0,0,0,1)] sm:p-8 lg:p-10'
-          variants={fadeInUp}
-          initial='hidden'
-          animate='visible'
-        >
-          <div className='space-y-7'>
-            <div className='inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-300'>
-              <Sparkles size={14} className='text-cyan-300' />
-              {track.subtitle}
-            </div>
-
-            <div className='space-y-4'>
-              <h1 className='text-[2.8rem] font-semibold tracking-[-0.07em] text-white sm:text-[3.7rem]'>{track.title}</h1>
-              <p className='max-w-[620px] text-base leading-8 text-slate-400 sm:text-lg'>{track.description}</p>
-            </div>
-
-            <div className='flex flex-wrap gap-2'>
-              {summaryPills.map((pill) => (
-                <span key={pill} className='inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300'>
-                  {pill}
-                </span>
-              ))}
-            </div>
-
-            <div className='flex flex-wrap gap-3'>
-              {firstLessonHref ? (
-                <Button icon={<ArrowRight size={18} />} onClick={() => router.push(firstLessonHref)}>
-                  Start First Lesson
-                </Button>
-              ) : null}
-              <Button variant='inverse' icon={<ArrowLeft size={18} />} onClick={() => router.push('/courses')}>
-                Back to Courses
-              </Button>
-              <div className='inline-flex items-center gap-3 rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-slate-300'>
-                <span className='flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.04] text-cyan-300'>
-                  <Icon size={18} />
-                </span>
-                <span>{firstLesson ? firstLesson.title : 'Choose a lesson below'}</span>
-              </div>
-            </div>
-          </div>
-        </motion.section>
-
-        <section className='space-y-5'>
-          <SectionHeader
-            eyebrow='Lessons'
-            title='Choose one lesson'
-            subtitle='Open the lesson workspace with the recommended setup already ready.'
+      <div className='min-h-0 flex-1 overflow-y-auto'>
+        <PageLayout className='min-h-full' contentClassName='gap-8 py-8 sm:py-12'>
+          <JourneyProgress
+            steps={[{ label: 'Choose track' }, { label: 'Pick lesson' }, { label: 'Open workspace' }]}
+            activeIndex={1}
           />
 
-          <div className='grid gap-5 xl:grid-cols-2'>
-            {track.lessons.map((lesson, index) => {
-              const href = buildLessonHref(lesson);
-              const status = getLessonStatus(index);
-              const guide = getLesson(lesson.slug);
+          <motion.section
+            className='ui-always-dark overflow-hidden rounded-[34px] border border-white/8 bg-[linear-gradient(180deg,var(--ui-immersive-from)_0%,var(--ui-immersive-to)_100%)] p-6 shadow-[0_40px_110px_-66px_rgba(0,0,0,1)] sm:p-8 lg:p-10'
+            variants={fadeInUp}
+            initial='hidden'
+            animate='visible'
+          >
+            <div className='space-y-7'>
+              <div className='inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-300'>
+                <Sparkles size={14} className='text-cyan-300' />
+                {track.subtitle}
+              </div>
 
-              return (
-                <Card
-                  key={lesson.id}
-                  variant='immersive'
-                  eyebrow={`Lesson ${index + 1}`}
-                  title={lesson.title}
-                  description={guide ? guide.activities.map((activity) => activity.title).join(' · ') : lesson.summary}
-                  icon={<BookOpen size={22} />}
-                  onClick={() => router.push(href)}
-                  className='min-h-[260px]'
-                >
-                  <div className='space-y-4'>
-                    <div className='flex flex-wrap gap-2'>
-                      {guide ? (
-                        <span className='inline-flex rounded-full border border-emerald-400/30 bg-emerald-400/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-200'>
-                          Step-by-step · {guide.activities.length} {guide.activities.length === 1 ? 'activity' : 'activities'}
+              <div className='space-y-4'>
+                <h1 className='text-[2.8rem] font-semibold tracking-[-0.07em] text-white sm:text-[3.7rem]'>{track.title}</h1>
+                <p className='max-w-[620px] text-base leading-8 text-slate-400 sm:text-lg'>{track.description}</p>
+              </div>
+
+              <div className='flex flex-wrap gap-2'>
+                {summaryPills.map((pill) => (
+                  <span key={pill} className='inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300'>
+                    {pill}
+                  </span>
+                ))}
+              </div>
+
+              <div className='flex flex-wrap gap-3'>
+                {firstLessonHref ? (
+                  <Button icon={<ArrowRight size={18} />} onClick={() => router.push(firstLessonHref)}>
+                    Start First Lesson
+                  </Button>
+                ) : null}
+                <Button variant='inverse' icon={<ArrowLeft size={18} />} onClick={() => router.push('/courses')}>
+                  Back to Courses
+                </Button>
+                <div className='inline-flex items-center gap-3 rounded-[22px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-slate-300'>
+                  <span className='flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.04] text-cyan-300'>
+                    <Icon size={18} />
+                  </span>
+                  <span>{firstLesson ? firstLesson.title : 'Choose a lesson below'}</span>
+                </div>
+              </div>
+            </div>
+          </motion.section>
+
+          <section className='space-y-5'>
+            <SectionHeader
+              eyebrow='Lessons'
+              title='Choose one lesson'
+              subtitle='Open the lesson workspace with the recommended setup already ready.'
+            />
+
+            <div className='grid gap-5 xl:grid-cols-2'>
+              {track.lessons.map((lesson, index) => {
+                const href = buildLessonHref(lesson);
+                const status = getLessonStatus(index);
+                const guide = getLesson(lesson.slug);
+
+                return (
+                  <Card
+                    key={lesson.id}
+                    variant='immersive'
+                    eyebrow={`Lesson ${index + 1}`}
+                    title={lesson.title}
+                    description={guide ? guide.activities.map((activity) => activity.title).join(' · ') : lesson.summary}
+                    icon={<BookOpen size={22} />}
+                    onClick={() => router.push(href)}
+                    className='min-h-[260px]'
+                  >
+                    <div className='space-y-4'>
+                      <div className='flex flex-wrap gap-2'>
+                        {guide ? (
+                          <span className='inline-flex rounded-full border border-emerald-400/30 bg-emerald-400/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-200'>
+                            Step-by-step · {guide.activities.length} {guide.activities.length === 1 ? 'activity' : 'activities'}
+                          </span>
+                        ) : null}
+                        <span className='inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300'>
+                          {status}
                         </span>
-                      ) : null}
-                      <span className='inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300'>
-                        {status}
-                      </span>
-                      <span className='inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300'>
-                        {lesson.board}
-                      </span>
-                      <span className='inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300'>
-                        {lesson.mode === 'block' ? 'Block coding' : 'Text coding'}
-                      </span>
-                    </div>
+                        <span className='inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300'>
+                          {lesson.board}
+                        </span>
+                        <span className='inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300'>
+                          {lesson.mode === 'block' ? 'Block coding' : 'Text coding'}
+                        </span>
+                      </div>
 
-                    <div className='rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-400'>
-                      Source: <span className='font-semibold text-white'>{lesson.sourceLabel}</span>
-                    </div>
+                      <div className='rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-400'>
+                        Source: <span className='font-semibold text-white'>{lesson.sourceLabel}</span>
+                      </div>
 
-                    <div className='inline-flex items-center gap-2 text-sm font-semibold text-sky-200'>
-                      Open lesson workspace
-                      <ArrowRight size={16} />
+                      <div className='inline-flex items-center gap-2 text-sm font-semibold text-sky-200'>
+                        Open lesson workspace
+                        <ArrowRight size={16} />
+                      </div>
                     </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        </section>
-      </PageLayout>
+                  </Card>
+                );
+              })}
+            </div>
+          </section>
+        </PageLayout>
+      </div>
     </MainLayout>
   );
 }

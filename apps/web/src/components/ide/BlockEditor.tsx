@@ -766,6 +766,16 @@ const handleGenerate = useCallback((force = false) => {
     [hideCategoryFlyout, isFlyoutVisible]
   );
 
+  // The block list keeps growing for a moment after it opens, as its blocks finish drawing, and
+  // Blockly doesn't size the list's scrollbar again afterwards, so it can think every block fits
+  // and ignore the mouse wheel. Size the scrollbar just before Blockly handles each wheel turn
+  // (this capture handler runs first; resize() does nothing when the size hasn't changed).
+  const handleStageWheelCapture = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    const target = event.target as Element | null;
+    if (!target?.closest('.blocklyFlyout')) return;
+    workspaceRef.current?.getFlyout()?.getWorkspace()?.scrollbar?.resize();
+  }, []);
+
   const workspaceLooksEmpty = blockCount <= 1;
 
   const guidedToolboxCategories = useMemo<GuidedToolboxCategorySummary[]>(
@@ -1044,6 +1054,7 @@ const handleGenerate = useCallback((force = false) => {
           <div
             className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-[radial-gradient(circle_at_top,var(--blockly-canvas-glow),transparent_42%),linear-gradient(180deg,var(--blockly-canvas-from)_0%,var(--blockly-canvas-to)_100%)]"
             onClickCapture={handleStageClickCapture}
+            onWheelCapture={handleStageWheelCapture}
           >
             <div ref={containerRef} className="absolute inset-0 h-full w-full min-h-0 min-w-0" />
             <CoachCard
